@@ -25,4 +25,4 @@ $ ./nob
 ```
 
 The `nob` automatically rebuilds itself if `nob.c` is modified thanks to
-the `NOB_GO_REBUILD_URSELF` macro (don't forget to check out how it works below)
+the `NOB_GO_REBUILD_URSELF` macro (don't forget to check out how it works in [nob.h](./nob.h))
