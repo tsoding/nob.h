@@ -4,6 +4,8 @@ This library is the next generation of the [NoBuild](https://github.com/tsoding/
 
 # Quick Example
 
+The only file you need from here is [nob.h](./nob.h). Just copy-paste it to your project and start using it.
+
 ```c
 // nob.c
 #define NOB_IMPLEMENTATION

@@ -1,4 +1,4 @@
-/* nob - v1.0.0 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.1.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -75,12 +75,16 @@ typedef enum {
     NOB_INFO,
     NOB_WARNING,
     NOB_ERROR,
+    NOB_NO_LOGS,
 } Nob_Log_Level;
+
+// Any messages with the level below nob_minimal_log_level are going to be suppressed.
+Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 
 void nob_log(Nob_Log_Level level, const char *fmt, ...);
 
-// It is an equivalent of shift command from bash. It basically pops a command line
-// argument from the beginning.
+// It is an equivalent of shift command from bash. It basically pops an element from
+// the beginning of a sized array.
 #define nob_shift(xs, xs_sz) (NOB_ASSERT((xs_sz) > 0), (xs_sz)--, *(xs)++)
 // NOTE: nob_shift_args() is an alias for an old variant of nob_shift that only worked with
 // the command line arguments passed to the main() function. nob_shift() is more generic.
@@ -215,6 +219,9 @@ Nob_Proc nob_cmd_run_async(Nob_Cmd cmd);
 
 // Run command synchronously
 bool nob_cmd_run_sync(Nob_Cmd cmd);
+// NOTE: nob_cmd_run_sync_and_reset() is just like nob_cmd_run_sync() except it also resets cmd.count to 0
+// so the Nob_Cmd instance can be seamlessly several times in a row
+bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd);
 
 #ifndef NOB_TEMP_CAPACITY
 #define NOB_TEMP_CAPACITY (8*1024*1024)
@@ -631,8 +638,17 @@ bool nob_cmd_run_sync(Nob_Cmd cmd)
     return nob_proc_wait(p);
 }
 
+bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd)
+{
+    Nob_Proc p = nob_cmd_run_sync(*cmd);
+    cmd->count = 0;
+    return p;
+}
+
 void nob_log(Nob_Log_Level level, const char *fmt, ...)
 {
+    if (level < nob_minimal_log_level) return;
+
     switch (level) {
     case NOB_INFO:
         fprintf(stderr, "[INFO] ");
@@ -1165,6 +1181,8 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.1.0 (2024-10-15) nob_minimal_log_level
+                         nob_cmd_run_sync_and_reset
       1.0.0 (2024-10-15) first release based on https://github.com/tsoding/musializer/blob/f106c92934172096ed6822b6b9b276410cd99a31/nob.h
 
 */
