@@ -220,7 +220,7 @@ Nob_Proc nob_cmd_run_async(Nob_Cmd cmd);
 // Run command synchronously
 bool nob_cmd_run_sync(Nob_Cmd cmd);
 // NOTE: nob_cmd_run_sync_and_reset() is just like nob_cmd_run_sync() except it also resets cmd.count to 0
-// so the Nob_Cmd instance can be seamlessly several times in a row
+// so the Nob_Cmd instance can be seamlessly used several times in a row
 bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd);
 
 #ifndef NOB_TEMP_CAPACITY
