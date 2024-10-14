@@ -5,7 +5,7 @@
    Quick example:
 
       ```c
-      // nob.h
+      // nob.c
       #define NOB_IMPLEMENTATION
       #include "nob.h"
 

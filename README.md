@@ -5,7 +5,7 @@ This library is the next generation of the [NoBuild](https://github.com/tsoding/
 # Quick Example
 
 ```c
-// nob.h
+// nob.c
 #define NOB_IMPLEMENTATION
 #include "nob.h"
 
