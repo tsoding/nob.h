@@ -1,8 +1,8 @@
-/* nob - v1.1.1 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.2.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
-   Quick example:
+   # Quick Example
 
       ```c
       // nob.c
@@ -26,6 +26,42 @@
 
       The `nob` automatically rebuilds itself if `nob.c` is modified thanks to
       the `NOB_GO_REBUILD_URSELF` macro (don't forget to check out how it works below)
+
+   # Stripping off `nob_` Prefixes
+
+      Since Pure C does not have any namespaces we prefix each name of the API with the `nob_` to avoid any
+      potential conflicts with any other names in your code. But sometimes it is very annoying and makes
+      the code noisy. If you know that none of the names from nob.h conflict with anything in your code
+      you can enable NOB_STRIP_PREFIX macro and just drop all the prefixes:
+
+      ```c
+      // nob.c
+      #define NOB_IMPLEMENTATION
+      #define NOB_STRIP_PREFIX
+      #include "nob.h"
+
+      int main(int argc, char **argv)
+      {
+          NOB_GO_REBUILD_URSELF(argc, argv);
+          Cmd cmd = {0};
+          cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", "main", "main.c");
+          if (!cmd_run_sync(cmd)) return 1;
+          return 0;
+      }
+      ```
+
+      Not all the names have strippable prefixes. All the redefinable names like `NOB_GO_REBUILD_URSELF`
+      for instance will retain their prefix even if NOB_STRIP_PREFIX is enabled. Notable exception is the
+      nob_log() function. Stripping away the prefix results in log() which was historically always referring
+      to the natural logarithmic function that is already defined in math.h. So there is no reason to strip
+      off the prefix for nob_log().
+
+      The prefixes are stripped off only on the level of preprocessor. The names of the functions in the
+      compiled object file will still retain the `nob_` prefix. Keep that in mind when you FFI with nob.h
+      from other languages (for whatever reason).
+
+      If only few specific names create conflicts for you, you can just #undef those names after the
+      `#include <nob.h>` since they are macros anyway.
 */
 
 #ifndef NOB_H_
@@ -66,6 +102,9 @@
 #else
 #    define NOB_LINE_END "\n"
 #endif
+
+#define NOB_UNUSED(value) (void)(value)
+#define NOB_TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
 
 #define NOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 #define NOB_ARRAY_GET(array, index) \
@@ -115,7 +154,9 @@ Nob_File_Type nob_get_file_type(const char *path);
 #define nob_return_defer(value) do { result = (value); goto defer; } while(0)
 
 // Initial capacity of a dynamic array
+#ifndef NOB_DA_INIT_CAP
 #define NOB_DA_INIT_CAP 256
+#endif
 
 // Append an item to a dynamic array
 #define nob_da_append(da, item)                                                          \
@@ -316,6 +357,8 @@ const char *nob_temp_sv_to_cstr(Nob_String_View sv);
 
 Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim);
 Nob_String_View nob_sv_trim(Nob_String_View sv);
+Nob_String_View nob_sv_trim_left(Nob_String_View sv);
+Nob_String_View nob_sv_trim_right(Nob_String_View sv);
 bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
 Nob_String_View nob_sv_from_cstr(const char *cstr);
 Nob_String_View nob_sv_from_parts(const char *data, size_t count);
@@ -1175,16 +1218,100 @@ int closedir(DIR *dirp)
 #endif // _WIN32
 // minirent.h SOURCE END ////////////////////////////////////////
 
-#endif
+#endif // NOB_IMPLEMENTATION
+
+#ifndef NOB_H_
+#define NOB_H_
+    // NOTE: The name stripping should be part of the header so it's not accidentally included
+    // several times. At the same time, it should be at the end of the file so to not create any
+    // potential conflicts in the NOB_IMPLEMENTATION. The header obviously cannot be at the end
+    // of the file because NOB_IMPLEMENTATION needs the forward declarations from there. So the
+    // solution is to split the header into two parts where the name stripping part is at the
+    // end of the file after the NOB_IMPLEMENTATION.
+    #ifdef NOB_STRIP_PREFIX
+        #define TODO NOB_TODO
+        #define UNUSED NOB_UNUSED
+        #define ARRAY_LEN NOB_ARRAY_LEN
+        #define ARRAY_GET NOB_ARRAY_GET
+        #define INFO NOB_INFO
+        #define WARNING NOB_WARNING
+        #define ERROR NOB_ERROR
+        #define NO_LOGS NOB_NO_LOGS
+        #define Log_Level Nob_Log_Level
+        #define minimal_log_level nob_minimal_log_level
+        // NOTE: Name log is already defined in math.h and historically always was the natural logarithmic function.
+        // So there should be no reason to strip the `nob_` prefix in this specific case.
+        // #define log nob_log
+        #define shift nob_shift
+        #define shift_args nob_shift_args
+        #define File_Paths Nob_File_Paths
+        #define FILE_REGULAR NOB_FILE_REGULAR
+        #define FILE_DIRECTORY NOB_FILE_DIRECTORY
+        #define FILE_SYMLINK NOB_FILE_SYMLINK
+        #define FILE_OTHER NOB_FILE_OTHER
+        #define File_Type Nob_File_Type
+        #define mkdir_if_not_exists nob_mkdir_if_not_exists
+        #define copy_file nob_copy_file
+        #define copy_directory_recursively nob_copy_directory_recursively
+        #define read_entire_dir nob_read_entire_dir
+        #define write_entire_file nob_write_entire_file
+        #define get_file_type nob_get_file_type
+        #define return_defer nob_return_defer
+        #define da_append nob_da_append
+        #define da_free nob_da_free
+        #define da_append_many nob_da_append_many
+        #define String_Builder Nob_String_Builder
+        #define read_entire_file nob_read_entire_file
+        #define sb_append_buf nob_sb_append_buf
+        #define sb_append_cstr nob_sb_append_cstr
+        #define sb_append_null nob_sb_append_null
+        #define sb_free nob_sb_free
+        #define Proc Nob_Proc
+        #define INVALID_PROC NOB_INVALID_PROC
+        #define Procs Nob_Procs
+        #define procs_wait nob_procs_wait
+        #define proc_wait nob_proc_wait
+        #define Cmd Nob_Cmd
+        #define cmd_render nob_cmd_render
+        #define cmd_append nob_cmd_append
+        #define cmd_free nob_cmd_free
+        #define cmd_run_async nob_cmd_run_async
+        #define cmd_run_sync nob_cmd_run_sync
+        #define cmd_run_sync_and_reset nob_cmd_run_sync_and_reset
+        #define temp_strdup nob_temp_strdup
+        #define temp_alloc nob_temp_alloc
+        #define temp_sprintf nob_temp_sprintf
+        #define temp_reset nob_temp_reset
+        #define temp_save nob_temp_save
+        #define temp_rewind nob_temp_rewind
+        #define rename nob_rename
+        #define needs_rebuild nob_needs_rebuild
+        #define needs_rebuild1 nob_needs_rebuild1
+        #define file_exists nob_file_exists
+        #define String_View Nob_String_View
+        #define temp_sv_to_cstr nob_temp_sv_to_cstr
+        #define sv_chop_by_delim nob_sv_chop_by_delim
+        #define sv_trim nob_sv_trim
+        #define sv_trim_left nob_sv_trim_left
+        #define sv_trim_right nob_sv_trim_right
+        #define sv_eq nob_sv_eq
+        #define sv_from_cstr nob_sv_from_cstr
+        #define sv_from_parts nob_sv_from_parts
+    #endif // NOB_STRIP_PREFIX
+#endif // NOB_H_
 
 /*
    Revision history:
 
+      1.2.0 (2024-10-15) Make NOB_DA_INIT_CAP redefinable
+                         Add NOB_STRIP_PREFIX which strips off nob_* prefix from all the user facing names
+                         Add NOB_UNUSED macro
+                         Add NOB_TODO macro
+                         Add nob_sv_trim_left and nob_sv_trim_right declarations to the header part
       1.1.1 (2024-10-15) Remove forward declaration for is_path1_modified_after_path2
       1.1.0 (2024-10-15) nob_minimal_log_level
                          nob_cmd_run_sync_and_reset
       1.0.0 (2024-10-15) first release based on https://github.com/tsoding/musializer/blob/4ac7cce9874bc19e02d8c160c8c6229de8919401/nob.h
-
 */
 
 /*
