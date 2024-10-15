@@ -682,7 +682,7 @@ bool nob_cmd_run_sync(Nob_Cmd cmd)
 
 bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd)
 {
-    Nob_Proc p = nob_cmd_run_sync(*cmd);
+    bool p = nob_cmd_run_sync(*cmd);
     cmd->count = 0;
     return p;
 }
