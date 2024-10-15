@@ -1183,7 +1183,7 @@ int closedir(DIR *dirp)
 
       1.1.0 (2024-10-15) nob_minimal_log_level
                          nob_cmd_run_sync_and_reset
-      1.0.0 (2024-10-15) first release based on https://github.com/tsoding/musializer/blob/f106c92934172096ed6822b6b9b276410cd99a31/nob.h
+      1.0.0 (2024-10-15) first release based on https://github.com/tsoding/musializer/blob/4ac7cce9874bc19e02d8c160c8c6229de8919401/nob.h
 
 */
 
