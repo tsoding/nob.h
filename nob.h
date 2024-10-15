@@ -1,4 +1,4 @@
-/* nob - v1.2.0 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.2.1 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -1220,8 +1220,8 @@ int closedir(DIR *dirp)
 
 #endif // NOB_IMPLEMENTATION
 
-#ifndef NOB_H_
-#define NOB_H_
+#ifndef NOB_STRIP_PREFIX_GUARD_
+#define NOB_STRIP_PREFIX_GUARD_
     // NOTE: The name stripping should be part of the header so it's not accidentally included
     // several times. At the same time, it should be at the end of the file so to not create any
     // potential conflicts in the NOB_IMPLEMENTATION. The header obviously cannot be at the end
@@ -1298,11 +1298,12 @@ int closedir(DIR *dirp)
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
     #endif // NOB_STRIP_PREFIX
-#endif // NOB_H_
+#endif // NOB_STRIP_PREFIX_GUARD_
 
 /*
    Revision history:
 
+      1.2.1 (2024-10-16) Add a separate include guard for NOB_STRIP_PREFIX.
       1.2.0 (2024-10-15) Make NOB_DA_INIT_CAP redefinable
                          Add NOB_STRIP_PREFIX which strips off nob_* prefix from all the user facing names
                          Add NOB_UNUSED macro
