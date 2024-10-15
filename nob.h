@@ -1,4 +1,4 @@
-/* nob - v1.1.0 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.1.1 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -233,7 +233,6 @@ void nob_temp_reset(void);
 size_t nob_temp_save(void);
 void nob_temp_rewind(size_t checkpoint);
 
-int is_path1_modified_after_path2(const char *path1, const char *path2);
 bool nob_rename(const char *old_path, const char *new_path);
 int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count);
 int nob_needs_rebuild1(const char *output_path, const char *input_path);
@@ -1181,6 +1180,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.1.1 (2024-10-15) Remove forward declaration for is_path1_modified_after_path2
       1.1.0 (2024-10-15) nob_minimal_log_level
                          nob_cmd_run_sync_and_reset
       1.0.0 (2024-10-15) first release based on https://github.com/tsoding/musializer/blob/4ac7cce9874bc19e02d8c160c8c6229de8919401/nob.h
