@@ -1,4 +1,4 @@
-/* nob - v1.2.1 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.2.2 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -682,7 +682,7 @@ bool nob_cmd_run_sync(Nob_Cmd cmd)
 
 bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd)
 {
-    Nob_Proc p = nob_cmd_run_sync(*cmd);
+    bool p = nob_cmd_run_sync(*cmd);
     cmd->count = 0;
     return p;
 }
@@ -1303,6 +1303,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.2.2 (2024-10-16) Fix compilation of nob_cmd_run_sync_and_reset on Windows (By @KillerxDBr)
       1.2.1 (2024-10-16) Add a separate include guard for NOB_STRIP_PREFIX.
       1.2.0 (2024-10-15) Make NOB_DA_INIT_CAP redefinable
                          Add NOB_STRIP_PREFIX which strips off nob_* prefix from all the user facing names
