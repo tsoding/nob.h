@@ -1,4 +1,4 @@
-/* nob - v1.2.2 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.3.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -105,6 +105,7 @@
 
 #define NOB_UNUSED(value) (void)(value)
 #define NOB_TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define NOB_UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
 
 #define NOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 #define NOB_ARRAY_GET(array, index) \
@@ -600,7 +601,7 @@ Nob_Proc nob_cmd_run_async(Nob_Cmd cmd)
             nob_log(NOB_ERROR, "Could not exec child process: %s", strerror(errno));
             exit(1);
         }
-        NOB_ASSERT(0 && "unreachable");
+        NOB_UNREACHABLE("nob_cmd_run_async");
     }
 
     return cpid;
@@ -702,7 +703,7 @@ void nob_log(Nob_Log_Level level, const char *fmt, ...)
         fprintf(stderr, "[ERROR] ");
         break;
     default:
-        NOB_ASSERT(0 && "unreachable");
+        NOB_UNREACHABLE("nob_log");
     }
 
     va_list args;
@@ -853,7 +854,7 @@ bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
             nob_return_defer(false);
         } break;
 
-        default: NOB_ASSERT(0 && "unreachable");
+        default: NOB_UNREACHABLE("nob_copy_directory_recursively");
     }
 
 defer:
@@ -1230,6 +1231,7 @@ int closedir(DIR *dirp)
     // end of the file after the NOB_IMPLEMENTATION.
     #ifdef NOB_STRIP_PREFIX
         #define TODO NOB_TODO
+        #define UNREACHABLE NOB_UNREACHABLE
         #define UNUSED NOB_UNUSED
         #define ARRAY_LEN NOB_ARRAY_LEN
         #define ARRAY_GET NOB_ARRAY_GET
@@ -1303,6 +1305,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.3.0 (2024-10-17) Add NOB_UNREACHABLE
       1.2.2 (2024-10-16) Fix compilation of nob_cmd_run_sync_and_reset on Windows (By @KillerxDBr)
       1.2.1 (2024-10-16) Add a separate include guard for NOB_STRIP_PREFIX.
       1.2.0 (2024-10-15) Make NOB_DA_INIT_CAP redefinable
