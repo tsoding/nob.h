@@ -448,12 +448,11 @@ char *nob_log_windows_error(DWORD err) {
     DWORD errMsgSize = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                                       NULL, err, LANG_USER_DEFAULT, win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, NULL);
 
-    if (errMsgSize <= 3)
-        return NULL;
-
+    // TODO: check if last 2 chars are actualy CRLF
     // removing line breaks
     //              \r\n\0
-    win32ErrMsg[errMsgSize - 2] = '\0';
+    if (errMsgSize > 2)
+        win32ErrMsg[errMsgSize - 2] = '\0';
 
     return (char *)&win32ErrMsg;
 }
@@ -487,7 +486,7 @@ bool nob_copy_file(const char *src_path, const char *dst_path)
     nob_log(NOB_INFO, "copying %s -> %s", src_path, dst_path);
 #ifdef _WIN32
     if (!CopyFile(src_path, dst_path, FALSE)) {
-        nob_log(NOB_ERROR, "Could not copy file: %lu", GetLastError());
+        nob_log(NOB_ERROR, "Could not copy file: %s", nob_log_windows_error(GetLastError()));
         return false;
     }
     return true;
@@ -599,7 +598,7 @@ Nob_Proc nob_cmd_run_async(Nob_Cmd cmd)
     nob_sb_free(sb);
 
     if (!bSuccess) {
-        nob_log(NOB_ERROR, "Could not create child process: %lu", GetLastError());
+        nob_log(NOB_ERROR, "Could not create child process: %s", nob_log_windows_error(GetLastError()));
         return NOB_INVALID_PROC;
     }
 
@@ -651,13 +650,13 @@ bool nob_proc_wait(Nob_Proc proc)
                    );
 
     if (result == WAIT_FAILED) {
-        nob_log(NOB_ERROR, "could not wait on child process: %lu", GetLastError());
+        nob_log(NOB_ERROR, "could not wait on child process: %s", nob_log_windows_error(GetLastError()));
         return false;
     }
 
     DWORD exit_status;
     if (!GetExitCodeProcess(proc, &exit_status)) {
-        nob_log(NOB_ERROR, "could not get process exit code: %lu", GetLastError());
+        nob_log(NOB_ERROR, "could not get process exit code: %s", nob_log_windows_error(GetLastError()));
         return false;
     }
 
@@ -743,7 +742,11 @@ bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
 
     dir = opendir(parent);
     if (dir == NULL) {
+        #ifdef _WIN32
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, nob_log_windows_error(GetLastError()));
+        #else
         nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, strerror(errno));
+        #endif // _WIN32
         nob_return_defer(false);
     }
 
@@ -755,7 +758,11 @@ bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
     }
 
     if (errno != 0) {
+        #ifdef _WIN32
+        nob_log(NOB_ERROR, "Could not read directory %s: %s", parent, nob_log_windows_error(GetLastError()));
+        #else
         nob_log(NOB_ERROR, "Could not read directory %s: %s", parent, strerror(errno));
+        #endif // _WIN32
         nob_return_defer(false);
     }
 
@@ -801,7 +808,7 @@ Nob_File_Type nob_get_file_type(const char *path)
 #ifdef _WIN32
     DWORD attr = GetFileAttributesA(path);
     if (attr == INVALID_FILE_ATTRIBUTES) {
-        nob_log(NOB_ERROR, "Could not get file attributes of %s: %lu", path, GetLastError());
+        nob_log(NOB_ERROR, "Could not get file attributes of %s: %s", path, nob_log_windows_error(GetLastError()));
         return -1;
     }
 
@@ -957,14 +964,14 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
     if (output_path_fd == INVALID_HANDLE_VALUE) {
         // NOTE: if output does not exist it 100% must be rebuilt
         if (GetLastError() == ERROR_FILE_NOT_FOUND) return 1;
-        nob_log(NOB_ERROR, "Could not open file %s: %lu", output_path, GetLastError());
+        nob_log(NOB_ERROR, "Could not open file %s: %s", output_path, nob_log_windows_error(GetLastError()));
         return -1;
     }
     FILETIME output_path_time;
     bSuccess = GetFileTime(output_path_fd, NULL, NULL, &output_path_time);
     CloseHandle(output_path_fd);
     if (!bSuccess) {
-        nob_log(NOB_ERROR, "Could not get time of %s: %lu", output_path, GetLastError());
+        nob_log(NOB_ERROR, "Could not get time of %s: %s", output_path, nob_log_windows_error(GetLastError()));
         return -1;
     }
 
@@ -973,14 +980,14 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
         HANDLE input_path_fd = CreateFile(input_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
         if (input_path_fd == INVALID_HANDLE_VALUE) {
             // NOTE: non-existing input is an error cause it is needed for building in the first place
-            nob_log(NOB_ERROR, "Could not open file %s: %lu", input_path, GetLastError());
+            nob_log(NOB_ERROR, "Could not open file %s: %s", input_path, nob_log_windows_error(GetLastError()));
             return -1;
         }
         FILETIME input_path_time;
         bSuccess = GetFileTime(input_path_fd, NULL, NULL, &input_path_time);
         CloseHandle(input_path_fd);
         if (!bSuccess) {
-            nob_log(NOB_ERROR, "Could not get time of %s: %lu", input_path, GetLastError());
+            nob_log(NOB_ERROR, "Could not get time of %s: %s", input_path, nob_log_windows_error(GetLastError()));
             return -1;
         }
 
@@ -1026,7 +1033,7 @@ bool nob_rename(const char *old_path, const char *new_path)
     nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
 #ifdef _WIN32
     if (!MoveFileEx(old_path, new_path, MOVEFILE_REPLACE_EXISTING)) {
-        nob_log(NOB_ERROR, "could not rename %s to %s: %lu", old_path, new_path, GetLastError());
+        nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, nob_log_windows_error(GetLastError()));
         return false;
     }
 #else
