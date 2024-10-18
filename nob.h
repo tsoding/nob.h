@@ -426,6 +426,9 @@ typedef struct DIR DIR;
 static DIR *opendir(const char *dirpath);
 static struct dirent *readdir(DIR *dirp);
 static int closedir(DIR *dirp);
+
+char *nob_log_windows_error(DWORD err);
+
 #endif // _WIN32
 // minirent.h HEADER END ////////////////////////////////////////
 
@@ -435,6 +438,26 @@ static int closedir(DIR *dirp);
 
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
+
+#ifdef _WIN32
+
+#define NOB_WIN32_ERR_MSG_SIZE (4 * 1024)
+static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
+
+char *nob_log_windows_error(DWORD err) {
+    DWORD errMsgSize = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                      NULL, err, LANG_USER_DEFAULT, win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, NULL);
+
+    if (errMsgSize <= 3)
+        return NULL;
+
+    // removing line breaks
+    //              \r\n\0
+    win32ErrMsg[errMsgSize - 2] = '\0';
+
+    return (char *)&win32ErrMsg;
+}
+#endif // _WIN32
 
 static size_t nob_temp_size = 0;
 static char nob_temp[NOB_TEMP_CAPACITY] = {0};
