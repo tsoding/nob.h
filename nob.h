@@ -118,6 +118,9 @@ typedef enum {
     NOB_NO_LOGS,
 } Nob_Log_Level;
 
+// Any messages with the level below nob_minimal_log_level are going to be suppressed.
+extern Nob_Log_Level nob_minimal_log_level;
+
 void nob_log(Nob_Log_Level level, const char *fmt, ...);
 
 // It is an equivalent of shift command from bash. It basically pops an element from
