@@ -1,4 +1,4 @@
-/* nob - v1.3.1 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.3.2 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -705,6 +705,7 @@ void nob_log(Nob_Log_Level level, const char *fmt, ...)
     case NOB_ERROR:
         fprintf(stderr, "[ERROR] ");
         break;
+    case NOB_NO_LOGS: return;
     default:
         NOB_UNREACHABLE("nob_log");
     }
@@ -1308,6 +1309,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.3.2 (2024-10.21) Fix unreachable error in nob_log on passing NOB_NO_LOGS
       1.3.1 (2024-10-21) Fix redeclaration error for minimal_log_level (By @KillerxDBr)
       1.3.0 (2024-10-17) Add NOB_UNREACHABLE
       1.2.2 (2024-10-16) Fix compilation of nob_cmd_run_sync_and_reset on Windows (By @KillerxDBr)

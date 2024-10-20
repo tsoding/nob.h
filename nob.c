@@ -21,7 +21,7 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < test_names_count; ++i) {
         const char *bin_path = temp_sprintf("%s%s", BUILD_FOLDER, test_names[i]);
         const char *src_path = temp_sprintf("%s%s.c", TESTS_FOLDER, test_names[i]);
-        cmd_append(&cmd, "cc", "-I.", "-o", bin_path, src_path);
+        cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-Wswitch-enum", "-I.", "-o", bin_path, src_path);
         if (!cmd_run_sync_and_reset(&cmd)) return 1;
         cmd_append(&cmd, bin_path);
         if (!cmd_run_sync_and_reset(&cmd)) return 1;

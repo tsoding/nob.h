@@ -6,6 +6,7 @@ void log_test_messages(void)
     nob_log(NOB_INFO, "Info Test Message");
     nob_log(NOB_WARNING, "Warning Test Message");
     nob_log(NOB_ERROR, "Error Test Message");
+    nob_log(NOB_NO_LOGS, "YOU SHOULD NEVER SEE THIS");
 }
 
 int main(void)
