@@ -1,4 +1,4 @@
-/* nob - v1.3.0 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.3.1 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -117,6 +117,9 @@ typedef enum {
     NOB_ERROR,
     NOB_NO_LOGS,
 } Nob_Log_Level;
+
+// Any messages with the level below nob_minimal_log_level are going to be suppressed.
+extern Nob_Log_Level nob_minimal_log_level;
 
 void nob_log(Nob_Log_Level level, const char *fmt, ...);
 
@@ -1335,6 +1338,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.3.1 (2024-10-21) Fix redeclaration error for minimal_log_level (By @KillerxDBr)
       1.3.0 (2024-10-17) Add NOB_UNREACHABLE
       1.2.2 (2024-10-16) Fix compilation of nob_cmd_run_sync_and_reset on Windows (By @KillerxDBr)
       1.2.1 (2024-10-16) Add a separate include guard for NOB_STRIP_PREFIX.
