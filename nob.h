@@ -295,6 +295,23 @@ int nob_file_exists(const char *file_path);
 #  endif
 #endif
 
+#ifdef _WIN32
+// On Windows executables almost always invoked without extension, so
+// it's ./nob, not ./nob.exe. For renaming the extension is a must.
+#define MAYBE_APPEND_EXE_EXTENSION_FOR_WIN32(binary_path)                                    \
+    do {                                                                                     \
+        if (!nob_sv_end_with(nob_sv_from_cstr(binary_path), ".exe")) {                       \
+            Nob_String_Builder binary_path_sb = {0};                                         \
+            nob_sb_append_cstr(&binary_path_sb, binary_path);                                \
+            nob_sb_append_cstr(&binary_path_sb, ".exe");                                     \
+            nob_sb_append_null(&binary_path_sb);                                             \
+            binary_path = binary_path_sb.items;                                              \
+        }                                                                                    \
+    } while(0)
+#else
+#define MAYBE_APPEND_EXE_EXTENSION_FOR_WIN32(binary_path)
+#endif // _WIN32
+
 // Go Rebuild Urself™ Technology
 //
 //   How to use it:
@@ -322,6 +339,7 @@ int nob_file_exists(const char *file_path);
         const char *source_path = __FILE__;                                                  \
         assert(argc >= 1);                                                                   \
         const char *binary_path = argv[0];                                                   \
+        MAYBE_APPEND_EXE_EXTENSION_FOR_WIN32(binary_path);                                   \
                                                                                              \
         int rebuild_is_needed = nob_needs_rebuild(binary_path, &source_path, 1);             \
         if (rebuild_is_needed < 0) exit(1);                                                  \
@@ -361,6 +379,7 @@ Nob_String_View nob_sv_trim(Nob_String_View sv);
 Nob_String_View nob_sv_trim_left(Nob_String_View sv);
 Nob_String_View nob_sv_trim_right(Nob_String_View sv);
 bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
+bool nob_sv_end_with(Nob_String_View sv, const char *cstr);
 Nob_String_View nob_sv_from_cstr(const char *cstr);
 Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 
@@ -1117,6 +1136,17 @@ bool nob_sv_eq(Nob_String_View a, Nob_String_View b)
     }
 }
 
+bool nob_sv_end_with(Nob_String_View sv, const char *cstr)
+{
+    size_t cstr_count = strlen(cstr);
+    if (sv.count >= cstr_count) {
+        size_t ending_start = sv.count - cstr_count;
+        Nob_String_View sv_ending = nob_sv_from_parts(sv.data + ending_start, cstr_count);
+        return nob_sv_eq(sv_ending, nob_sv_from_cstr(cstr));
+    }
+    return false;
+}
+
 // RETURNS:
 //  0 - file does not exists
 //  1 - file exists
@@ -1301,6 +1331,7 @@ int closedir(DIR *dirp)
         #define sv_trim_left nob_sv_trim_left
         #define sv_trim_right nob_sv_trim_right
         #define sv_eq nob_sv_eq
+        #define sv_end_with nob_sv_end_with
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
     #endif // NOB_STRIP_PREFIX

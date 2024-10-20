@@ -7,6 +7,7 @@
 
 const char *test_names[] = {
     "minimal_log_level",
+    "nob_sv_end_with",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
