@@ -415,7 +415,7 @@ Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
 {
     const char *binary_path = nob_shift(argv, argc);
-#ifdef WIN32_
+#ifdef _WIN32
     // On Windows executables almost always invoked without extension, so
     // it's ./nob, not ./nob.exe. For renaming the extension is a must.
     if (!nob_sv_end_with(nob_sv_from_cstr(binary_path), ".exe")) {
