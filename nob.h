@@ -1326,7 +1326,8 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
-      1.3.3 (2024-10-21) Fix UX issues with NOB_GO_REBUILD_URSELF on Windows when you call nob without the .exe extension (By @pgalkin)
+      1.4.0 (2024-10-21) Fix UX issues with NOB_GO_REBUILD_URSELF on Windows when you call nob without the .exe extension (By @pgalkin)
+                         Add nob_sv_end_with (By @pgalkin)
       1.3.2 (2024-10-21) Fix unreachable error in nob_log on passing NOB_NO_LOGS
       1.3.1 (2024-10-21) Fix redeclaration error for minimal_log_level (By @KillerxDBr)
       1.3.0 (2024-10-17) Add NOB_UNREACHABLE
