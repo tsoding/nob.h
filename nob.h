@@ -1,4 +1,4 @@
-/* nob - v1.3.1 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.4.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -299,12 +299,12 @@ int nob_file_exists(const char *file_path);
 //
 //   How to use it:
 //     int main(int argc, char** argv) {
-//         GO_REBUILD_URSELF(argc, argv);
+//         NOB_GO_REBUILD_URSELF(argc, argv);
 //         // actual work
 //         return 0;
 //     }
 //
-//   After your added this macro every time you run ./nobuild it will detect
+//   After your added this macro every time you run ./nob it will detect
 //   that you modified its original source code and will try to rebuild itself
 //   before doing any actual work. So you only need to bootstrap your build system
 //   once.
@@ -312,42 +312,13 @@ int nob_file_exists(const char *file_path);
 //   The modification is detected by comparing the last modified times of the executable
 //   and its source code. The same way the make utility usually does it.
 //
-//   The rebuilding is done by using the REBUILD_URSELF macro which you can redefine
+//   The rebuilding is done by using the NOB_REBUILD_URSELF macro which you can redefine
 //   if you need a special way of bootstraping your build system. (which I personally
-//   do not recommend since the whole idea of nobuild is to keep the process of bootstrapping
-//   as simple as possible and doing all of the actual work inside of the nobuild)
+//   do not recommend since the whole idea of NoBuild is to keep the process of bootstrapping
+//   as simple as possible and doing all of the actual work inside of ./nob)
 //
-#define NOB_GO_REBUILD_URSELF(argc, argv)                                                    \
-    do {                                                                                     \
-        const char *source_path = __FILE__;                                                  \
-        assert(argc >= 1);                                                                   \
-        const char *binary_path = argv[0];                                                   \
-                                                                                             \
-        int rebuild_is_needed = nob_needs_rebuild(binary_path, &source_path, 1);             \
-        if (rebuild_is_needed < 0) exit(1);                                                  \
-        if (rebuild_is_needed) {                                                             \
-            Nob_String_Builder sb = {0};                                                     \
-            nob_sb_append_cstr(&sb, binary_path);                                            \
-            nob_sb_append_cstr(&sb, ".old");                                                 \
-            nob_sb_append_null(&sb);                                                         \
-                                                                                             \
-            if (!nob_rename(binary_path, sb.items)) exit(1);                                 \
-            Nob_Cmd rebuild = {0};                                                           \
-            nob_cmd_append(&rebuild, NOB_REBUILD_URSELF(binary_path, source_path));          \
-            bool rebuild_succeeded = nob_cmd_run_sync(rebuild);                              \
-            nob_cmd_free(rebuild);                                                           \
-            if (!rebuild_succeeded) {                                                        \
-                nob_rename(sb.items, binary_path);                                           \
-                exit(1);                                                                     \
-            }                                                                                \
-                                                                                             \
-            Nob_Cmd cmd = {0};                                                               \
-            nob_da_append_many(&cmd, argv, argc);                                            \
-            if (!nob_cmd_run_sync(cmd)) exit(1);                                             \
-            exit(0);                                                                         \
-        }                                                                                    \
-    } while(0)
-// The implementation idea is stolen from https://github.com/zhiayang/nabs
+void nob__go_rebuild_urself(const char *source_path, int argc, char **argv);
+#define NOB_GO_REBUILD_URSELF(argc, argv) nob__go_rebuild_urself(__FILE__, argc, argv)
 
 typedef struct {
     size_t count;
@@ -361,6 +332,7 @@ Nob_String_View nob_sv_trim(Nob_String_View sv);
 Nob_String_View nob_sv_trim_left(Nob_String_View sv);
 Nob_String_View nob_sv_trim_right(Nob_String_View sv);
 bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
+bool nob_sv_end_with(Nob_String_View sv, const char *cstr);
 Nob_String_View nob_sv_from_cstr(const char *cstr);
 Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 
@@ -460,6 +432,39 @@ char *nob_log_windows_error(DWORD err) {
     return (char *)&win32ErrMsg;
 }
 #endif // _WIN32
+
+// The implementation idea is stolen from https://github.com/zhiayang/nabs
+void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
+{
+    const char *binary_path = nob_shift(argv, argc);
+#ifdef _WIN32
+    // On Windows executables almost always invoked without extension, so
+    // it's ./nob, not ./nob.exe. For renaming the extension is a must.
+    if (!nob_sv_end_with(nob_sv_from_cstr(binary_path), ".exe")) {
+        binary_path = nob_temp_sprintf("%s.exe", binary_path);
+    }
+#endif
+
+    int rebuild_is_needed = nob_needs_rebuild1(binary_path, source_path);
+    if (rebuild_is_needed < 0) exit(1); // error
+    if (!rebuild_is_needed) return;     // no rebuild is needed
+
+    Nob_Cmd cmd = {0};
+
+    const char *old_binary_path = nob_temp_sprintf("%s.old", binary_path);
+
+    if (!nob_rename(binary_path, old_binary_path)) exit(1);
+    nob_cmd_append(&cmd, NOB_REBUILD_URSELF(binary_path, source_path));
+    if (!nob_cmd_run_sync_and_reset(&cmd)) {
+        nob_rename(old_binary_path, binary_path);
+        exit(1);
+    }
+
+    nob_cmd_append(&cmd, binary_path);
+    nob_da_append_many(&cmd, argv, argc);
+    if (!nob_cmd_run_sync_and_reset(&cmd)) exit(1);
+    exit(0);
+}
 
 static size_t nob_temp_size = 0;
 static char nob_temp[NOB_TEMP_CAPACITY] = {0};
@@ -727,6 +732,7 @@ void nob_log(Nob_Log_Level level, const char *fmt, ...)
     case NOB_ERROR:
         fprintf(stderr, "[ERROR] ");
         break;
+    case NOB_NO_LOGS: return;
     default:
         NOB_UNREACHABLE("nob_log");
     }
@@ -1146,6 +1152,17 @@ bool nob_sv_eq(Nob_String_View a, Nob_String_View b)
     }
 }
 
+bool nob_sv_end_with(Nob_String_View sv, const char *cstr)
+{
+    size_t cstr_count = strlen(cstr);
+    if (sv.count >= cstr_count) {
+        size_t ending_start = sv.count - cstr_count;
+        Nob_String_View sv_ending = nob_sv_from_parts(sv.data + ending_start, cstr_count);
+        return nob_sv_eq(sv_ending, nob_sv_from_cstr(cstr));
+    }
+    return false;
+}
+
 // RETURNS:
 //  0 - file does not exists
 //  1 - file exists
@@ -1330,6 +1347,7 @@ int closedir(DIR *dirp)
         #define sv_trim_left nob_sv_trim_left
         #define sv_trim_right nob_sv_trim_right
         #define sv_eq nob_sv_eq
+        #define sv_end_with nob_sv_end_with
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
     #endif // NOB_STRIP_PREFIX
@@ -1338,6 +1356,9 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.4.0 (2024-10-21) Fix UX issues with NOB_GO_REBUILD_URSELF on Windows when you call nob without the .exe extension (By @pgalkin)
+                         Add nob_sv_end_with (By @pgalkin)
+      1.3.2 (2024-10-21) Fix unreachable error in nob_log on passing NOB_NO_LOGS
       1.3.1 (2024-10-21) Fix redeclaration error for minimal_log_level (By @KillerxDBr)
       1.3.0 (2024-10-17) Add NOB_UNREACHABLE
       1.2.2 (2024-10-16) Fix compilation of nob_cmd_run_sync_and_reset on Windows (By @KillerxDBr)
@@ -1366,6 +1387,13 @@ int closedir(DIR *dirp)
         and let them co-exist for a while.
       - MAJOR update should be just a periodic cleanup of the deprecated functions and types
         without really modifying any existing functionality.
+
+   Naming Conventions:
+
+      - All the user facing names should be prefixed with `nob_` or `NOB_` depending on the case.
+      - The prefixes of non-redefinable names should be strippable with NOB_STRIP_PREFIX (unless
+        explicitly stated otherwise like in case of nob_log).
+      - Internal functions should be prefixed with `nob__` (double underscore).
 */
 
 /*
