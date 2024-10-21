@@ -420,6 +420,9 @@ Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 
 #ifdef _WIN32
 
+// im basing this in a github code snippet from .net sent in some Stack Overflow thread,
+// that allocate a buffer of 4096 wchars to use with FormatMessageW
+// TODO: find the thread link
 #define NOB_WIN32_ERR_MSG_SIZE (4 * 1024)
 static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
 
