@@ -1,4 +1,4 @@
-/* nob - v1.3.3 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.4.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
