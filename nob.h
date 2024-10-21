@@ -295,33 +295,16 @@ int nob_file_exists(const char *file_path);
 #  endif
 #endif
 
-#ifdef _WIN32
-// On Windows executables almost always invoked without extension, so
-// it's ./nob, not ./nob.exe. For renaming the extension is a must.
-#define MAYBE_APPEND_EXE_EXTENSION_FOR_WIN32(binary_path)                                    \
-    do {                                                                                     \
-        if (!nob_sv_end_with(nob_sv_from_cstr(binary_path), ".exe")) {                       \
-            Nob_String_Builder binary_path_sb = {0};                                         \
-            nob_sb_append_cstr(&binary_path_sb, binary_path);                                \
-            nob_sb_append_cstr(&binary_path_sb, ".exe");                                     \
-            nob_sb_append_null(&binary_path_sb);                                             \
-            binary_path = binary_path_sb.items;                                              \
-        }                                                                                    \
-    } while(0)
-#else
-#define MAYBE_APPEND_EXE_EXTENSION_FOR_WIN32(binary_path)
-#endif // _WIN32
-
 // Go Rebuild Urself™ Technology
 //
 //   How to use it:
 //     int main(int argc, char** argv) {
-//         GO_REBUILD_URSELF(argc, argv);
+//         NOB_GO_REBUILD_URSELF(argc, argv);
 //         // actual work
 //         return 0;
 //     }
 //
-//   After your added this macro every time you run ./nobuild it will detect
+//   After your added this macro every time you run ./nob it will detect
 //   that you modified its original source code and will try to rebuild itself
 //   before doing any actual work. So you only need to bootstrap your build system
 //   once.
@@ -329,43 +312,13 @@ int nob_file_exists(const char *file_path);
 //   The modification is detected by comparing the last modified times of the executable
 //   and its source code. The same way the make utility usually does it.
 //
-//   The rebuilding is done by using the REBUILD_URSELF macro which you can redefine
+//   The rebuilding is done by using the NOB_REBUILD_URSELF macro which you can redefine
 //   if you need a special way of bootstraping your build system. (which I personally
-//   do not recommend since the whole idea of nobuild is to keep the process of bootstrapping
-//   as simple as possible and doing all of the actual work inside of the nobuild)
+//   do not recommend since the whole idea of NoBuild is to keep the process of bootstrapping
+//   as simple as possible and doing all of the actual work inside of ./nob)
 //
-#define NOB_GO_REBUILD_URSELF(argc, argv)                                                    \
-    do {                                                                                     \
-        const char *source_path = __FILE__;                                                  \
-        assert(argc >= 1);                                                                   \
-        const char *binary_path = argv[0];                                                   \
-        MAYBE_APPEND_EXE_EXTENSION_FOR_WIN32(binary_path);                                   \
-                                                                                             \
-        int rebuild_is_needed = nob_needs_rebuild(binary_path, &source_path, 1);             \
-        if (rebuild_is_needed < 0) exit(1);                                                  \
-        if (rebuild_is_needed) {                                                             \
-            Nob_String_Builder sb = {0};                                                     \
-            nob_sb_append_cstr(&sb, binary_path);                                            \
-            nob_sb_append_cstr(&sb, ".old");                                                 \
-            nob_sb_append_null(&sb);                                                         \
-                                                                                             \
-            if (!nob_rename(binary_path, sb.items)) exit(1);                                 \
-            Nob_Cmd rebuild = {0};                                                           \
-            nob_cmd_append(&rebuild, NOB_REBUILD_URSELF(binary_path, source_path));          \
-            bool rebuild_succeeded = nob_cmd_run_sync(rebuild);                              \
-            nob_cmd_free(rebuild);                                                           \
-            if (!rebuild_succeeded) {                                                        \
-                nob_rename(sb.items, binary_path);                                           \
-                exit(1);                                                                     \
-            }                                                                                \
-                                                                                             \
-            Nob_Cmd cmd = {0};                                                               \
-            nob_da_append_many(&cmd, argv, argc);                                            \
-            if (!nob_cmd_run_sync(cmd)) exit(1);                                             \
-            exit(0);                                                                         \
-        }                                                                                    \
-    } while(0)
-// The implementation idea is stolen from https://github.com/zhiayang/nabs
+void nob__go_rebuild_urself(const char *source_path, int argc, char **argv);
+#define NOB_GO_REBUILD_URSELF(argc, argv) nob__go_rebuild_urself(__FILE__, argc, argv)
 
 typedef struct {
     size_t count;
@@ -457,6 +410,39 @@ static int closedir(DIR *dirp);
 
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
+
+// The implementation idea is stolen from https://github.com/zhiayang/nabs
+void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
+{
+    const char *binary_path = nob_shift(argv, argc);
+#ifdef WIN32_
+    // On Windows executables almost always invoked without extension, so
+    // it's ./nob, not ./nob.exe. For renaming the extension is a must.
+    if (!nob_sv_end_with(nob_sv_from_cstr(binary_path), ".exe")) {
+        binary_path = nob_temp_sprintf("%s.exe", binary_path);
+    }
+#endif
+
+    int rebuild_is_needed = nob_needs_rebuild1(binary_path, source_path);
+    if (rebuild_is_needed < 0) exit(1); // error
+    if (!rebuild_is_needed) return;     // no rebuild is needed
+
+    Nob_Cmd cmd = {0};
+
+    const char *old_binary_path = nob_temp_sprintf("%s.old", binary_path);
+
+    if (!nob_rename(binary_path, old_binary_path)) exit(1);
+    nob_cmd_append(&cmd, NOB_REBUILD_URSELF(binary_path, source_path));
+    if (!nob_cmd_run_sync_and_reset(&cmd)) {
+        nob_rename(old_binary_path, binary_path);
+        exit(1);
+    }
+
+    nob_cmd_append(&cmd, binary_path);
+    nob_da_append_many(&cmd, argv, argc);
+    if (!nob_cmd_run_sync_and_reset(&cmd)) exit(1);
+    exit(0);
+}
 
 static size_t nob_temp_size = 0;
 static char nob_temp[NOB_TEMP_CAPACITY] = {0};
@@ -1369,6 +1355,13 @@ int closedir(DIR *dirp)
         and let them co-exist for a while.
       - MAJOR update should be just a periodic cleanup of the deprecated functions and types
         without really modifying any existing functionality.
+
+   Naming Conventions:
+
+      - All the user facing names should be prefixed with `nob_` or `NOB_` depending on the case.
+      - The prefixes of non-redefinable names should be strippable with NOB_STRIP_PREFIX (unless
+        explicitly stated otherwise like in case of nob_log).
+      - Internal functions should be prefixed with `nob__` (double underscore).
 */
 
 /*
