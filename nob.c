@@ -8,6 +8,9 @@
 const char *test_names[] = {
     "minimal_log_level",
     "nob_sv_end_with",
+#ifdef _WIN32
+    "win32_error",
+#endif //_WIN32
 };
 #define test_names_count ARRAY_LEN(test_names)
 

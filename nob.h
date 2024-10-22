@@ -432,13 +432,13 @@ char *nob_log_win32_error(DWORD err) {
 
     if (errMsgSize == 0) {
         if (GetLastError() != ERROR_MR_MID_NOT_FOUND) {
-            if (sprintf(win32ErrMsg, "Error while getting message error for 0x%08lX", err) > 0) {
+            if (sprintf(win32ErrMsg, "Could not get error message for 0x%lX", err) > 0) {
                 return (char *)&win32ErrMsg;
             } else {
                 return NULL;
             }
         } else {
-            if (sprintf(win32ErrMsg, "Invalid Windows Error code (0x%08lX)", err) > 0) {
+            if (sprintf(win32ErrMsg, "Invalid Windows Error code (0x%lX)", err) > 0) {
                 return (char *)&win32ErrMsg;
             } else {
                 return NULL;
