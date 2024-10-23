@@ -1,4 +1,4 @@
-/* nob - v1.4.0 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.5.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -279,6 +279,8 @@ bool nob_rename(const char *old_path, const char *new_path);
 int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count);
 int nob_needs_rebuild1(const char *output_path, const char *input_path);
 int nob_file_exists(const char *file_path);
+const char *nob_get_current_dir_temp(void);
+bool nob_set_current_dir(const char *path);
 
 // TODO: add MinGW support for Go Rebuild Urself™ Technology
 #ifndef NOB_REBUILD_URSELF
@@ -1154,6 +1156,50 @@ int nob_file_exists(const char *file_path)
 #endif
 }
 
+const char *nob_get_current_dir_temp()
+{
+#ifdef _WIN32
+    DWORD nBufferLength = GetCurrentDirectory(0, NULL);
+    if (nBufferLength == 0) {
+        nob_log(NOB_ERROR, "could not get current directory: %s", GetLastError());
+        return NULL;
+    }
+
+    char *buffer = (char*) nob_temp_alloc(nBufferLength);
+    if (GetCurrentDirectory(nBufferLength, buffer) == 0) {
+        nob_log(NOB_ERROR, "could not get current directory: %s", GetLastError());
+        return NULL;
+    }
+
+    return buffer;
+#else
+    char *buffer = (char*) nob_temp_alloc(PATH_MAX);
+    if (getcwd(buffer, PATH_MAX) == NULL) {
+        nob_log(NOB_ERROR, "could not get current directory: %s", strerror(errno));
+        return NULL;
+    }
+
+    return buffer;
+#endif // _WIN32
+}
+
+bool nob_set_current_dir(const char *path)
+{
+#ifdef _WIN32
+    if (!SetCurrentDirectory(path)) {
+        nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, GetLastError());
+        return false;
+    }
+    return true;
+#else
+    if (chdir(path) < 0) {
+        nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, strerror(errno));
+        return false;
+    }
+    return true;
+#endif // _WIN32
+}
+
 // minirent.h SOURCE BEGIN ////////////////////////////////////////
 #ifdef _WIN32
 struct DIR
@@ -1310,6 +1356,8 @@ int closedir(DIR *dirp)
         #define needs_rebuild nob_needs_rebuild
         #define needs_rebuild1 nob_needs_rebuild1
         #define file_exists nob_file_exists
+        #define get_current_dir_temp nob_get_current_dir_temp
+        #define set_current_dir nob_set_current_dir
         #define String_View Nob_String_View
         #define temp_sv_to_cstr nob_temp_sv_to_cstr
         #define sv_chop_by_delim nob_sv_chop_by_delim
@@ -1326,6 +1374,8 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.5.0 (2024-10-23) Add nob_get_current_dir_temp()
+                         Add nob_set_current_dir()
       1.4.0 (2024-10-21) Fix UX issues with NOB_GO_REBUILD_URSELF on Windows when you call nob without the .exe extension (By @pgalkin)
                          Add nob_sv_end_with (By @pgalkin)
       1.3.2 (2024-10-21) Fix unreachable error in nob_log on passing NOB_NO_LOGS
