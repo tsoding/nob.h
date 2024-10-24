@@ -1,4 +1,4 @@
-/* nob - v1.5.0 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.5.1 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -79,6 +79,7 @@
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
+#include <limits.h>
 
 #ifdef _WIN32
 #    define WIN32_LEAN_AND_MEAN
@@ -1374,6 +1375,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.5.1 (2024-10-25) Include limits.h for Linux musl libc (by @pgalkin)
       1.5.0 (2024-10-23) Add nob_get_current_dir_temp()
                          Add nob_set_current_dir()
       1.4.0 (2024-10-21) Fix UX issues with NOB_GO_REBUILD_URSELF on Windows when you call nob without the .exe extension (By @pgalkin)
