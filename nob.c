@@ -46,7 +46,8 @@ int main(int argc, char **argv)
         }
 
         while (argc > 0) {
-            if (!build_and_run_test(&cmd, shift(argv, argc))) return 1;
+            const char *test_name = shift(argv, argc);
+            if (!build_and_run_test(&cmd, test_name)) return 1;
         }
         return 0;
     }

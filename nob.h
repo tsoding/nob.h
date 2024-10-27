@@ -1,4 +1,4 @@
-/* nob - v1.5.1 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.6.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -233,6 +233,7 @@ typedef struct {
 } Nob_Procs;
 
 bool nob_procs_wait(Nob_Procs procs);
+bool nob_procs_wait_and_reset(Nob_Procs *procs);
 
 // Wait until the process has finished
 bool nob_proc_wait(Nob_Proc proc);
@@ -259,6 +260,9 @@ void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
 
 // Run command asynchronously
 Nob_Proc nob_cmd_run_async(Nob_Cmd cmd);
+// NOTE: nob_cmd_run_async_and_reset() is just like nob_cmd_run_async() except it also resets cmd.count to 0
+// so the Nob_Cmd instance can be seamlessly used several times in a row
+Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd);
 
 // Run command synchronously
 bool nob_cmd_run_sync(Nob_Cmd cmd);
@@ -338,6 +342,8 @@ bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
 bool nob_sv_end_with(Nob_String_View sv, const char *cstr);
 Nob_String_View nob_sv_from_cstr(const char *cstr);
 Nob_String_View nob_sv_from_parts(const char *data, size_t count);
+// nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
+#define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
 
 // printf macros for String_View
 #ifndef SV_Fmt
@@ -619,12 +625,26 @@ Nob_Proc nob_cmd_run_async(Nob_Cmd cmd)
 #endif
 }
 
+Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd)
+{
+    Nob_Proc proc = nob_cmd_run_async(*cmd);
+    cmd->count = 0;
+    return proc;
+}
+
 bool nob_procs_wait(Nob_Procs procs)
 {
     bool success = true;
     for (size_t i = 0; i < procs.count; ++i) {
         success = nob_proc_wait(procs.items[i]) && success;
     }
+    return success;
+}
+
+bool nob_procs_wait_and_reset(Nob_Procs *procs)
+{
+    bool success = nob_procs_wait(*procs);
+    procs->count = 0;
     return success;
 }
 
@@ -1339,12 +1359,14 @@ int closedir(DIR *dirp)
         #define INVALID_PROC NOB_INVALID_PROC
         #define Procs Nob_Procs
         #define procs_wait nob_procs_wait
+        #define procs_wait_and_reset nob_procs_wait_and_reset
         #define proc_wait nob_proc_wait
         #define Cmd Nob_Cmd
         #define cmd_render nob_cmd_render
         #define cmd_append nob_cmd_append
         #define cmd_free nob_cmd_free
         #define cmd_run_async nob_cmd_run_async
+        #define cmd_run_async_and_reset nob_cmd_run_async_and_reset
         #define cmd_run_sync nob_cmd_run_sync
         #define cmd_run_sync_and_reset nob_cmd_run_sync_and_reset
         #define temp_strdup nob_temp_strdup
@@ -1369,12 +1391,16 @@ int closedir(DIR *dirp)
         #define sv_end_with nob_sv_end_with
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
+        #define sb_to_sv nob_sb_to_sv
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
 
 /*
    Revision history:
 
+      1.6.0 (2024-10-27) Add nob_cmd_run_sync_and_reset()
+                         Add nob_sb_to_sv()
+                         Add nob_procs_wait_and_reset()
       1.5.1 (2024-10-25) Include limits.h for Linux musl libc (by @pgalkin)
       1.5.0 (2024-10-23) Add nob_get_current_dir_temp()
                          Add nob_set_current_dir()
