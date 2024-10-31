@@ -1,4 +1,4 @@
-/* nob - v1.4.0 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.6.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -79,6 +79,7 @@
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
+#include <limits.h>
 
 #ifdef _WIN32
 #    define WIN32_LEAN_AND_MEAN
@@ -232,6 +233,7 @@ typedef struct {
 } Nob_Procs;
 
 bool nob_procs_wait(Nob_Procs procs);
+bool nob_procs_wait_and_reset(Nob_Procs *procs);
 
 // Wait until the process has finished
 bool nob_proc_wait(Nob_Proc proc);
@@ -258,6 +260,9 @@ void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
 
 // Run command asynchronously
 Nob_Proc nob_cmd_run_async(Nob_Cmd cmd);
+// NOTE: nob_cmd_run_async_and_reset() is just like nob_cmd_run_async() except it also resets cmd.count to 0
+// so the Nob_Cmd instance can be seamlessly used several times in a row
+Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd);
 
 // Run command synchronously
 bool nob_cmd_run_sync(Nob_Cmd cmd);
@@ -279,6 +284,8 @@ bool nob_rename(const char *old_path, const char *new_path);
 int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count);
 int nob_needs_rebuild1(const char *output_path, const char *input_path);
 int nob_file_exists(const char *file_path);
+const char *nob_get_current_dir_temp(void);
+bool nob_set_current_dir(const char *path);
 
 // TODO: add MinGW support for Go Rebuild Urself™ Technology
 #ifndef NOB_REBUILD_URSELF
@@ -335,6 +342,8 @@ bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
 bool nob_sv_end_with(Nob_String_View sv, const char *cstr);
 Nob_String_View nob_sv_from_cstr(const char *cstr);
 Nob_String_View nob_sv_from_parts(const char *data, size_t count);
+// nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
+#define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
 
 // printf macros for String_View
 #ifndef SV_Fmt
@@ -664,12 +673,26 @@ Nob_Proc nob_cmd_run_async(Nob_Cmd cmd)
 #endif
 }
 
+Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd)
+{
+    Nob_Proc proc = nob_cmd_run_async(*cmd);
+    cmd->count = 0;
+    return proc;
+}
+
 bool nob_procs_wait(Nob_Procs procs)
 {
     bool success = true;
     for (size_t i = 0; i < procs.count; ++i) {
         success = nob_proc_wait(procs.items[i]) && success;
     }
+    return success;
+}
+
+bool nob_procs_wait_and_reset(Nob_Procs *procs)
+{
+    bool success = nob_procs_wait(*procs);
+    procs->count = 0;
     return success;
 }
 
@@ -1210,6 +1233,50 @@ int nob_file_exists(const char *file_path)
 #endif
 }
 
+const char *nob_get_current_dir_temp()
+{
+#ifdef _WIN32
+    DWORD nBufferLength = GetCurrentDirectory(0, NULL);
+    if (nBufferLength == 0) {
+        nob_log(NOB_ERROR, "could not get current directory: %s", nob_log_win32_error(GetLastError()));
+        return NULL;
+    }
+
+    char *buffer = (char*) nob_temp_alloc(nBufferLength);
+    if (GetCurrentDirectory(nBufferLength, buffer) == 0) {
+        nob_log(NOB_ERROR, "could not get current directory: %s", nob_log_win32_error(GetLastError()));
+        return NULL;
+    }
+
+    return buffer;
+#else
+    char *buffer = (char*) nob_temp_alloc(PATH_MAX);
+    if (getcwd(buffer, PATH_MAX) == NULL) {
+        nob_log(NOB_ERROR, "could not get current directory: %s", strerror(errno));
+        return NULL;
+    }
+
+    return buffer;
+#endif // _WIN32
+}
+
+bool nob_set_current_dir(const char *path)
+{
+#ifdef _WIN32
+    if (!SetCurrentDirectory(path)) {
+        nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, nob_log_win32_error(GetLastError()));
+        return false;
+    }
+    return true;
+#else
+    if (chdir(path) < 0) {
+        nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, strerror(errno));
+        return false;
+    }
+    return true;
+#endif // _WIN32
+}
+
 // minirent.h SOURCE BEGIN ////////////////////////////////////////
 #ifdef _WIN32
 struct DIR
@@ -1348,12 +1415,14 @@ int closedir(DIR *dirp)
         #define INVALID_PROC NOB_INVALID_PROC
         #define Procs Nob_Procs
         #define procs_wait nob_procs_wait
+        #define procs_wait_and_reset nob_procs_wait_and_reset
         #define proc_wait nob_proc_wait
         #define Cmd Nob_Cmd
         #define cmd_render nob_cmd_render
         #define cmd_append nob_cmd_append
         #define cmd_free nob_cmd_free
         #define cmd_run_async nob_cmd_run_async
+        #define cmd_run_async_and_reset nob_cmd_run_async_and_reset
         #define cmd_run_sync nob_cmd_run_sync
         #define cmd_run_sync_and_reset nob_cmd_run_sync_and_reset
         #define temp_strdup nob_temp_strdup
@@ -1366,6 +1435,8 @@ int closedir(DIR *dirp)
         #define needs_rebuild nob_needs_rebuild
         #define needs_rebuild1 nob_needs_rebuild1
         #define file_exists nob_file_exists
+        #define get_current_dir_temp nob_get_current_dir_temp
+        #define set_current_dir nob_set_current_dir
         #define String_View Nob_String_View
         #define temp_sv_to_cstr nob_temp_sv_to_cstr
         #define sv_chop_by_delim nob_sv_chop_by_delim
@@ -1376,12 +1447,20 @@ int closedir(DIR *dirp)
         #define sv_end_with nob_sv_end_with
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
+        #define sb_to_sv nob_sb_to_sv
+        #define log_win32_error nob_log_win32_error
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
 
 /*
    Revision history:
 
+      1.6.0 (2024-10-27) Add nob_cmd_run_sync_and_reset()
+                         Add nob_sb_to_sv()
+                         Add nob_procs_wait_and_reset()
+      1.5.1 (2024-10-25) Include limits.h for Linux musl libc (by @pgalkin)
+      1.5.0 (2024-10-23) Add nob_get_current_dir_temp()
+                         Add nob_set_current_dir()
       1.4.0 (2024-10-21) Fix UX issues with NOB_GO_REBUILD_URSELF on Windows when you call nob without the .exe extension (By @pgalkin)
                          Add nob_sv_end_with (By @pgalkin)
       1.3.2 (2024-10-21) Fix unreachable error in nob_log on passing NOB_NO_LOGS
