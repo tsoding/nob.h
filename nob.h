@@ -255,6 +255,9 @@ void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
                        ((const char*[]){__VA_ARGS__}), \
                        (sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*)))
 
+#define nob_cmd_extend(cmd, other_cmd) \
+    nob_da_append_many(cmd, (other_cmd)->items, (other_cmd)->count)
+
 // Free all the memory allocated by command arguments
 #define nob_cmd_free(cmd) NOB_FREE(cmd.items)
 
