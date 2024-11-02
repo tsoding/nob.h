@@ -462,7 +462,7 @@ char *nob_log_win32_error(DWORD err) {
         win32ErrMsg[--errMsgSize] = '\0';
     }
 
-    return (char *)&win32ErrMsg;
+    return win32ErrMsg;
 }
 
 #endif // _WIN32
