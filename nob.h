@@ -1,4 +1,4 @@
-/* nob - v1.7.0 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.8.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -1458,6 +1458,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.8.0 (2024-11-03) Add nob_cmd_extend() (By @0dminnimda)
       1.7.0 (2024-11-03) Add nob_win32_error_message and NOB_WIN32_ERR_MSG_SIZE (By @KillerxDBr)
       1.6.0 (2024-10-27) Add nob_cmd_run_sync_and_reset()
                          Add nob_sb_to_sv()
