@@ -3,6 +3,6 @@
 
 int main(void) {
     for (DWORD i = 0; i < 16000; i++)
-        nob_log(NOB_ERROR, "%lu (0x%X): \"%s\"", i, i, nob_log_win32_error(i));
+        nob_log(NOB_ERROR, "%lu (0x%X): \"%s\"", i, i, nob_win32_error_message(i));
     return 0;
 }
