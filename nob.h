@@ -1,4 +1,4 @@
-/* nob - v1.6.0 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.7.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -413,8 +413,15 @@ typedef struct DIR DIR;
 static DIR *opendir(const char *dirpath);
 static struct dirent *readdir(DIR *dirp);
 static int closedir(DIR *dirp);
+
 #endif // _WIN32
 // minirent.h HEADER END ////////////////////////////////////////
+
+#ifdef _WIN32
+
+char *nob_win32_error_message(DWORD err);
+
+#endif // _WIN32
 
 #endif // NOB_H_
 
@@ -422,6 +429,46 @@ static int closedir(DIR *dirp);
 
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
+
+#ifdef _WIN32
+
+// Base on https://stackoverflow.com/a/75644008
+// > .NET Core uses 4096 * sizeof(WCHAR) buffer on stack for FormatMessageW call. And...thats it.
+// >
+// > https://github.com/dotnet/runtime/blob/3b63eb1346f1ddbc921374a5108d025662fb5ffd/src/coreclr/utilcode/posterror.cpp#L264-L265
+#ifndef NOB_WIN32_ERR_MSG_SIZE
+#define NOB_WIN32_ERR_MSG_SIZE (4 * 1024)
+#endif // NOB_WIN32_ERR_MSG_SIZE
+
+char *nob_win32_error_message(DWORD err) {
+    static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
+    DWORD errMsgSize = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, LANG_USER_DEFAULT, win32ErrMsg,
+                                      NOB_WIN32_ERR_MSG_SIZE, NULL);
+
+    if (errMsgSize == 0) {
+        if (GetLastError() != ERROR_MR_MID_NOT_FOUND) {
+            if (sprintf(win32ErrMsg, "Could not get error message for 0x%lX", err) > 0) {
+                return (char *)&win32ErrMsg;
+            } else {
+                return NULL;
+            }
+        } else {
+            if (sprintf(win32ErrMsg, "Invalid Windows Error code (0x%lX)", err) > 0) {
+                return (char *)&win32ErrMsg;
+            } else {
+                return NULL;
+            }
+        }
+    }
+
+    while (errMsgSize > 1 && isspace(win32ErrMsg[errMsgSize - 1])) {
+        win32ErrMsg[--errMsgSize] = '\0';
+    }
+
+    return win32ErrMsg;
+}
+
+#endif // _WIN32
 
 // The implementation idea is stolen from https://github.com/zhiayang/nabs
 void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
@@ -484,7 +531,7 @@ bool nob_copy_file(const char *src_path, const char *dst_path)
     nob_log(NOB_INFO, "copying %s -> %s", src_path, dst_path);
 #ifdef _WIN32
     if (!CopyFile(src_path, dst_path, FALSE)) {
-        nob_log(NOB_ERROR, "Could not copy file: %lu", GetLastError());
+        nob_log(NOB_ERROR, "Could not copy file: %s", nob_win32_error_message(GetLastError()));
         return false;
     }
     return true;
@@ -596,7 +643,7 @@ Nob_Proc nob_cmd_run_async(Nob_Cmd cmd)
     nob_sb_free(sb);
 
     if (!bSuccess) {
-        nob_log(NOB_ERROR, "Could not create child process: %lu", GetLastError());
+        nob_log(NOB_ERROR, "Could not create child process: %s", nob_win32_error_message(GetLastError()));
         return NOB_INVALID_PROC;
     }
 
@@ -662,13 +709,13 @@ bool nob_proc_wait(Nob_Proc proc)
                    );
 
     if (result == WAIT_FAILED) {
-        nob_log(NOB_ERROR, "could not wait on child process: %lu", GetLastError());
+        nob_log(NOB_ERROR, "could not wait on child process: %s", nob_win32_error_message(GetLastError()));
         return false;
     }
 
     DWORD exit_status;
     if (!GetExitCodeProcess(proc, &exit_status)) {
-        nob_log(NOB_ERROR, "could not get process exit code: %lu", GetLastError());
+        nob_log(NOB_ERROR, "could not get process exit code: %s", nob_win32_error_message(GetLastError()));
         return false;
     }
 
@@ -755,7 +802,11 @@ bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
 
     dir = opendir(parent);
     if (dir == NULL) {
+        #ifdef _WIN32
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, nob_win32_error_message(GetLastError()));
+        #else
         nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, strerror(errno));
+        #endif // _WIN32
         nob_return_defer(false);
     }
 
@@ -767,7 +818,11 @@ bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
     }
 
     if (errno != 0) {
+        #ifdef _WIN32
+        nob_log(NOB_ERROR, "Could not read directory %s: %s", parent, nob_win32_error_message(GetLastError()));
+        #else
         nob_log(NOB_ERROR, "Could not read directory %s: %s", parent, strerror(errno));
+        #endif // _WIN32
         nob_return_defer(false);
     }
 
@@ -813,7 +868,7 @@ Nob_File_Type nob_get_file_type(const char *path)
 #ifdef _WIN32
     DWORD attr = GetFileAttributesA(path);
     if (attr == INVALID_FILE_ATTRIBUTES) {
-        nob_log(NOB_ERROR, "Could not get file attributes of %s: %lu", path, GetLastError());
+        nob_log(NOB_ERROR, "Could not get file attributes of %s: %s", path, nob_win32_error_message(GetLastError()));
         return -1;
     }
 
@@ -969,14 +1024,14 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
     if (output_path_fd == INVALID_HANDLE_VALUE) {
         // NOTE: if output does not exist it 100% must be rebuilt
         if (GetLastError() == ERROR_FILE_NOT_FOUND) return 1;
-        nob_log(NOB_ERROR, "Could not open file %s: %lu", output_path, GetLastError());
+        nob_log(NOB_ERROR, "Could not open file %s: %s", output_path, nob_win32_error_message(GetLastError()));
         return -1;
     }
     FILETIME output_path_time;
     bSuccess = GetFileTime(output_path_fd, NULL, NULL, &output_path_time);
     CloseHandle(output_path_fd);
     if (!bSuccess) {
-        nob_log(NOB_ERROR, "Could not get time of %s: %lu", output_path, GetLastError());
+        nob_log(NOB_ERROR, "Could not get time of %s: %s", output_path, nob_win32_error_message(GetLastError()));
         return -1;
     }
 
@@ -985,14 +1040,14 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
         HANDLE input_path_fd = CreateFile(input_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
         if (input_path_fd == INVALID_HANDLE_VALUE) {
             // NOTE: non-existing input is an error cause it is needed for building in the first place
-            nob_log(NOB_ERROR, "Could not open file %s: %lu", input_path, GetLastError());
+            nob_log(NOB_ERROR, "Could not open file %s: %s", input_path, nob_win32_error_message(GetLastError()));
             return -1;
         }
         FILETIME input_path_time;
         bSuccess = GetFileTime(input_path_fd, NULL, NULL, &input_path_time);
         CloseHandle(input_path_fd);
         if (!bSuccess) {
-            nob_log(NOB_ERROR, "Could not get time of %s: %lu", input_path, GetLastError());
+            nob_log(NOB_ERROR, "Could not get time of %s: %s", input_path, nob_win32_error_message(GetLastError()));
             return -1;
         }
 
@@ -1038,7 +1093,7 @@ bool nob_rename(const char *old_path, const char *new_path)
     nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
 #ifdef _WIN32
     if (!MoveFileEx(old_path, new_path, MOVEFILE_REPLACE_EXISTING)) {
-        nob_log(NOB_ERROR, "could not rename %s to %s: %lu", old_path, new_path, GetLastError());
+        nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, nob_win32_error_message(GetLastError()));
         return false;
     }
 #else
@@ -1185,13 +1240,13 @@ const char *nob_get_current_dir_temp()
 #ifdef _WIN32
     DWORD nBufferLength = GetCurrentDirectory(0, NULL);
     if (nBufferLength == 0) {
-        nob_log(NOB_ERROR, "could not get current directory: %s", GetLastError());
+        nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
 
     char *buffer = (char*) nob_temp_alloc(nBufferLength);
     if (GetCurrentDirectory(nBufferLength, buffer) == 0) {
-        nob_log(NOB_ERROR, "could not get current directory: %s", GetLastError());
+        nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
 
@@ -1211,7 +1266,7 @@ bool nob_set_current_dir(const char *path)
 {
 #ifdef _WIN32
     if (!SetCurrentDirectory(path)) {
-        nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, GetLastError());
+        nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, nob_win32_error_message(GetLastError()));
         return false;
     }
     return true;
@@ -1396,12 +1451,14 @@ int closedir(DIR *dirp)
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
         #define sb_to_sv nob_sb_to_sv
+        #define win32_error_message nob_win32_error_message
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
 
 /*
    Revision history:
 
+      1.7.0 (2024-11-03) Add nob_win32_error_message and NOB_WIN32_ERR_MSG_SIZE (By @KillerxDBr)
       1.6.0 (2024-10-27) Add nob_cmd_run_sync_and_reset()
                          Add nob_sb_to_sv()
                          Add nob_procs_wait_and_reset()
