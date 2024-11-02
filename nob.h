@@ -1,4 +1,4 @@
-/* nob - v1.7.0 - Public Domain - https://github.com/tsoding/nob
+/* nob - v1.8.0 - Public Domain - https://github.com/tsoding/nob
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -254,6 +254,9 @@ void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
     nob_da_append_many(cmd, \
                        ((const char*[]){__VA_ARGS__}), \
                        (sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*)))
+
+#define nob_cmd_extend(cmd, other_cmd) \
+    nob_da_append_many(cmd, (other_cmd)->items, (other_cmd)->count)
 
 // Free all the memory allocated by command arguments
 #define nob_cmd_free(cmd) NOB_FREE(cmd.items)
@@ -1419,6 +1422,7 @@ int closedir(DIR *dirp)
         #define Cmd Nob_Cmd
         #define cmd_render nob_cmd_render
         #define cmd_append nob_cmd_append
+        #define cmd_extend nob_cmd_extend
         #define cmd_free nob_cmd_free
         #define cmd_run_async nob_cmd_run_async
         #define cmd_run_async_and_reset nob_cmd_run_async_and_reset
@@ -1454,6 +1458,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+      1.8.0 (2024-11-03) Add nob_cmd_extend() (By @0dminnimda)
       1.7.0 (2024-11-03) Add nob_win32_error_message and NOB_WIN32_ERR_MSG_SIZE (By @KillerxDBr)
       1.6.0 (2024-10-27) Add nob_cmd_run_sync_and_reset()
                          Add nob_sb_to_sv()
