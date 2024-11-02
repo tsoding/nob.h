@@ -436,9 +436,9 @@ Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 #ifndef NOB_WIN32_ERR_MSG_SIZE
 #define NOB_WIN32_ERR_MSG_SIZE (4 * 1024)
 #endif // NOB_WIN32_ERR_MSG_SIZE
-static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
 
 char *nob_log_win32_error(DWORD err) {
+    static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
     DWORD errMsgSize = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, LANG_USER_DEFAULT, win32ErrMsg,
                                       NOB_WIN32_ERR_MSG_SIZE, NULL);
 
