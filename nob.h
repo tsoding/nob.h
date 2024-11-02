@@ -458,13 +458,9 @@ char *nob_log_win32_error(DWORD err) {
         }
     }
 
-    // DWORD bkpSize = errMsgSize;
-
-    // TODO: check if last 2 chars are actualy CRLF
-    // removing line breaks
-    //              \r\n\0
-    while (errMsgSize > 1 && win32ErrMsg[errMsgSize - 1] < ' ')
+    while (errMsgSize > 1 && isspace(win32ErrMsg[errMsgSize - 1])) {
         win32ErrMsg[--errMsgSize] = '\0';
+    }
 
     return (char *)&win32ErrMsg;
 }
