@@ -283,6 +283,9 @@ void nob_temp_reset(void);
 size_t nob_temp_save(void);
 void nob_temp_rewind(size_t checkpoint);
 
+// Given any path returns the last part of that path.
+// "/path/to/a/file.c" -> "file.c"; "/path/to/a/directory" -> "directory"
+const char *nob_path_name(const char *path);
 bool nob_rename(const char *old_path, const char *new_path);
 int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count);
 int nob_needs_rebuild1(const char *output_path, const char *input_path);
@@ -1088,6 +1091,19 @@ int nob_needs_rebuild1(const char *output_path, const char *input_path)
     return nob_needs_rebuild(output_path, &input_path, 1);
 }
 
+const char *nob_path_name(const char *path)
+{
+#ifdef _WIN32
+    const char *p1 = strrchr(path, '/');
+    const char *p2 = strrchr(path, '\\');
+    const char *p = max(p1, p2);  // NULL is ignored if the other search is successful
+    return p ? p + 1 : path;
+#else
+    const char *p = strrchr(path, '/');
+    return p ? p + 1 : path;
+#endif // _WIN32
+}
+
 bool nob_rename(const char *old_path, const char *new_path)
 {
     nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
@@ -1434,6 +1450,7 @@ int closedir(DIR *dirp)
         #define temp_reset nob_temp_reset
         #define temp_save nob_temp_save
         #define temp_rewind nob_temp_rewind
+        #define path_name nob_path_name
         #define rename nob_rename
         #define needs_rebuild nob_needs_rebuild
         #define needs_rebuild1 nob_needs_rebuild1
