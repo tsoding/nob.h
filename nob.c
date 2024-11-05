@@ -1,24 +1,22 @@
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 #include "nob.h"
-
-#define BUILD_FOLDER "build/"
-#define TESTS_FOLDER "tests/"
+#include "shared.h"
 
 const char *test_names[] = {
     "minimal_log_level",
     "nob_sv_end_with",
     "set_get_current_dir",
+    "cmd_redirect",
 #ifdef _WIN32
     "win32_error",
 #endif //_WIN32
 };
 #define test_names_count ARRAY_LEN(test_names)
 
-// TODO: Implement record/replay testing
 bool build_and_run_test(Cmd *cmd, const char *test_name)
 {
-    const char *bin_path = temp_sprintf("%s%s", BUILD_FOLDER, test_name);
+    const char *bin_path = temp_sprintf("%s%s", BUILD_FOLDER TESTS_FOLDER, test_name);
     const char *src_path = temp_sprintf("%s%s.c", TESTS_FOLDER, test_name);
     cmd_append(cmd, "cc", "-Wall", "-Wextra", "-Wswitch-enum", "-I.", "-o", bin_path, src_path);
     if (!cmd_run_sync_and_reset(cmd)) return false;
@@ -39,6 +37,8 @@ int main(int argc, char **argv)
     if (argc > 0) command_name = shift(argv, argc);
 
     if (!mkdir_if_not_exists(BUILD_FOLDER)) return 1;
+    if (!mkdir_if_not_exists(BUILD_FOLDER TESTS_FOLDER)) return 1;
+    if (!mkdir_if_not_exists(BUILD_FOLDER TOOLS_FOLDER)) return 1;
 
     if (strcmp(command_name, "test") == 0) {
         if (argc <= 0) {
