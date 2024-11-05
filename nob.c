@@ -2,13 +2,25 @@
 #define NOB_STRIP_PREFIX
 #include "nob.h"
 
-#define BUILD_FOLDER "build/"
-#define TESTS_FOLDER "tests/"
+#if defined(_MSC_VER)
+#   define BUILD_FOLDER "build\\"
+#   define TESTS_FOLDER "tests\\"
+#   ifdef __clang__
+#       define CC "clang-cl"
+#   else
+#       define CC "cl"
+#   endif
+#else
+#   define BUILD_FOLDER "build/"
+#   define TESTS_FOLDER "tests/"
+#   define CC "cc"
+#endif
 
 const char *test_names[] = {
     "minimal_log_level",
     "nob_sv_end_with",
     "set_get_current_dir",
+    "nob_da_for",
 #ifdef _WIN32
     "win32_error",
 #endif //_WIN32
@@ -20,7 +32,12 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
 {
     const char *bin_path = temp_sprintf("%s%s", BUILD_FOLDER, test_name);
     const char *src_path = temp_sprintf("%s%s.c", TESTS_FOLDER, test_name);
-    cmd_append(cmd, "cc", "-Wall", "-Wextra", "-Wswitch-enum", "-I.", "-o", bin_path, src_path);
+
+#if defined(_MSC_VER)
+    cmd_append(cmd, CC, "/W4",  "/I.", "/nologo", "/Zc:auto", "/std:clatest", temp_sprintf("/Fe:%s",bin_path), src_path);
+#else
+    cmd_append(cmd, CC, "-Wall", "-Wextra", "-Wswitch-enum", "-I.", "-o", bin_path, src_path);
+#endif
     if (!cmd_run_sync_and_reset(cmd)) return false;
     cmd_append(cmd, bin_path);
     if (!cmd_run_sync_and_reset(cmd)) return false;

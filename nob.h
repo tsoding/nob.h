@@ -90,6 +90,13 @@
 #    include <windows.h>
 #    include <direct.h>
 #    include <shellapi.h>
+#    ifdef _MSC_VER
+#       // Disable some warnings on MSVC. Example: `snprintf` is considered unsafe by microsuck compiler
+#       pragma warning(push)
+#       pragma warning(disable : 4244)
+#       pragma warning(disable : 4305)
+#       pragma warning(disable : 4996)
+#    endif
 #else
 #    include <sys/types.h>
 #    include <sys/wait.h>
@@ -158,6 +165,35 @@ Nob_File_Type nob_get_file_type(const char *path);
 // Initial capacity of a dynamic array
 #ifndef NOB_DA_INIT_CAP
 #define NOB_DA_INIT_CAP 256
+#endif
+
+
+#if (defined(_MSC_VER) && defined(__clang__))
+#   define USING_CLANG_CL_EXE  // Using clang-cl.exe which has typeof support
+#endif
+
+// MSVC typeof support: https://learn.microsoft.com/en-us/cpp/c-language/typeof-c?view=msvc-170
+// Even TCC has typeof support, but untested: https://bellard.org/tcc/tcc-doc.html
+#if (!defined(_MSC_VER) || defined(USING_CLANG_CL_EXE) || (defined(_MSC_FULL_VER) && _MSC_FULL_VER > 193933428) )
+#   define CC_HAS_TYPEOF_SUPPORT
+#endif
+
+
+#if defined(CC_HAS_TYPEOF_SUPPORT)
+// For loop macro for dynamic arrays that provides both item (via `it`) and index (via `it_index`)
+#define nob_da_for(da)                                                               \
+    for (size_t it_index = 0; it_index < (da)->count; ++it_index)                    \
+    for (typeof((da)->items[0]) it = (da)->items[it_index], *_ = NULL; _ == NULL; _ = &it)
+#else
+// Less Powerfull version (no `it`)
+#define nob_da_for(da)                                            \
+    for (size_t it_index = 0; it_index < (da)->count; ++it_index)
+
+// If we detect that we could be using the feature we let the user know
+#if defined(_MSC_VER) && defined(CC_HAS_TYPEOF_SUPPORT)
+#   error "Pass /std:clatest be able to use typeof() or use clang-cl.exe"
+#endif
+
 #endif
 
 // Append an item to a dynamic array
@@ -1404,6 +1440,7 @@ int closedir(DIR *dirp)
         #define write_entire_file nob_write_entire_file
         #define get_file_type nob_get_file_type
         #define return_defer nob_return_defer
+        #define da_for nob_da_for
         #define da_append nob_da_append
         #define da_free nob_da_free
         #define da_append_many nob_da_append_many
@@ -1430,6 +1467,7 @@ int closedir(DIR *dirp)
         #define cmd_run_sync_and_reset nob_cmd_run_sync_and_reset
         #define temp_strdup nob_temp_strdup
         #define temp_alloc nob_temp_alloc
+        #define tprintf nob_temp_sprintf
         #define temp_sprintf nob_temp_sprintf
         #define temp_reset nob_temp_reset
         #define temp_save nob_temp_save
