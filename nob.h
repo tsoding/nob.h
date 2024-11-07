@@ -621,7 +621,9 @@ void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
     }
 #endif
 
-    int rebuild_is_needed = nob_needs_rebuild1(binary_path, source_path);
+    const char* inputs[] = {source_path, nob_header_path()};
+    int rebuild_is_needed = nob_needs_rebuild(binary_path, inputs, NOB_ARRAY_LEN(inputs));
+    // int rebuild_is_needed = nob_needs_rebuild1(binary_path, source_path);
     if (rebuild_is_needed < 0) exit(1); // error
     if (!rebuild_is_needed) return;     // no rebuild is needed
 
