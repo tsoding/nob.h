@@ -29,7 +29,7 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
 
 int main(int argc, char **argv)
 {
-    NOB_GO_REBUILD_URSELF(argc, argv);
+    NOB_GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
 
     Cmd cmd = {0};
 

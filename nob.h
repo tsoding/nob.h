@@ -1,4 +1,4 @@
-/* nob - v1.10.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.11.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -472,8 +472,24 @@ bool nob_set_current_dir(const char *path);
 //   do not recommend since the whole idea of NoBuild is to keep the process of bootstrapping
 //   as simple as possible and doing all of the actual work inside of ./nob)
 //
-void nob__go_rebuild_urself(const char *source_path, int argc, char **argv);
-#define NOB_GO_REBUILD_URSELF(argc, argv) nob__go_rebuild_urself(__FILE__, argc, argv)
+void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...);
+#define NOB_GO_REBUILD_URSELF(argc, argv) nob__go_rebuild_urself(argc, argv, __FILE__, NULL)
+// Sometimes your nob.c includes additional files, so you want the Go Rebuild Urself™ Technology to check
+// if they also were modified and rebuild nob.c accordingly. For that we have NOB_GO_REBUILD_URSELF_PLUS():
+// ```c
+// #define NOB_IMPLEMENTATION
+// #include "nob.h"
+//
+// #include "foo.c"
+// #include "bar.c"
+//
+// int main(int argc, char **argv)
+// {
+//     NOB_GO_REBUILD_URSELF_PLUS(argc, argv, "foo.c", "bar.c");
+//     // ...
+//     return 0;
+// }
+#define NOB_GO_REBUILD_URSELF_PLUS(argc, argv, ...) nob__go_rebuild_urself(argc, argv, __FILE__, __VA_ARGS__, NULL);
 
 typedef struct {
     size_t count;
@@ -616,7 +632,7 @@ char *nob_win32_error_message(DWORD err) {
 #endif // _WIN32
 
 // The implementation idea is stolen from https://github.com/zhiayang/nabs
-void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
+void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
 {
     const char *binary_path = nob_shift(argv, argc);
 #ifdef _WIN32
@@ -627,9 +643,23 @@ void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
     }
 #endif
 
-    int rebuild_is_needed = nob_needs_rebuild1(binary_path, source_path);
+    Nob_File_Paths source_paths = {0};
+    nob_da_append(&source_paths, source_path);
+    va_list args;
+    va_start(args, source_path);
+    for (;;) {
+        const char *path = va_arg(args, const char*);
+        if (path == NULL) break;
+        nob_da_append(&source_paths, path);
+    }
+    va_end(args);
+
+    int rebuild_is_needed = nob_needs_rebuild(binary_path, source_paths.items, source_paths.count);
     if (rebuild_is_needed < 0) exit(1); // error
-    if (!rebuild_is_needed) return;     // no rebuild is needed
+    if (!rebuild_is_needed) {           // no rebuild is needed
+        NOB_FREE(source_paths.items);
+        return;
+    }
 
     Nob_Cmd cmd = {0};
 
@@ -726,7 +756,7 @@ bool nob_copy_file(const char *src_path, const char *dst_path)
     }
 
 defer:
-    free(buf);
+    NOB_FREE(buf);
     close(src_fd);
     close(dst_fd);
     return result;
@@ -1772,6 +1802,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.11.0 (2025-02-04) Add NOB_GO_REBUILD_URSELF_PLUS() (By @rexim)
      1.10.0 (2025-02-04) Make NOB_ASSERT, NOB_REALLOC, and NOB_FREE redefinable (By @OleksiiBulba)
       1.9.1 (2025-02-04) Fix signature of nob_get_current_dir_temp() (By @julianstoerig)
       1.9.0 (2024-11-06) Add Nob_Cmd_Redirect mechanism (By @rexim)
