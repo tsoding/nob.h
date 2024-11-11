@@ -1,4 +1,4 @@
-/* nob - v1.14.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.14.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -691,6 +691,12 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
         nob_rename(old_binary_path, binary_path);
         exit(1);
     }
+#ifdef NOB_EXPERIMENTAL_DELETE_OLD
+    // TODO: this is an experimental behavior behind a compilation flag.
+    // Once it is confirmed that it does not cause much problems on both POSIX and Windows
+    // we may turn it on by default.
+    nob_delete_file(old_binary_path);
+#endif // NOB_EXPERIMENTAL_DELETE_OLD
 
     nob_cmd_append(&cmd, binary_path);
     nob_da_append_many(&cmd, argv, argc);
@@ -1856,6 +1862,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.14.1 (2025-03-02) Add NOB_EXPERIMENTAL_DELETE_OLD flag that enables deletion of nob.old in Go Rebuild Urself™ Technology
      1.14.0 (2025-02-17) Add nob_da_last()
                          Add nob_da_remove_unordered()
      1.13.1 (2025-02-17) Fix segfault in nob_delete_file() (By @SileNce5k)
