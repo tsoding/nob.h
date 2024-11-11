@@ -673,6 +673,12 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
         nob_rename(old_binary_path, binary_path);
         exit(1);
     }
+#ifdef NOB_GRU_DELETE_OLD_BINARY
+    // TODO: this is an experimental behavior behind a compilation flag.
+    // Once it is confirmed that it does not cause much problems on both POSIX and Windows
+    // we may turn it on by default.
+    nob_delete_file(old_binary_path);
+#endif // NOB_GRU_DELETE_OLD_BINARY
 
     nob_cmd_append(&cmd, binary_path);
     nob_da_append_many(&cmd, argv, argc);
