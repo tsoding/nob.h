@@ -29,6 +29,12 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
 int main(int argc, char **argv)
 {
     NOB_GO_REBUILD_URSELF(argc, argv);
+    
+    const char *nob_header = nob_header_path();
+    if(nob_file_exists(nob_header) != 1)
+        nob_log(NOB_ERROR, "nob.h not found at '%s'", nob_header);
+    else
+        nob_log(NOB_INFO, "nob.h found at '%s'", nob_header);
 
     Cmd cmd = {0};
 
