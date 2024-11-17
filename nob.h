@@ -164,11 +164,21 @@
 #ifndef NOB_H_
 #define NOB_H_
 
-#define NOB_ASSERT assert
-#define NOB_REALLOC realloc
-#define NOB_FREE free
-
+#ifndef NOB_ASSERT
 #include <assert.h>
+#define NOB_ASSERT assert
+#endif /* NOB_ASSERT */
+
+#ifndef NOB_REALLOC
+#include <stdlib.h>
+#define NOB_REALLOC realloc
+#endif /* NOB_REALLOC */
+
+#ifndef NOB_FREE
+#include <stdlib.h>
+#define NOB_FREE free
+#endif /* NOB_FREE */
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -1409,7 +1419,7 @@ bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 
     size_t new_count = sb->count + m;
     if (new_count > sb->capacity) {
-        sb->items = realloc(sb->items, new_count);
+        sb->items = NOB_REALLOC(sb->items, new_count);
         NOB_ASSERT(sb->items != NULL && "Buy more RAM lool!!");
         sb->capacity = new_count;
     }
@@ -1600,7 +1610,7 @@ DIR *opendir(const char *dirpath)
 
 fail:
     if (dir) {
-        free(dir);
+        NOB_FREE(dir);
     }
 
     return NULL;
@@ -1646,9 +1656,9 @@ int closedir(DIR *dirp)
     }
 
     if (dirp->dirent) {
-        free(dirp->dirent);
+        NOB_FREE(dirp->dirent);
     }
-    free(dirp);
+    NOB_FREE(dirp);
 
     return 0;
 }
