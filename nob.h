@@ -462,8 +462,9 @@ bool nob_set_current_dir(const char *path);
 //   do not recommend since the whole idea of NoBuild is to keep the process of bootstrapping
 //   as simple as possible and doing all of the actual work inside of ./nob)
 //
-void nob__go_rebuild_urself(const char *source_path, int argc, char **argv);
-#define NOB_GO_REBUILD_URSELF(argc, argv) nob__go_rebuild_urself(__FILE__, argc, argv)
+void nob__go_rebuild_urself(const char *source_path, int argc, char **argv, Nob_Cmd* options);
+#define NOB_GO_REBUILD_URSELF(argc, argv) nob__go_rebuild_urself(__FILE__, argc, argv, NULL)
+#define NOB_GO_REBUILD_URSELF_WITH_OPTIONS(argc, argv, options) nob__go_rebuild_urself(__FILE__, argc, argv, options)
 
 typedef struct {
     size_t count;
@@ -606,7 +607,7 @@ char *nob_win32_error_message(DWORD err) {
 #endif // _WIN32
 
 // The implementation idea is stolen from https://github.com/zhiayang/nabs
-void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
+void nob__go_rebuild_urself(const char *source_path, int argc, char **argv, Nob_Cmd* options)
 {
     const char *binary_path = nob_shift(argv, argc);
 #ifdef _WIN32
@@ -627,6 +628,7 @@ void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
 
     if (!nob_rename(binary_path, old_binary_path)) exit(1);
     nob_cmd_append(&cmd, NOB_REBUILD_URSELF(binary_path, source_path));
+    nob_cmd_extend(&cmd, options);
     if (!nob_cmd_run_sync_and_reset(&cmd)) {
         nob_rename(old_binary_path, binary_path);
         exit(1);
