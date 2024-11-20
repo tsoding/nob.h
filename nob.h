@@ -887,7 +887,11 @@ Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
         nob_cmd_append(&cmd_null, NULL);
 
         if (execvp(cmd.items[0], (char * const*) cmd_null.items) < 0) {
-            nob_log(NOB_ERROR, "Could not exec child process: %s", strerror(errno));
+            if (errno == ENOENT) {
+                nob_log(NOB_ERROR, "Executable `%s` is not found, not a valid script or an elf interpreter is missing", cmd.items[0], strerror(errno));
+            } else {
+                nob_log(NOB_ERROR, "Could not exec child process: %s", strerror(errno));
+            }
             exit(1);
         }
         NOB_UNREACHABLE("nob_cmd_run_async_redirect");
