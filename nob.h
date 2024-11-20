@@ -214,12 +214,20 @@ typedef enum {
     NOB_WARNING,
     NOB_ERROR,
     NOB_NO_LOGS,
+    NOB_LOG_LEVEL_COUNT,
 } Nob_Log_Level;
+static_assert(NOB_LOG_LEVEL_COUNT == 4, "Number of Nob_Log_Level changed!");
+static const char *nob_log_level_names[NOB_LOG_LEVEL_COUNT - 1] = {
+    [NOB_INFO]    = "INFO",
+    [NOB_WARNING] = "WARNING",
+    [NOB_ERROR]   = "ERROR",
+};
 
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 extern Nob_Log_Level nob_minimal_log_level;
 
 void nob_log(Nob_Log_Level level, const char *fmt, ...);
+void nob_vlog(Nob_Log_Level level, const char *fmt, va_list args);
 
 // It is an equivalent of shift command from bash. It basically pops an element from
 // the beginning of a sized array.
@@ -1048,28 +1056,18 @@ bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect
 }
 
 void nob_log(Nob_Log_Level level, const char *fmt, ...)
-{
-    if (level < nob_minimal_log_level) return;
-
-    switch (level) {
-    case NOB_INFO:
-        fprintf(stderr, "[INFO] ");
-        break;
-    case NOB_WARNING:
-        fprintf(stderr, "[WARNING] ");
-        break;
-    case NOB_ERROR:
-        fprintf(stderr, "[ERROR] ");
-        break;
-    case NOB_NO_LOGS: return;
-    default:
-        NOB_UNREACHABLE("nob_log");
-    }
-
+{ 
     va_list args;
     va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
+    nob_vlog(level, fmt, args);
     va_end(args);
+}
+void nob_vlog(Nob_Log_Level level, const char *fmt, va_list args)
+{
+    if (level < nob_minimal_log_level || level == NOB_NO_LOGS) return;
+
+    fprintf(stderr, "[%s] ", nob_log_level_names[level]);
+    vfprintf(stderr, fmt, args);
     fprintf(stderr, "\n");
 }
 
