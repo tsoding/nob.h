@@ -998,7 +998,11 @@ bool nob_proc_wait(Nob_Proc proc)
         }
 
         if (WIFSIGNALED(wstatus)) {
+            #ifndef NOB_REMOVE_NON_STANDARD            
             nob_log(NOB_ERROR, "command process was terminated by %s", strsignal(WTERMSIG(wstatus)));
+            #else
+            nob_log(NOB_ERROR, "command process was terminated (info missing in non standard mode)");
+            #endif
             return false;
         }
     }
@@ -1141,6 +1145,8 @@ defer:
     return result;
 }
 
+
+#ifndef NOB_REMOVE_NON_STANDARD
 Nob_File_Type nob_get_file_type(const char *path)
 {
 #ifdef _WIN32
@@ -1232,6 +1238,7 @@ defer:
     nob_da_free(children);
     return result;
 }
+#endif //NOB_REMOVE_NON_STANDARD
 
 char *nob_temp_strdup(const char *cstr)
 {
