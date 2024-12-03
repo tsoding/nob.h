@@ -500,6 +500,7 @@ Nob_String_View nob_sv_trim_left(Nob_String_View sv);
 Nob_String_View nob_sv_trim_right(Nob_String_View sv);
 bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
 bool nob_sv_end_with(Nob_String_View sv, const char *cstr);
+bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_prefix);
 Nob_String_View nob_sv_from_cstr(const char *cstr);
 Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
@@ -1589,6 +1590,17 @@ bool nob_sv_end_with(Nob_String_View sv, const char *cstr)
     return false;
 }
 
+
+bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_prefix)
+{
+    if (expected_prefix.count <= sv.count) {
+        Nob_String_View actual_prefix = nob_sv_from_parts(sv.data, expected_prefix.count);
+        return nob_sv_eq(expected_prefix, actual_prefix);
+    }
+
+    return false;
+}
+
 // RETURNS:
 //  0 - file does not exists
 //  1 - file exists
@@ -1834,6 +1846,7 @@ int closedir(DIR *dirp)
         #define sv_trim_left nob_sv_trim_left
         #define sv_trim_right nob_sv_trim_right
         #define sv_eq nob_sv_eq
+        #define sv_start_with nob_sv_start_with
         #define sv_end_with nob_sv_end_with
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
@@ -1849,6 +1862,7 @@ int closedir(DIR *dirp)
                          Add nob_delete_file()
                          Add experimental NOB_GRU_DELETE_OLD_BINARY feature flag
                          Add nob.flags.txt file awareness
+                         Add nob_sv_start_with()
       1.9.0 (2024-11-06) Add Nob_Cmd_Redirect mechanism (By @rexim)
                          Add nob_path_name() (By @0dminnimda)
       1.8.0 (2024-11-03) Add nob_cmd_extend() (By @0dminnimda)
