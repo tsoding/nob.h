@@ -1846,7 +1846,7 @@ int closedir(DIR *dirp)
         #define sv_trim_left nob_sv_trim_left
         #define sv_trim_right nob_sv_trim_right
         #define sv_eq nob_sv_eq
-        #define sv_start_with nob_sv_start_with
+        #define sv_starts_with nob_sv_starts_with
         #define sv_end_with nob_sv_end_with
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
