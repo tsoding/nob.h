@@ -173,6 +173,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
@@ -482,6 +483,18 @@ Nob_String_View nob_sv_from_cstr(const char *cstr);
 Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
 #define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
+
+Nob_String_View nob_sv_take_left_while(Nob_String_View sv, bool (*predicate)(char x));
+Nob_String_View nob_sv_chop_by_sv(Nob_String_View *sv, Nob_String_View thicc_delim);
+bool nob_sv_try_chop_by_delim(Nob_String_View *sv, char delim, Nob_String_View *chunk);
+Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n);
+Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n);
+Nob_String_View nob_sv_chop_left_while(Nob_String_View *sv, bool (*predicate)(char x));
+bool nob_sv_index_of(Nob_String_View sv, char c, size_t *index);
+bool nob_sv_eq_ignorecase(Nob_String_View a, Nob_String_View b);
+bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View prefix);
+uint64_t nob_sv_to_u64(Nob_String_View sv);
+uint64_t nob_sv_chop_u64(Nob_String_View *sv);
 
 // printf macros for String_View
 #ifndef SV_Fmt
@@ -1503,6 +1516,50 @@ bool nob_sv_end_with(Nob_String_View sv, const char *cstr)
         return nob_sv_eq(sv_ending, nob_sv_from_cstr(cstr));
     }
     return false;
+}
+
+Nob_String_View nob_sv_take_left_while(Nob_String_View sv, bool (*predicate)(char x)) {
+    NOB_TODO("nob_sv_take_left_while");
+}
+
+Nob_String_View nob_sv_chop_by_sv(Nob_String_View *sv, Nob_String_View thicc_delim) {
+    NOB_TODO("nob_sv_chop_by_sv");
+}
+
+bool nob_sv_try_chop_by_delim(Nob_String_View *sv, char delim, Nob_String_View *chunk) {
+    NOB_TODO("nob_sv_try_chop_by_delim");
+}
+
+Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n) {
+    NOB_TODO("nob_sv_chop_left");
+}
+
+Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n) {
+    NOB_TODO("nob_sv_chop_right");
+}
+
+Nob_String_View nob_sv_chop_left_while(Nob_String_View *sv, bool (*predicate)(char x)) {
+    NOB_TODO("nob_sv_chop_left_while");
+}
+
+bool nob_sv_index_of(Nob_String_View sv, char c, size_t *index) {
+    NOB_TODO("nob_sv_index_of");
+}
+
+bool nob_sv_eq_ignorecase(Nob_String_View a, Nob_String_View b) {
+    NOB_TODO("nob_sv_eq_ignorecase");
+}
+
+bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View prefix) {
+    NOB_TODO("nob_sv_starts_with");
+}
+
+uint64_t nob_sv_to_u64(Nob_String_View sv) {
+    NOB_TODO("nob_sv_to_u64");
+}
+
+uint64_t nob_sv_chop_u64(Nob_String_View *sv) {
+    NOB_TODO("nob_sv_chop_u64");
 }
 
 // RETURNS:
