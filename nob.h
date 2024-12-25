@@ -1526,7 +1526,7 @@ int nob_file_exists(const char *file_path)
 #endif
 }
 
-const char *nob_get_current_dir_temp()
+const char *nob_get_current_dir_temp(void)
 {
 #ifdef _WIN32
     DWORD nBufferLength = GetCurrentDirectory(0, NULL);
