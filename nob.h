@@ -425,18 +425,20 @@ int nob_file_exists(const char *file_path);
 const char *nob_get_current_dir_temp(void);
 bool nob_set_current_dir(const char *path);
 
+#define NOB_CC_FLAGS_PLACEHOLDER "<CC_FLAGS_PLACEHOLDER>"
+
 // TODO: add MinGW support for Go Rebuild Urself™ Technology
 #ifndef NOB_REBUILD_URSELF
 #  if _WIN32
 #    if defined(__GNUC__)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-o", binary_path, source_path
+#       define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", NOB_CC_FLAGS_PLACEHOLDER, "-o", binary_path, source_path
 #    elif defined(__clang__)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-o", binary_path, source_path
+#       define NOB_REBUILD_URSELF(binary_path, source_path) "clang", NOB_CC_FLAGS_PLACEHOLDER, "-o", binary_path, source_path
 #    elif defined(_MSC_VER)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", nob_temp_sprintf("/Fe:%s", (binary_path)), source_path
+#       define NOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", NOB_CC_FLAGS_PLACEHOLDER, nob_temp_sprintf("/Fe:%s", (binary_path)), source_path
 #    endif
 #  else
-#    define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
+#    define NOB_REBUILD_URSELF(binary_path, source_path) "cc", NOB_CC_FLAGS_PLACEHOLDER, "-o", binary_path, source_path
 #  endif
 #endif
 
@@ -462,8 +464,17 @@ bool nob_set_current_dir(const char *path);
 //   do not recommend since the whole idea of NoBuild is to keep the process of bootstrapping
 //   as simple as possible and doing all of the actual work inside of ./nob)
 //
-void nob__go_rebuild_urself(const char *source_path, int argc, char **argv);
-#define NOB_GO_REBUILD_URSELF(argc, argv) nob__go_rebuild_urself(__FILE__, argc, argv)
+void nob__go_rebuild_urself(const char *source_path, int argc, char **argv, bool force);
+#define NOB_GO_REBUILD_URSELF(argc, argv) nob__go_rebuild_urself(__FILE__, argc, argv, false)
+
+struct {
+    char **items;
+    size_t count;
+    size_t capacity;
+} nob_go_defines;
+#define NOB_GO_DEFINE(symbol) nob_da_append(&nob_go_defines, #symbol "\0" symbol)
+void nob__go_redefine(const char *source_path, const char *symbol, const char *value);
+#define NOB_GO_REDEFINE(symbol, value) nob__go_redefine(__FILE__, #symbol, value)
 
 typedef struct {
     size_t count;
@@ -605,9 +616,59 @@ char *nob_win32_error_message(DWORD err) {
 
 #endif // _WIN32
 
-// The implementation idea is stolen from https://github.com/zhiayang/nabs
-void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
+static int nob__write_escaped_string(char *dst, char *src)
 {
+    char *s = src, *d = dst;
+    char *const s_end = s + strlen(s);
+    int n = 0;
+    while (s < s_end) {
+        char *p0 = strchr(s, '\\');
+        char *p1 = strchr(s, '"');
+        char *write_until = NULL;
+        if (p0 != NULL && (p1 == NULL || p0 < p1)) {
+            write_until = p0;
+        } else if (p1 != NULL && (p0 == NULL || p1 < p0)) {
+            write_until = p1;
+        } else {
+            assert(p0 == NULL && p1 == NULL);
+            write_until = s_end;
+        }
+        assert(write_until != NULL);
+
+        const size_t write_n = write_until-s;
+        if (write_n > 0) {
+            if (d != NULL) {
+                memcpy(d, s, write_n);
+                d += write_n;
+            }
+            s += write_n;
+            n += write_n;
+        }
+        if (s < s_end) {
+            if (d != NULL) {
+                *(d++) = '\\';
+                *(d++) = *s;
+            }
+            ++s;
+            n+=2;
+        }
+    }
+    if (d != NULL) {
+        *d = 0;
+    }
+    return n;
+}
+
+int nob__go_rebuild_urself_argc;
+char **nob__go_rebuild_urself_argv;
+
+
+// The implementation idea is stolen from https://github.com/zhiayang/nabs
+void nob__go_rebuild_urself(const char *source_path, int argc, char **argv, bool force)
+{
+    nob__go_rebuild_urself_argc = argc;
+    nob__go_rebuild_urself_argv = argv;
+
     const char *binary_path = nob_shift(argv, argc);
 #ifdef _WIN32
     // On Windows executables almost always invoked without extension, so
@@ -617,16 +678,47 @@ void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
     }
 #endif
 
-    int rebuild_is_needed = nob_needs_rebuild1(binary_path, source_path);
-    if (rebuild_is_needed < 0) exit(1); // error
-    if (!rebuild_is_needed) return;     // no rebuild is needed
+    if (!force) {
+        int rebuild_is_needed = nob_needs_rebuild1(binary_path, source_path);
+        if (rebuild_is_needed < 0) exit(1); // error
+        if (!rebuild_is_needed) return;     // no rebuild is needed
+    }
 
-    Nob_Cmd cmd = {0};
+    Nob_Cmd cmdfmt = {0}, cmd = {0};
 
     const char *old_binary_path = nob_temp_sprintf("%s.old", binary_path);
 
     if (!nob_rename(binary_path, old_binary_path)) exit(1);
-    nob_cmd_append(&cmd, NOB_REBUILD_URSELF(binary_path, source_path));
+    nob_cmd_append(&cmdfmt, NOB_REBUILD_URSELF(binary_path, source_path));
+    for (size_t i0 = 0; i0 < cmdfmt.count; ++i0) {
+        if (strcmp(cmdfmt.items[i0], NOB_CC_FLAGS_PLACEHOLDER) != 0) {
+            nob_cmd_append(&cmd, cmdfmt.items[i0]);
+        } else {
+            for (size_t i1 = 0; i1 < nob_go_defines.count; ++i1) {
+                char *define_symbol = nob_go_defines.items[i1];
+                char *define_value = define_symbol + strlen(define_symbol) + 1;
+                #if defined(_MSC_VER)
+                const char *part0 = "/D";
+                #else
+                const char *part0 = "-D";
+                #endif
+                const char *part1 = "=\"";
+                const char *part2 = "\"";
+
+                const int ne = nob__write_escaped_string(NULL, define_value);
+                const int argsz = strlen(part0) + strlen(define_symbol) + strlen(part1) + ne + strlen(part2);
+                char *arg = nob_temp_alloc(argsz+1);
+                char *p = arg;
+                p += snprintf(p, 1+argsz-(p-arg), "%s%s%s", part0, define_symbol, part1);
+                assert(ne == nob__write_escaped_string(p, define_value));
+                p += ne;
+                p += snprintf(p, 1+argsz-(p-arg), "%s", part2);
+                assert(p == arg+argsz);
+                nob_cmd_append(&cmd, arg);
+            }
+        }
+    }
+
     if (!nob_cmd_run_sync_and_reset(&cmd)) {
         nob_rename(old_binary_path, binary_path);
         exit(1);
@@ -636,6 +728,32 @@ void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
     nob_da_append_many(&cmd, argv, argc);
     if (!nob_cmd_run_sync_and_reset(&cmd)) exit(1);
     exit(0);
+}
+
+void nob__go_redefine(const char *source_path, const char *symbol, const char *value)
+{
+    for (size_t i = 0; i < nob_go_defines.count; i++) {
+        char *define_symbol = nob_go_defines.items[i];
+        if (strcmp(define_symbol, symbol) != 0) continue;
+        const size_t slen = strlen(symbol);
+        char *define_value = define_symbol + slen + 1;
+        if (strcmp(define_value, value) == 0) return;
+        const size_t vlen = strlen(value);
+        char *new_define = nob_temp_alloc(slen + vlen + 2);
+        memcpy(new_define, symbol, slen);
+        new_define[slen] = 0;
+        memcpy(new_define + slen + 1, value, vlen);
+        new_define[slen + 1 + vlen] = 0;
+        nob_go_defines.items[i] = new_define;
+        if (nob__go_rebuild_urself_argv == NULL) {
+            nob_log(NOB_ERROR, "bad NOB_GO_REDEFINE() call; must come after NOB_GO_REBUILD_URSELF()");
+            abort();
+        }
+        nob__go_rebuild_urself(source_path, nob__go_rebuild_urself_argc, nob__go_rebuild_urself_argv, true);
+        NOB_UNREACHABLE("nob__go_redefine");
+    }
+    nob_log(NOB_ERROR, "bad NOB_GO_REDEFINE(%s, ...) call; did not match a previous NOB_GO_DEFINE(%s)", symbol, symbol);
+    abort();
 }
 
 static size_t nob_temp_size = 0;
