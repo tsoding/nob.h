@@ -545,9 +545,11 @@ struct dirent
 
 typedef struct DIR DIR;
 
+#ifdef NOB_IMPLEMENTATION
 static DIR *opendir(const char *dirpath);
 static struct dirent *readdir(DIR *dirp);
 static int closedir(DIR *dirp);
+#endif // NOB_IMPLEMENTATION
 
 #endif // _WIN32
 // minirent.h HEADER END ////////////////////////////////////////
