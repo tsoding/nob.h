@@ -475,6 +475,7 @@ struct {
 #define NOB_GO_DEFINE(symbol) nob_da_append(&nob_go_defines, #symbol "\0" symbol)
 void nob__go_redefine(const char *source_path, const char *symbol, const char *value);
 #define NOB_GO_REDEFINE(symbol, value) nob__go_redefine(__FILE__, #symbol, value)
+#define NOB_GO_REDEFINE_STR(symbol_string, value) nob__go_redefine(__FILE__, symbol_string, value)
 
 typedef struct {
     size_t count;
