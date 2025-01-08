@@ -472,7 +472,8 @@ struct {
     size_t count;
     size_t capacity;
 } nob_go_defines;
-#define NOB_GO_DEFINE(symbol) nob_da_append(&nob_go_defines, #symbol "\0" symbol)
+void nob_go_define(const char* symbol, const char* value);
+#define NOB_GO_DEFINE(symbol) nob_go_define(#symbol, symbol)
 void nob__go_redefine(const char *source_path, const char *symbol, const char *value);
 #define NOB_GO_REDEFINE(symbol, value) nob__go_redefine(__FILE__, #symbol, value)
 #define NOB_GO_REDEFINE_STR(symbol_string, value) nob__go_redefine(__FILE__, symbol_string, value)
@@ -729,6 +730,18 @@ void nob__go_rebuild_urself(const char *source_path, int argc, char **argv, bool
     nob_da_append_many(&cmd, argv, argc);
     if (!nob_cmd_run_sync_and_reset(&cmd)) exit(1);
     exit(0);
+}
+
+void nob_go_define(const char* symbol, const char* value)
+{
+    const size_t slen = strlen(symbol);
+    const size_t vlen = strlen(value);
+    char *def = nob_temp_alloc(slen + vlen + 2);
+    memcpy(def, symbol, slen);
+    def[slen] = 0;
+    memcpy(def + slen + 1, value, vlen);
+    def[slen + 1 + vlen] = 0;
+    nob_da_append(&nob_go_defines, def);
 }
 
 void nob__go_redefine(const char *source_path, const char *symbol, const char *value)
