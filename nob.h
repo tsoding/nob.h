@@ -288,6 +288,13 @@ Nob_File_Type nob_get_file_type(const char *path);
         (da)->count += (new_items_count);                                                     \
     } while (0)
 
+#define nob_da_resize(da, new_size)                                                    \
+    do {                                                                               \
+        (da)->capacity = (da)->count = new_size;                                       \
+        (da)->items = NOB_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items)); \
+        NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                         \
+    } while (0)
+
 typedef struct {
     char *items;
     size_t count;
@@ -1698,6 +1705,7 @@ int closedir(DIR *dirp)
         #define da_append nob_da_append
         #define da_free nob_da_free
         #define da_append_many nob_da_append_many
+        #define da_resize nob_da_resize
         #define String_Builder Nob_String_Builder
         #define read_entire_file nob_read_entire_file
         #define sb_append_buf nob_sb_append_buf
