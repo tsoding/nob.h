@@ -1525,7 +1525,7 @@ int nob_file_exists(const char *file_path)
     DWORD dwAttrib = GetFileAttributesA(file_path);
     if(dwAttrib == INVALID_FILE_ATTRIBUTES){
         DWORD err = GetLastError();
-        if (err == ERROR_FILE_NOT_FOUND) return 0;
+        if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) return 0;
         nob_log(NOB_ERROR, "Could not check if file %s exists: %s", file_path, nob_win32_error_message(err));
         return -1;
     }
