@@ -159,6 +159,25 @@
 
       If only few specific names create conflicts for you, you can just #undef those names after the
       `#include <nob.h>` since they are macros anyway.
+   
+   # Other options
+ 
+      The NOB_NO_ECHO, if defined disables echo (printing) of the executed commads via nob_cmd_run_* functions.
+      
+      ```c
+      #define NOB_NO_ECHO
+      #define NOB_IMPLEMENTATION
+      #include "nob.h"
+      ```
+
+      The NOB_COLORS, if defined enables ANSI colors in messages printed by nob_log.
+
+      ```c
+      #define NOB_COLORS
+      #define NOB_IMPLEMENTATION
+      #include "nob.h"
+      ```
+
 */
 
 #ifndef NOB_H_
@@ -329,6 +348,8 @@ typedef int Nob_Fd;
 
 Nob_Fd nob_fd_open_for_read(const char *path);
 Nob_Fd nob_fd_open_for_write(const char *path);
+bool nob_fd_create_pipe(Nob_Fd fds[2]);
+bool nob_fd_read(Nob_Fd fd, Nob_String_Builder *sb);
 void nob_fd_close(Nob_Fd fd);
 
 typedef struct {
@@ -374,6 +395,16 @@ typedef struct {
 // use it as a C string.
 void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
 
+// Print command render result as NOB_INFO.
+#define nob_cmd_print(cmd) \
+    do { \
+        Nob_String_Builder sb = {0}; \
+        nob_cmd_render((cmd), &sb); \
+        nob_sb_append_null(&sb); \
+        nob_log(NOB_INFO, "CMD: %s", sb.items); \
+        nob_sb_free(sb); \
+    } while(0)
+
 #define nob_cmd_append(cmd, ...) \
     nob_da_append_many(cmd, \
                        ((const char*[]){__VA_ARGS__}), \
@@ -404,6 +435,10 @@ bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd);
 bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
 // Run redirected command synchronously and set cmd.count to 0 and close all the opened files
 bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
+// Run command synchronously and read the output from pipe.
+bool nob_cmd_run_sync_read(Nob_Cmd cmd, Nob_String_Builder *sb);
+// Run command synchronously and read the output from pip and set cmd.count to 0.
+bool nob_cmd_run_sync_read_and_reset(Nob_Cmd *cmd, Nob_String_Builder *sb);
 
 #ifndef NOB_TEMP_CAPACITY
 #define NOB_TEMP_CAPACITY (8*1024*1024)
@@ -477,7 +512,7 @@ Nob_String_View nob_sv_trim(Nob_String_View sv);
 Nob_String_View nob_sv_trim_left(Nob_String_View sv);
 Nob_String_View nob_sv_trim_right(Nob_String_View sv);
 bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
-bool nob_sv_end_with(Nob_String_View sv, const char *cstr);
+bool nob_sv_ends_with(Nob_String_View sv, const char *cstr);
 Nob_String_View nob_sv_from_cstr(const char *cstr);
 Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
@@ -494,6 +529,7 @@ Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 //   String_View name = ...;
 //   printf("Name: "SV_Fmt"\n", SV_Arg(name));
 
+#define nob_ends_with(cstr, suffix) nob_sv_ends_with(nob_sv_from_cstr(cstr), (suffix))
 
 // minirent.h HEADER BEGIN ////////////////////////////////////////
 // Copyright 2021 Alexey Kutepov <reximkut@gmail.com>
@@ -612,7 +648,7 @@ void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
 #ifdef _WIN32
     // On Windows executables almost always invoked without extension, so
     // it's ./nob, not ./nob.exe. For renaming the extension is a must.
-    if (!nob_sv_end_with(nob_sv_from_cstr(binary_path), ".exe")) {
+    if (!nob_ends_with(binary_path, ".exe")) {
         binary_path = nob_temp_sprintf("%s.exe", binary_path);
     }
 #endif
@@ -650,20 +686,20 @@ bool nob_mkdir_if_not_exists(const char *path)
 #endif
     if (result < 0) {
         if (errno == EEXIST) {
-            nob_log(NOB_INFO, "directory `%s` already exists", path);
+            nob_log(NOB_INFO, "Directory %s already exists.", path);
             return true;
         }
-        nob_log(NOB_ERROR, "could not create directory `%s`: %s", path, strerror(errno));
+        nob_log(NOB_ERROR, "Could not create directory %s: %s", path, strerror(errno));
         return false;
     }
 
-    nob_log(NOB_INFO, "created directory `%s`", path);
+    nob_log(NOB_INFO, "Created directory %s.", path);
     return true;
 }
 
 bool nob_copy_file(const char *src_path, const char *dst_path)
 {
-    nob_log(NOB_INFO, "copying %s -> %s", src_path, dst_path);
+    nob_log(NOB_INFO, "Copying %s -> %s.", src_path, dst_path);
 #ifdef _WIN32
     if (!CopyFile(src_path, dst_path, FALSE)) {
         nob_log(NOB_ERROR, "Could not copy file: %s", nob_win32_error_message(GetLastError()));
@@ -742,16 +778,15 @@ void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render)
 Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
 {
     if (cmd.count < 1) {
-        nob_log(NOB_ERROR, "Could not run empty command");
+        nob_log(NOB_ERROR, "Could not run empty command.");
         return NOB_INVALID_PROC;
     }
 
-    Nob_String_Builder sb = {0};
-    nob_cmd_render(cmd, &sb);
-    nob_sb_append_null(&sb);
-    nob_log(NOB_INFO, "CMD: %s", sb.items);
-    nob_sb_free(sb);
-    memset(&sb, 0, sizeof(sb));
+#ifndef NOB_NO_ECHO
+	nob_cmd_print(cmd);
+#endif
+	
+	Nob_String_Builder sb = {0};
 
 #ifdef _WIN32
     // https://docs.microsoft.com/en-us/windows/win32/procthread/creating-a-child-process-with-redirected-input-and-output
@@ -897,7 +932,7 @@ Nob_Fd nob_fd_open_for_write(const char *path)
                      O_WRONLY | O_CREAT | O_TRUNC,
                      S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (result < 0) {
-        nob_log(NOB_ERROR, "could not open file %s: %s", path, strerror(errno));
+        nob_log(NOB_ERROR, "Could not open file %s: %s", path, strerror(errno));
         return NOB_INVALID_FD;
     }
     return result;
@@ -923,6 +958,58 @@ Nob_Fd nob_fd_open_for_write(const char *path)
 
     return result;
 #endif // _WIN32
+}
+
+bool nob_fd_create_pipe(Nob_Fd fds[2]) {
+#ifndef _WIN32
+	if (pipe(fds) == -1) {
+		fds[0] = fds[1] = NOB_INVALID_FD;
+		nob_log(NOB_ERROR, "Could not create pipe: %s", strerror(errno));
+		return false;
+	}
+	return true;
+#else
+	SECURITY_ATTRIBUTES saAttr = {0};
+	saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+	saAttr.bInheritHandle = TRUE;
+
+	if (!CreatePipe(&fds[0], &fds[1], &saAttr, 0)) {
+		nob_log(NOB_ERROR, "Could not create pipe: %s", nob_win32_error_message(GetLastError()));
+		return false;
+	}
+	return true;
+#endif
+}
+
+bool nob_fd_read(Nob_Fd fd, Nob_String_Builder *sb) {
+#ifndef _WIN32
+	char buffer[2048];
+	ssize_t bytes_read;
+	while ((bytes_read = read(fd, buffer, NOB_ARRAY_LEN(buffer))) > 0) {
+		nob_sb_append_buf(sb, buffer, bytes_read);
+	}
+	if (bytes_read == -1) {
+		nob_log(NOB_ERROR, "Could not read the pipe: %s", strerror(errno));
+		return false;
+	}
+	return true;
+#else
+	char buffer[2048];
+	DWORD bytes_read;
+	while (true) {
+		if (!ReadFile(fd, buffer, NOB_ARRAY_LEN(buffer), &bytes_read, NULL)) {
+			const DWORD ec = GetLastError();
+			if (ec == ERROR_BROKEN_PIPE) break;
+
+			nob_log(NOB_ERROR, "Could not read the pipe: %s", nob_win32_error_message(ec));
+			return false;
+		}
+		if (!bytes_read) break;
+
+		nob_sb_append_buf(sb, buffer, bytes_read);
+	}
+	return true;
+#endif
 }
 
 void nob_fd_close(Nob_Fd fd)
@@ -961,18 +1048,18 @@ bool nob_proc_wait(Nob_Proc proc)
                    );
 
     if (result == WAIT_FAILED) {
-        nob_log(NOB_ERROR, "could not wait on child process: %s", nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not wait on child process: %s", nob_win32_error_message(GetLastError()));
         return false;
     }
 
     DWORD exit_status;
     if (!GetExitCodeProcess(proc, &exit_status)) {
-        nob_log(NOB_ERROR, "could not get process exit code: %s", nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not get process exit code: %s", nob_win32_error_message(GetLastError()));
         return false;
     }
 
     if (exit_status != 0) {
-        nob_log(NOB_ERROR, "command exited with exit code %lu", exit_status);
+        nob_log(NOB_ERROR, "Command exited with exit code %lu.", exit_status);
         return false;
     }
 
@@ -983,14 +1070,14 @@ bool nob_proc_wait(Nob_Proc proc)
     for (;;) {
         int wstatus = 0;
         if (waitpid(proc, &wstatus, 0) < 0) {
-            nob_log(NOB_ERROR, "could not wait on command (pid %d): %s", proc, strerror(errno));
+            nob_log(NOB_ERROR, "Could not wait on command (pid %d): %s", proc, strerror(errno));
             return false;
         }
 
         if (WIFEXITED(wstatus)) {
             int exit_status = WEXITSTATUS(wstatus);
             if (exit_status != 0) {
-                nob_log(NOB_ERROR, "command exited with exit code %d", exit_status);
+                nob_log(NOB_ERROR, "Command exited with exit code %d.", exit_status);
                 return false;
             }
 
@@ -998,7 +1085,7 @@ bool nob_proc_wait(Nob_Proc proc)
         }
 
         if (WIFSIGNALED(wstatus)) {
-            nob_log(NOB_ERROR, "command process was terminated by %s", strsignal(WTERMSIG(wstatus)));
+            nob_log(NOB_ERROR, "Command process was terminated by %s", strsignal(WTERMSIG(wstatus)));
             return false;
         }
     }
@@ -1047,19 +1134,53 @@ bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect
     return p;
 }
 
+bool nob_cmd_run_sync_read(Nob_Cmd cmd, Nob_String_Builder *sb) {
+	bool result = true;
+
+	Nob_Fd fds[2] = { NOB_INVALID_FD, NOB_INVALID_FD };
+	if (!nob_fd_create_pipe(fds)) nob_return_defer(false);
+	if (!nob_cmd_run_sync_redirect(cmd, (Nob_Cmd_Redirect){
+		.fdout = &fds[1],
+		.fderr = &fds[1], // Maybe we want to handle stderr separately, but this approach leads to simpler api.
+	})) {
+		nob_return_defer(false);
+	}
+	nob_fd_close(fds[1]);
+	fds[1] = NOB_INVALID_FD;
+	if (!nob_fd_read(fds[0], sb)) nob_return_defer(false);
+	// nob_sb_append_null(sb); // not sure about this
+
+defer:
+	nob_fd_close(fds[0]);
+	nob_fd_close(fds[1]);
+	return result;
+}
+
+bool nob_cmd_run_sync_read_and_reset(Nob_Cmd *cmd, Nob_String_Builder *sb) {
+	bool p = nob_cmd_run_sync_read(*cmd, sb);
+	cmd->count = 0;
+	return p;
+}
+
+#ifdef NOB_COLORS
+#define COLORIZE(text, color_code) "\033[" #color_code "m" text "\033[0m"
+#else
+#define COLORIZE(text, color_code) text
+#endif
+
 void nob_log(Nob_Log_Level level, const char *fmt, ...)
 {
     if (level < nob_minimal_log_level) return;
 
     switch (level) {
     case NOB_INFO:
-        fprintf(stderr, "[INFO] ");
+        fprintf(stderr, "[" COLORIZE("INFO", 32) "] ");
         break;
     case NOB_WARNING:
-        fprintf(stderr, "[WARNING] ");
+        fprintf(stderr, "[" COLORIZE("WARNING", 33) "] ");
         break;
     case NOB_ERROR:
-        fprintf(stderr, "[ERROR] ");
+        fprintf(stderr, "[" COLORIZE("ERROR", 31) "] ");
         break;
     case NOB_NO_LOGS: return;
     default:
@@ -1072,6 +1193,8 @@ void nob_log(Nob_Log_Level level, const char *fmt, ...)
     va_end(args);
     fprintf(stderr, "\n");
 }
+
+#undef COLORIZE
 
 bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
 {
@@ -1218,7 +1341,7 @@ bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
         } break;
 
         case NOB_FILE_OTHER: {
-            nob_log(NOB_ERROR, "Unsupported type of file %s", src_path);
+            nob_log(NOB_ERROR, "Unsupported type of file %s.", src_path);
             nob_return_defer(false);
         } break;
 
@@ -1381,15 +1504,15 @@ const char *nob_path_name(const char *path)
 
 bool nob_rename(const char *old_path, const char *new_path)
 {
-    nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
+    nob_log(NOB_INFO, "Renaming %s -> %s.", old_path, new_path);
 #ifdef _WIN32
     if (!MoveFileEx(old_path, new_path, MOVEFILE_REPLACE_EXISTING)) {
-        nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not rename %s to %s: %s", old_path, new_path, nob_win32_error_message(GetLastError()));
         return false;
     }
 #else
     if (rename(old_path, new_path) < 0) {
-        nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, strerror(errno));
+        nob_log(NOB_ERROR, "Could not rename %s to %s: %s", old_path, new_path, strerror(errno));
         return false;
     }
 #endif // _WIN32
@@ -1494,7 +1617,7 @@ bool nob_sv_eq(Nob_String_View a, Nob_String_View b)
     }
 }
 
-bool nob_sv_end_with(Nob_String_View sv, const char *cstr)
+bool nob_sv_ends_with(Nob_String_View sv, const char *cstr)
 {
     size_t cstr_count = strlen(cstr);
     if (sv.count >= cstr_count) {
@@ -1531,13 +1654,13 @@ const char *nob_get_current_dir_temp()
 #ifdef _WIN32
     DWORD nBufferLength = GetCurrentDirectory(0, NULL);
     if (nBufferLength == 0) {
-        nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
 
     char *buffer = (char*) nob_temp_alloc(nBufferLength);
     if (GetCurrentDirectory(nBufferLength, buffer) == 0) {
-        nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
 
@@ -1545,7 +1668,7 @@ const char *nob_get_current_dir_temp()
 #else
     char *buffer = (char*) nob_temp_alloc(PATH_MAX);
     if (getcwd(buffer, PATH_MAX) == NULL) {
-        nob_log(NOB_ERROR, "could not get current directory: %s", strerror(errno));
+        nob_log(NOB_ERROR, "Could not get current directory: %s", strerror(errno));
         return NULL;
     }
 
@@ -1557,13 +1680,13 @@ bool nob_set_current_dir(const char *path)
 {
 #ifdef _WIN32
     if (!SetCurrentDirectory(path)) {
-        nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not set current directory to %s: %s", path, nob_win32_error_message(GetLastError()));
         return false;
     }
     return true;
 #else
     if (chdir(path) < 0) {
-        nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, strerror(errno));
+        nob_log(NOB_ERROR, "Could not set current directory to %s: %s", path, strerror(errno));
         return false;
     }
     return true;
@@ -1710,6 +1833,8 @@ int closedir(DIR *dirp)
         #define INVALID_FD NOB_INVALID_FD
         #define fd_open_for_read nob_fd_open_for_read
         #define fd_open_for_write nob_fd_open_for_write
+        #define fd_create_pipe nob_fd_create_pipe
+        #define fd_read nob_fd_read
         #define fd_close nob_fd_close
         #define Procs Nob_Procs
         #define procs_wait nob_procs_wait
@@ -1720,6 +1845,7 @@ int closedir(DIR *dirp)
         #define cmd_render nob_cmd_render
         #define cmd_append nob_cmd_append
         #define cmd_extend nob_cmd_extend
+        #define cmd_print nob_cmd_print
         #define cmd_free nob_cmd_free
         #define cmd_run_async nob_cmd_run_async
         #define cmd_run_async_and_reset nob_cmd_run_async_and_reset
@@ -1729,6 +1855,8 @@ int closedir(DIR *dirp)
         #define cmd_run_sync_and_reset nob_cmd_run_sync_and_reset
         #define cmd_run_sync_redirect nob_cmd_run_sync_redirect
         #define cmd_run_sync_redirect_and_reset nob_cmd_run_sync_redirect_and_reset
+        #define cmd_run_sync_read nob_cmd_run_sync_read
+        #define cmd_run_sync_read_and_reset nob_cmd_run_sync_read_and_reset
         #define temp_strdup nob_temp_strdup
         #define temp_alloc nob_temp_alloc
         #define temp_sprintf nob_temp_sprintf
@@ -1749,10 +1877,11 @@ int closedir(DIR *dirp)
         #define sv_trim_left nob_sv_trim_left
         #define sv_trim_right nob_sv_trim_right
         #define sv_eq nob_sv_eq
-        #define sv_end_with nob_sv_end_with
+        #define sv_end_with nob_sv_ends_with
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
         #define sb_to_sv nob_sb_to_sv
+        #define ends_with nob_ends_with
         #define win32_error_message nob_win32_error_message
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
