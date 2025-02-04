@@ -614,13 +614,13 @@ char *nob_win32_error_message(DWORD err) {
         char *newErrMsg = NULL;
         if (GetLastError() == ERROR_MR_MID_NOT_FOUND) {
             newErrMsg = "Invalid Win32 error code";
-            } else {
+        } else {
             newErrMsg = "Could not get error message";
-            }
+        }
 
         if (snprintf(win32ErrMsg, sizeof(win32ErrMsg), "%s for 0x%lX", newErrMsg, err) > 0) {
-                return (char *)&win32ErrMsg;
-            } else {
+            return (char *)&win32ErrMsg;
+        } else {
             return newErrMsg;
         }
     }
