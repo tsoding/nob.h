@@ -1,4 +1,4 @@
-/* nob - v1.9.1 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.10.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -1772,6 +1772,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.10.0 (2025-02-04) Make NOB_ASSERT, NOB_REALLOC, and NOB_FREE redefinable (By @OleksiiBulba)
       1.9.1 (2025-02-04) Fix signature of nob_get_current_dir_temp() (By @julianstoerig)
       1.9.0 (2024-11-06) Add Nob_Cmd_Redirect mechanism (By @rexim)
                          Add nob_path_name() (By @0dminnimda)
