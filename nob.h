@@ -492,9 +492,18 @@ Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n);
 Nob_String_View nob_sv_chop_left_while(Nob_String_View *sv, bool (*predicate)(char x));
 bool nob_sv_index_of(Nob_String_View sv, char c, size_t *index);
 bool nob_sv_eq_ignorecase(Nob_String_View a, Nob_String_View b);
-bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View prefix);
+bool nob_sv_start_with(Nob_String_View sv, const char *expected_prefix);
 uint64_t nob_sv_to_u64(Nob_String_View sv);
 uint64_t nob_sv_chop_u64(Nob_String_View *sv);
+
+#define SV(cstr_lit) nob_sv_from_parts(cstr_lit, sizeof(cstr_lit) - 1)
+#define SV_STATIC(cstr_lit)   \
+    {                         \
+        sizeof(cstr_lit) - 1, \
+        (cstr_lit)            \
+    }
+
+#define SV_NULL nob_sv_from_parts(NULL, 0)
 
 // printf macros for String_View
 #ifndef SV_Fmt
@@ -1519,47 +1528,150 @@ bool nob_sv_end_with(Nob_String_View sv, const char *cstr)
 }
 
 Nob_String_View nob_sv_take_left_while(Nob_String_View sv, bool (*predicate)(char x)) {
-    NOB_TODO("nob_sv_take_left_while");
+    size_t i = 0;
+    while (i < sv.count && predicate(sv.data[i])) {
+        i += 1;
+    }
+    return nob_sv_from_parts(sv.data, i);
 }
 
 Nob_String_View nob_sv_chop_by_sv(Nob_String_View *sv, Nob_String_View thicc_delim) {
-    NOB_TODO("nob_sv_chop_by_sv");
+    Nob_String_View window = nob_sv_from_parts(sv->data, thicc_delim.count);
+    size_t i = 0;
+    while (i + thicc_delim.count < sv->count && !(nob_sv_eq(window, thicc_delim))) {
+        i++;
+        window.data++;
+    }
+
+    Nob_String_View result = nob_sv_from_parts(sv->data, i);
+
+    if (i + thicc_delim.count == sv->count) {
+        // include last <thicc_delim.count> characters if they aren't
+        //  equal to thicc_delim
+        result.count += thicc_delim.count;
+    }
+
+    // Chop!
+    sv->data += i + thicc_delim.count;
+    sv->count -= i + thicc_delim.count;
+
+    return result;
 }
 
 bool nob_sv_try_chop_by_delim(Nob_String_View *sv, char delim, Nob_String_View *chunk) {
-    NOB_TODO("nob_sv_try_chop_by_delim");
+    size_t i = 0;
+    while (i < sv->count && sv->data[i] != delim) {
+        i += 1;
+    }
+
+    Nob_String_View result = nob_sv_from_parts(sv->data, i);
+
+    if (i < sv->count) {
+        sv->count -= i + 1;
+        sv->data += i + 1;
+        if (chunk) {
+            *chunk = result;
+        }
+        return true;
+    }
+
+    return false;
 }
 
 Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n) {
-    NOB_TODO("nob_sv_chop_left");
+    if (n > sv->count) {
+        n = sv->count;
+    }
+
+    Nob_String_View result = nob_sv_from_parts(sv->data, n);
+
+    sv->data += n;
+    sv->count -= n;
+
+    return result;
 }
 
 Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n) {
-    NOB_TODO("nob_sv_chop_right");
+    if (n > sv->count) {
+        n = sv->count;
+    }
+
+    Nob_String_View result = nob_sv_from_parts(sv->data + sv->count - n, n);
+
+    sv->count -= n;
+
+    return result;
 }
 
 Nob_String_View nob_sv_chop_left_while(Nob_String_View *sv, bool (*predicate)(char x)) {
-    NOB_TODO("nob_sv_chop_left_while");
+    size_t i = 0;
+    while (i < sv->count && predicate(sv->data[i])) {
+        i += 1;
+    }
+    return nob_sv_chop_left(sv, i);
 }
 
 bool nob_sv_index_of(Nob_String_View sv, char c, size_t *index) {
-    NOB_TODO("nob_sv_index_of");
+    size_t i = 0;
+    while (i < sv.count && sv.data[i] != c) {
+        i += 1;
+    }
+
+    if (i < sv.count) {
+        if (index) {
+            *index = i;
+        }
+        return true;
+    } else {
+        return false;
+    }
 }
 
 bool nob_sv_eq_ignorecase(Nob_String_View a, Nob_String_View b) {
-    NOB_TODO("nob_sv_eq_ignorecase");
+    if (a.count != b.count) {
+        return false;
+    }
+
+    char x, y;
+    for (size_t i = 0; i < a.count; i++) {
+        x = 'A' <= a.data[i] && a.data[i] <= 'Z' ? a.data[i] + 32 : a.data[i];
+
+        y = 'A' <= b.data[i] && b.data[i] <= 'Z' ? b.data[i] + 32 : b.data[i];
+
+        if (x != y)
+            return false;
+    }
+    return true;
 }
 
-bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View prefix) {
-    NOB_TODO("nob_sv_starts_with");
+bool nob_sv_start_with(Nob_String_View sv, const char *expected_prefix) {
+    Nob_String_View expected_prefix_sv = nob_sv_from_cstr(expected_prefix);
+    if (expected_prefix_sv.count <= sv.count) {
+        Nob_String_View actual_prefix = nob_sv_from_parts(sv.data, expected_prefix_sv.count);
+        return nob_sv_eq(expected_prefix_sv, actual_prefix);
+    }
+
+    return false;
 }
 
 uint64_t nob_sv_to_u64(Nob_String_View sv) {
-    NOB_TODO("nob_sv_to_u64");
+    uint64_t result = 0;
+
+    for (size_t i = 0; i < sv.count && isdigit(sv.data[i]); ++i) {
+        result = result * 10 + (uint64_t)sv.data[i] - '0';
+    }
+
+    return result;
 }
 
 uint64_t nob_sv_chop_u64(Nob_String_View *sv) {
-    NOB_TODO("nob_sv_chop_u64");
+    uint64_t result = 0;
+    while (sv->count > 0 && isdigit(*sv->data)) {
+        result = result * 10 + *sv->data - '0';
+        sv->count -= 1;
+        sv->data += 1;
+    }
+    return result;
 }
 
 // RETURNS:
@@ -1811,6 +1923,17 @@ int closedir(DIR *dirp)
         #define sv_from_parts nob_sv_from_parts
         #define sb_to_sv nob_sb_to_sv
         #define win32_error_message nob_win32_error_message
+        #define sv_take_left_while nob_sv_take_left_while
+        #define sv_chop_by_sv nob_sv_chop_by_sv
+        #define sv_try_chop_by_delim nob_sv_try_chop_by_delim
+        #define sv_chop_left nob_sv_chop_left
+        #define sv_chop_right nob_sv_chop_right
+        #define sv_chop_left_while nob_sv_chop_left_while
+        #define sv_index_of nob_sv_index_of
+        #define sv_eq_ignorecase nob_sv_eq_ignorecase
+        #define sv_start_with nob_sv_start_with
+        #define sv_to_u64 nob_sv_to_u64
+        #define sv_chop_u64 nob_sv_chop_u64
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
 
