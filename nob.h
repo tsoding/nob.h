@@ -91,9 +91,9 @@
       // Opening all the necessary files
       Nob_Fd fdin = nob_fd_open_for_read("input.txt");
       if (fdin == NOB_INVALID_FD) return 1;
-      Nob_Fd fdout = nob_fd_open_for_read("output.txt");
+      Nob_Fd fdout = nob_fd_open_for_write("output.txt");
       if (fdout == NOB_INVALID_FD) return 1;
-      Nob_Fd fderr = nob_fd_open_for_read("error.txt");
+      Nob_Fd fderr = nob_fd_open_for_write("error.txt");
       if (fderr == NOB_INVALID_FD) return 1;
 
       // Preparing the command
