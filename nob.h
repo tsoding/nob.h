@@ -679,6 +679,8 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
 
     Nob_File_Paths source_paths = {0};
     nob_da_append(&source_paths, source_path);
+    // TODO: we need to catch the situation when the flags file existed but then got deleted
+    // Such situation should prompt a rebuild, cause it's effectively a modification of the file
     if (nob_flags_exists > 0) nob_da_append(&source_paths, nob_flags_file_path);
     va_list args;
     va_start(args, source_path);
