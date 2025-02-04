@@ -1591,12 +1591,13 @@ struct DIR
 
 DIR *opendir(const char *dirpath)
 {
-    assert(dirpath);
+    NOB_ASSERT(dirpath);
 
     char buffer[MAX_PATH];
     snprintf(buffer, MAX_PATH, "%s\\*", dirpath);
 
-    DIR *dir = (DIR*)calloc(1, sizeof(DIR));
+    DIR *dir = (DIR*)NOB_REALLOC(NULL, sizeof(DIR));
+    memset(dir, 0, sizeof(DIR));
 
     dir->hFind = FindFirstFile(buffer, &dir->data);
     if (dir->hFind == INVALID_HANDLE_VALUE) {
@@ -1618,10 +1619,11 @@ fail:
 
 struct dirent *readdir(DIR *dirp)
 {
-    assert(dirp);
+    NOB_ASSERT(dirp);
 
     if (dirp->dirent == NULL) {
-        dirp->dirent = (struct dirent*)calloc(1, sizeof(struct dirent));
+        dirp->dirent = (struct dirent*)NOB_REALLOC(NULL, sizeof(struct dirent));
+        memset(dirp->dirent, 0, sizeof(struct dirent));
     } else {
         if(!FindNextFile(dirp->hFind, &dirp->data)) {
             if (GetLastError() != ERROR_NO_MORE_FILES) {
@@ -1646,7 +1648,7 @@ struct dirent *readdir(DIR *dirp)
 
 int closedir(DIR *dirp)
 {
-    assert(dirp);
+    NOB_ASSERT(dirp);
 
     if(!FindClose(dirp->hFind)) {
         // TODO: closedir should set errno accordingly on FindClose fail
