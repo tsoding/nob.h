@@ -19,7 +19,11 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
 {
     const char *bin_path = temp_sprintf("%s%s", BUILD_FOLDER TESTS_FOLDER, test_name);
     const char *src_path = temp_sprintf("%s%s.c", TESTS_FOLDER, test_name);
+#ifdef _MSC_VER
+    cmd_append(cmd, "cl", "-I.", "-o", bin_path, src_path);
+#else
     cmd_append(cmd, "cc", "-Wall", "-Wextra", "-Wswitch-enum", "-I.", "-o", bin_path, src_path);
+#endif //  _MSC_VER
     if (!cmd_run_sync_and_reset(cmd)) return false;
     cmd_append(cmd, bin_path);
     if (!cmd_run_sync_and_reset(cmd)) return false;
