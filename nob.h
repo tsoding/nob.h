@@ -713,11 +713,15 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
         Nob_String_Builder sb = {0};
         if (nob_read_entire_file(nob_flags_file_path, &sb)) {
             Nob_String_View sv = nob_sb_to_sv(sb);
+            nob_da_append(&sb, '\n'); // NOTE: extra new line, just in case
             while (sv.count > 0) {
                 Nob_String_View flag = nob_sv_trim(nob_sv_chop_by_delim(&sv, '\n'));
-                if (flag.count == 0) continue;         // NOTE: ignore empty lines
+                if (flag.count == 0)   continue;       // NOTE: ignore empty lines
                 if (*flag.data == '#') continue;       // NOTE: ignore commented out lines
-                ((char*)flag.data)[flag.count] = '\0'; // TODO: explain why this is fine
+                ((char*)flag.data)[flag.count] = '\0'; // NOTE: we always have at least an extra '\n' character
+                                                       // at the end of each line. So we always have something
+                                                       // we can safely replace with '\0' to turn the flag into
+                                                       // a C-string.
                 nob_cmd_append(&cmd, flag.data);
             }
         }
