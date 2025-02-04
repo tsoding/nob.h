@@ -11,6 +11,7 @@ const char *test_names[] = {
 #ifdef _WIN32
     "win32_error",
 #endif //_WIN32
+    "read_entire_dir",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
@@ -28,7 +29,7 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
 
 int main(int argc, char **argv)
 {
-    NOB_GO_REBUILD_URSELF(argc, argv);
+    NOB_GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
 
     Cmd cmd = {0};
 
