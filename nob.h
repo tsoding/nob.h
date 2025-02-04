@@ -460,6 +460,10 @@ bool nob_set_current_dir(const char *path);
 #define NOB_SELF_REBUILT_FLAG "-DNOB_SELF_REBUILT"
 #endif // NOB_SELF_REBUILT_FLAG
 
+#ifndef NOB_FLAGS_FILE_SUFFIX
+#define NOB_FLAGS_FILE_SUFFIX ".flags.txt"
+#endif // NOB_FLAGS_FILE_SUFFIX
+
 // TODO: add MinGW support for Go Rebuild Urself™ Technology
 #ifndef NOB_REBUILD_URSELF
 #  if _WIN32
@@ -670,7 +674,7 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
 #endif
 
     // TODO: write an article about how to use the flags files.
-    const char *nob_flags_file_path = nob_temp_sprintf("%s.flags.txt", binary_path);
+    const char *nob_flags_file_path = nob_temp_sprintf("%s%s", binary_path, NOB_FLAGS_FILE_SUFFIX);
     int nob_flags_exists = nob_file_exists(nob_flags_file_path);
 
     Nob_File_Paths source_paths = {0};
@@ -689,7 +693,7 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
     if (rebuild_is_needed < 0) exit(1); // error
 #ifndef NOB_SELF_REBUILT
     // If NOB_SELF_REBUILT is not defined we are running nob that was bootstrapped manually
-    // for the first time. Which means it probably does not have flags defined in nob.flags.txt
+    // for the first time. Which means it probably does not have flags defined in the flags
     // files. Forsing rebuild just in case to pick up those flags.
     rebuild_is_needed = 1;
 #endif //
