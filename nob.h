@@ -454,24 +454,25 @@ int nob_file_exists(const char *file_path);
 const char *nob_get_current_dir_temp(void);
 bool nob_set_current_dir(const char *path);
 
+// WARNING: Do not redefine this flag if you don't know what you are doing! This flag is added
+// when nob executable rebuilds itself. Without this flag you end up in an infinite rebuild loop.
+#ifndef NOB_SELF_REBUILT_FLAG
+#define NOB_SELF_REBUILT_FLAG "-DNOB_SELF_REBUILT"
+#endif // NOB_SELF_REBUILT_FLAG
+
 // TODO: add MinGW support for Go Rebuild Urself™ Technology
 #ifndef NOB_REBUILD_URSELF
 #  if _WIN32
 #    if defined(__GNUC__)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-DNOB_SELF_REBUILT", "-o", binary_path, source_path
+#       define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-o", binary_path, source_path
 #    elif defined(__clang__)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-DNOB_SELF_REBUILT", "-o", binary_path, source_path
+#       define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-o", binary_path, source_path
 #    elif defined(_MSC_VER)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", "/DNOB_SELF_REBUILT", nob_temp_sprintf("/Fe:%s", (binary_path)), source_path
+#       define NOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", nob_temp_sprintf("/Fe:%s", (binary_path)), source_path
 #    endif
 #  else
-#    define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-DNOB_SELF_REBUILT", "-o", binary_path, source_path
+#    define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
 #  endif
-// TODO: After the introduction of -DNOB_SELF_REBUILT all the custom NOB_REBUILD_URSELF definitions are broken,
-// because they likely don't have it. And if you don't have -DNOB_SELF_REBUILT you end up in an infinite rebuild loop.
-// We should probably put -DNOB_SELF_REBUILT into a separate macro (also redefinable for those who know what they are doing).
-// Luckly just "-DNOB_SELF_REBUILT" should work for the majority of the compilers (including MSVC btw, because it allows to
-// use both dashes and slashes for its flags).
 #endif
 
 // Go Rebuild Urself™ Technology
@@ -703,6 +704,7 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
 
     if (!nob_rename(binary_path, old_binary_path)) exit(1);
     nob_cmd_append(&cmd, NOB_REBUILD_URSELF(binary_path, source_path));
+    nob_cmd_append(&cmd, NOB_SELF_REBUILT_FLAG);
     if (nob_flags_exists > 0) {
         Nob_String_Builder sb = {0};
         if (nob_read_entire_file(nob_flags_file_path, &sb)) {
