@@ -2,6 +2,15 @@ name: no-build build
 on: [push, pull_request]
 
 jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - name: Clone GIT repo
+        uses: actions/checkout@v4
+      - name: Build nob
+        run: clang -o nob nob.c
+      - name: Run nob
+        run: ./nob
   ubuntu:
     strategy:
       matrix:
