@@ -299,11 +299,14 @@ bool nob_delete_file(const char *path);
         (da)->count += (new_items_count);                                                     \
     } while (0)
 
-#define nob_da_resize(da, new_size)                                                    \
-    do {                                                                               \
-        (da)->capacity = (da)->count = new_size;                                       \
-        (da)->items = NOB_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items)); \
-        NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                         \
+#define nob_da_resize(da, new_size)                                                        \
+    do {                                                                                   \
+        if ((new_size) >= (da)->capacity) {                                                \
+            (da)->capacity = (new_size);                                                   \
+            (da)->items = NOB_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items)); \
+            NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                         \
+        }                                                                                  \
+        (da)->count = (new_size);                                                          \
     } while (0)
 
 typedef struct {
