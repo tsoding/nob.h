@@ -34,14 +34,6 @@ int main(int argc, char **argv)
 {
     NOB_GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
 
-    #ifdef FOO
-    nob_log(INFO, "----------------------------------------");
-    nob_log(INFO, "FOO FOO FOO FOO FOO FOO FOO FOO FOO FOO ");
-    nob_log(INFO, "FOO FOO FOO FOO FOO FOO FOO FOO FOO FOO ");
-    nob_log(INFO, "FOO FOO FOO FOO FOO FOO FOO FOO FOO FOO ");
-    nob_log(INFO, "----------------------------------------");
-    #endif // FOO
-
     Cmd cmd = {0};
 
     const char *program_name = shift(argv, argc);
