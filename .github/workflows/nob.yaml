@@ -1,12 +1,16 @@
 name: no-build build
 on: [push, pull_request]
 
+permissions: {}
+
 jobs:
   macos:
     runs-on: macos-latest
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Build nob
         run: clang -o nob nob.c
       - name: Run nob
@@ -19,6 +23,8 @@ jobs:
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Build nob
         run: ${{ matrix.cc }} -o nob nob.c
       - name: Run nob
@@ -28,6 +34,8 @@ jobs:
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Build nob
         shell: cmd
         # cl.exe isn't available as-is in Github images because they don't want

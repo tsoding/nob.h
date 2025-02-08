@@ -1,0 +1,9 @@
+ci:
+  autoupdate_schedule: quarterly
+  submodules: false
+
+repos:
+  - repo: https://github.com/woodruffw/zizmor-pre-commit
+    rev: v1.3.0
+    hooks:
+      - id: zizmor
