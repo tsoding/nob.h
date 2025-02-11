@@ -301,7 +301,7 @@ bool nob_delete_file(const char *path);
 
 #define nob_da_resize(da, new_size)                                                        \
     do {                                                                                   \
-        if ((new_size) >= (da)->capacity) {                                                \
+        if ((new_size) > (da)->capacity) {                                                 \
             (da)->capacity = (new_size);                                                   \
             (da)->items = NOB_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items)); \
             NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                         \
