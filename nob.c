@@ -12,6 +12,7 @@ const char *test_names[] = {
     "win32_error",
 #endif //_WIN32
     "read_entire_dir",
+    "da_resize",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
