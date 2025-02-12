@@ -2,7 +2,7 @@
 
 This library is the next generation of the NoBuild idea. "nob" stands for "nobuild", but it's shorter and more suitable as a prefix for a library.
 
-For my previous iteration on this idea see [https://github.com/tsoding/nobuild], but I do not recommend to use it.
+For my previous iteration on this idea see [https://github.com/tsoding/nobuild](https://github.com/tsoding/nobuild), but I do not recommend to use it.
 
 ## NoBuild Idea
 
@@ -12,7 +12,7 @@ The idea is that you should not need anything but a C compiler to build a C proj
 
 I'm not sure if this is even a good idea myself. This is why I'm implementing it. This is a research project. I'm not making any claims about suitability of this approach to any project.
 
-Right now I'm actively using nob in a variety of my C projects at [https://github.com/tsoding/]. It works quite well for me there.
+Right now I'm actively using nob in a variety of my C projects at [https://github.com/tsoding/](https://github.com/tsoding/). It works quite well for me there.
 
 ## It's likely Not Suitable for Your Project
 
