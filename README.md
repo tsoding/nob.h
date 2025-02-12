@@ -38,7 +38,7 @@ You know all these BS movements that supposedly remove the root cause of your pr
 
 ## How to use the library in your own project
 
-The only file you need from is [nob.h](https://raw.githubusercontent.com/tsoding/nob.h/refs/heads/main/nob.h). Just copy-paste it to your project and start using it.
+The only file you need from here is [nob.h](https://raw.githubusercontent.com/tsoding/nob.h/refs/heads/main/nob.h). Just copy-paste it to your project and start using it.
 
 ```c
 // nob.c
