@@ -564,7 +564,7 @@ Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 #else // _WIN32
 
 #define WIN32_LEAN_AND_MEAN
-#include "windows.h"
+#include <windows.h>
 
 struct dirent
 {
@@ -1661,7 +1661,7 @@ bool nob_set_current_dir(const char *path)
 struct DIR
 {
     HANDLE hFind;
-    WIN32_FIND_DATA data;
+    WIN32_FIND_DATAA data;
     struct dirent *dirent;
 };
 
@@ -1675,7 +1675,7 @@ DIR *opendir(const char *dirpath)
     DIR *dir = (DIR*)NOB_REALLOC(NULL, sizeof(DIR));
     memset(dir, 0, sizeof(DIR));
 
-    dir->hFind = FindFirstFile(buffer, &dir->data);
+    dir->hFind = FindFirstFileA(buffer, &dir->data);
     if (dir->hFind == INVALID_HANDLE_VALUE) {
         // TODO: opendir should set errno accordingly on FindFirstFile fail
         // https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror
@@ -1701,7 +1701,7 @@ struct dirent *readdir(DIR *dirp)
         dirp->dirent = (struct dirent*)NOB_REALLOC(NULL, sizeof(struct dirent));
         memset(dirp->dirent, 0, sizeof(struct dirent));
     } else {
-        if(!FindNextFile(dirp->hFind, &dirp->data)) {
+        if(!FindNextFileA(dirp->hFind, &dirp->data)) {
             if (GetLastError() != ERROR_NO_MORE_FILES) {
                 // TODO: readdir should set errno accordingly on FindNextFile fail
                 // https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror
