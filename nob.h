@@ -1,4 +1,4 @@
-/* nob - v1.13.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.13.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -1846,6 +1846,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.13.1 (2025-02-17) Fix segfault in nob_delete_file() (By @SileNce5k)
      1.13.0 (2025-02-11) Add nob_da_resize() (By @satchelfrost)
      1.12.0 (2025-02-04) Add nob_delete_file()
                          Add nob_sv_start_with()
