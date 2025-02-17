@@ -1,4 +1,4 @@
-/* nob - v1.13.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.13.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -1226,13 +1226,13 @@ bool nob_delete_file(const char *path)
     nob_log(NOB_INFO, "deleting %s", path);
 #ifdef _WIN32
     if (!DeleteFileA(path)) {
-        nob_log(NOB_ERROR, "Could not delete file %s: %s", nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
         return false;
     }
     return true;
 #else
     if (remove(path) < 0) {
-        nob_log(NOB_ERROR, "Could not delete file %s: %s", strerror(errno));
+        nob_log(NOB_ERROR, "Could not delete file %s: %s", path, strerror(errno));
         return false;
     }
     return true;
@@ -1846,6 +1846,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.13.1 (2025-02-17) Fix segfault in nob_delete_file() (By @SileNce5k)
      1.13.0 (2025-02-11) Add nob_da_resize() (By @satchelfrost)
      1.12.0 (2025-02-04) Add nob_delete_file()
                          Add nob_sv_start_with()
