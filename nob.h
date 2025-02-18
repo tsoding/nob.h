@@ -1,4 +1,4 @@
-/* nob - v1.12.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.13.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -297,6 +297,16 @@ bool nob_delete_file(const char *path);
         }                                                                                   \
         memcpy((da)->items + (da)->count, (new_items), (new_items_count)*sizeof(*(da)->items)); \
         (da)->count += (new_items_count);                                                     \
+    } while (0)
+
+#define nob_da_resize(da, new_size)                                                        \
+    do {                                                                                   \
+        if ((new_size) > (da)->capacity) {                                                 \
+            (da)->capacity = (new_size);                                                   \
+            (da)->items = NOB_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items)); \
+            NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                         \
+        }                                                                                  \
+        (da)->count = (new_size);                                                          \
     } while (0)
 
 typedef struct {
@@ -1226,13 +1236,13 @@ bool nob_delete_file(const char *path)
     nob_log(NOB_INFO, "deleting %s", path);
 #ifdef _WIN32
     if (!DeleteFileA(path)) {
-        nob_log(NOB_ERROR, "Could not delete file %s: %s", nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
         return false;
     }
     return true;
 #else
     if (remove(path) < 0) {
-        nob_log(NOB_ERROR, "Could not delete file %s: %s", strerror(errno));
+        nob_log(NOB_ERROR, "Could not delete file %s: %s", path, strerror(errno));
         return false;
     }
     return true;
@@ -1787,6 +1797,7 @@ int closedir(DIR *dirp)
         #define da_append nob_da_append
         #define da_free nob_da_free
         #define da_append_many nob_da_append_many
+        #define da_resize nob_da_resize
         #define String_Builder Nob_String_Builder
         #define read_entire_file nob_read_entire_file
         #define sb_append_buf nob_sb_append_buf
@@ -1850,6 +1861,8 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.13.1 (2025-02-17) Fix segfault in nob_delete_file() (By @SileNce5k)
+     1.13.0 (2025-02-11) Add nob_da_resize() (By @satchelfrost)
      1.12.0 (2025-02-04) Add nob_delete_file()
                          Add nob_sv_start_with()
      1.11.0 (2025-02-04) Add NOB_GO_REBUILD_URSELF_PLUS() (By @rexim)
