@@ -357,7 +357,7 @@ typedef struct {
     const char *data;
     size_t count;
 #ifdef _WIN32
-    HANDLE fileMapping;
+    HANDLE file_mapping;
 #endif
 } Nob_Mapped_File;
 
@@ -1008,13 +1008,13 @@ Nob_Mapped_File nob_mmap_file(const char *path) {
     if (fd == NOB_INVALID_FD) nob_return_defer((Nob_Mapped_File) {0});
 
 #ifdef _WIN32
-    HANDLE fileMapping = CreateFileMappingA(fd, NULL, PAGE_READONLY, 0, 0, NULL);
-    if (fileMapping == INVALID_HANDLE_VALUE) {
+    HANDLE file_mapping = CreateFileMappingA(fd, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (file_mapping == INVALID_HANDLE_VALUE) {
         nob_log(NOB_ERROR, "Could not mmap file %s: %s", path, nob_win32_error_message(GetLastError()));
         nob_return_defer((Nob_Mapped_File) {0});
     }
 
-    const char *data = MapViewOfFile(fileMapping, FILE_MAP_READ, 0, 0, 0);
+    const char *data = MapViewOfFile(file_mapping, FILE_MAP_READ, 0, 0, 0);
     if (data == NULL) {
         nob_log(NOB_ERROR, "Could not mmap file %s: %s", path, nob_win32_error_message(GetLastError()));
         nob_return_defer((Nob_Mapped_File) {0});
@@ -1025,7 +1025,7 @@ Nob_Mapped_File nob_mmap_file(const char *path) {
 
     size_t size = *(size_t*)file_size_dwords;
 
-    result.fileMapping = fileMapping;
+    result.file_mapping = file_mapping;
     result.data = data;
     result.count = size;
 
@@ -1060,7 +1060,7 @@ defer:
 void nob_munmap_file(Nob_Mapped_File mf) {
 #ifdef _WIN32
     UnmapViewOfFile(mf.data);
-    CloseHandle(mf.fileMapping);
+    CloseHandle(mf.file_mapping);
 #else
     munmap((char*)mf.data, mf.count);
 #endif // _WIN32
