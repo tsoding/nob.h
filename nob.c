@@ -13,6 +13,7 @@ const char *test_names[] = {
 #endif //_WIN32
     "read_entire_dir",
     "da_resize",
+    "mmap_file",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
