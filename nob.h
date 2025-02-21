@@ -357,6 +357,7 @@ typedef struct {
     const char *data;
     size_t count;
 #ifdef _WIN32
+    Nob_Fd fd;
     HANDLE file_mapping;
 #endif
 } Nob_Mapped_File;
@@ -1025,6 +1026,7 @@ Nob_Mapped_File nob_mmap_file(const char *path) {
 
     size_t size = *(size_t*)file_size_dwords;
 
+    result.fd = fd;
     result.file_mapping = file_mapping;
     result.data = data;
     result.count = size;
@@ -1061,6 +1063,7 @@ void nob_munmap_file(Nob_Mapped_File mf) {
 #ifdef _WIN32
     UnmapViewOfFile(mf.data);
     CloseHandle(mf.file_mapping);
+    CloseHandle(mf.fd);
 #else
     munmap((char*)mf.data, mf.count);
 #endif // _WIN32
