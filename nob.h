@@ -361,7 +361,7 @@ typedef struct {
 #endif
 } Nob_Mapped_File;
 
-// Indicates failure by returning String_View with data == NULL
+// Indicates failure by returning Mapped_File with data == NULL
 Nob_Mapped_File nob_mmap_file(const char *path);
 void nob_munmap_file(Nob_Mapped_File mf);
 
