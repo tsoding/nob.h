@@ -1,0 +1,5 @@
+This is a test file for mmap_file.c
+It tests nob.h's ability to mmap()/CreateFileMapping() files into memory
+I was considering starting this file's name with a dot (.) to avoid having to re-record the output of
+  read_entire_dir.c, since it has the same "bug" as the original implementation of "ls", but then I realized that
+  adding a new test would break read_entire_dir.c anyway, so it would be pointless. And now I have something to put in the file!
