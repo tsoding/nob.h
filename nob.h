@@ -1,4 +1,4 @@
-/* nob - v1.13.1 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.14.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -308,6 +308,14 @@ bool nob_delete_file(const char *path);
         }                                                                                  \
         (da)->count = (new_size);                                                          \
     } while (0)
+
+#define nob_da_last(da) (da)->items[(NOB_ASSERT((da)->count > 0), (da)->count-1)]
+#define nob_da_remove_unordered(da, i)               \
+    do {                                             \
+        size_t j = (i);                              \
+        NOB_ASSERT(j < (da)->count);                 \
+        (da)->items[j] = (da)->items[--(da)->count]; \
+    } while(0)
 
 typedef struct {
     char *items;
@@ -1783,6 +1791,8 @@ int closedir(DIR *dirp)
         #define da_free nob_da_free
         #define da_append_many nob_da_append_many
         #define da_resize nob_da_resize
+        #define da_last nob_da_last
+        #define da_remove_unordered nob_da_remove_unordered
         #define String_Builder Nob_String_Builder
         #define read_entire_file nob_read_entire_file
         #define sb_append_buf nob_sb_append_buf
@@ -1846,6 +1856,8 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.14.0 (2025-02-17) Add nob_da_last()
+                         Add nob_da_remove_unordered()
      1.13.1 (2025-02-17) Fix segfault in nob_delete_file() (By @SileNce5k)
      1.13.0 (2025-02-11) Add nob_da_resize() (By @satchelfrost)
      1.12.0 (2025-02-04) Add nob_delete_file()
