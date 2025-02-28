@@ -13,6 +13,8 @@ const char *test_names[] = {
 #endif //_WIN32
     "read_entire_dir",
     "da_resize",
+    "da_last",
+    "da_remove_unordered",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
