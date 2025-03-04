@@ -364,10 +364,12 @@ typedef struct {
     Nob_Proc *items;
     size_t count;
     size_t capacity;
+    bool failed;
 } Nob_Procs;
 
 bool nob_procs_wait(Nob_Procs procs);
 bool nob_procs_wait_and_reset(Nob_Procs *procs);
+void nob_procs_append_or_wait_and_reset(Nob_Procs *procs, Nob_Proc proc);
 
 // Wait until the process has finished
 bool nob_proc_wait(Nob_Proc proc);
@@ -1003,7 +1005,7 @@ void nob_fd_close(Nob_Fd fd)
 
 bool nob_procs_wait(Nob_Procs procs)
 {
-    bool success = true;
+    bool success = !procs.failed;
     for (size_t i = 0; i < procs.count; ++i) {
         success = nob_proc_wait(procs.items[i]) && success;
     }
@@ -1014,7 +1016,18 @@ bool nob_procs_wait_and_reset(Nob_Procs *procs)
 {
     bool success = nob_procs_wait(*procs);
     procs->count = 0;
+    procs->failed = false;
     return success;
+}
+
+void nob_procs_append_or_wait_and_reset(Nob_Procs *procs, Nob_Proc proc)
+{
+    if (procs->count + 1 < procs->capacity) {
+        nob_da_append(procs, proc);
+        return;
+    }
+    procs->failed = !nob_procs_wait(*procs) || procs->failed;
+    procs->count = 0;
 }
 
 bool nob_proc_wait(Nob_Proc proc)
