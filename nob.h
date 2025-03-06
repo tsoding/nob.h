@@ -1,4 +1,4 @@
-/* nob - v1.14.1 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.15.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -518,6 +518,7 @@ typedef struct {
 const char *nob_temp_sv_to_cstr(Nob_String_View sv);
 
 Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim);
+Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n);
 Nob_String_View nob_sv_trim(Nob_String_View sv);
 Nob_String_View nob_sv_trim_left(Nob_String_View sv);
 Nob_String_View nob_sv_trim_right(Nob_String_View sv);
@@ -1541,6 +1542,20 @@ Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim)
     return result;
 }
 
+Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n)
+{
+    if (n > sv->count) {
+        n = sv->count;
+    }
+
+    Nob_String_View result = nob_sv_from_parts(sv->data, n);
+
+    sv->data  += n;
+    sv->count -= n;
+
+    return result;
+}
+
 Nob_String_View nob_sv_from_parts(const char *data, size_t count)
 {
     Nob_String_View sv;
@@ -1861,6 +1876,7 @@ int closedir(DIR *dirp)
         #define String_View Nob_String_View
         #define temp_sv_to_cstr nob_temp_sv_to_cstr
         #define sv_chop_by_delim nob_sv_chop_by_delim
+        #define sv_chop_left nob_sv_chop_left
         #define sv_trim nob_sv_trim
         #define sv_trim_left nob_sv_trim_left
         #define sv_trim_right nob_sv_trim_right
@@ -1877,6 +1893,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.15.0 (2025-03-03) Add nob_sv_chop_left()
      1.14.1 (2025-03-02) Add NOB_EXPERIMENTAL_DELETE_OLD flag that enables deletion of nob.old in Go Rebuild Urself™ Technology
      1.14.0 (2025-02-17) Add nob_da_last()
                          Add nob_da_remove_unordered()
