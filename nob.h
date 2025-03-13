@@ -316,6 +316,7 @@ typedef struct {
 } Nob_String_Builder;
 
 bool nob_read_entire_file(const char *path, Nob_String_Builder *sb);
+int nob_sb_appendf(Nob_String_Builder *sb, const char *fmt, ...);
 
 // Append a sized buffer to a string builder
 #define nob_sb_append_buf(sb, buf, size) nob_da_append_many(sb, buf, size)
@@ -1497,6 +1498,33 @@ defer:
     return result;
 }
 
+int nob_sb_appendf(Nob_String_Builder *sb, const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    int n = vsnprintf(NULL, 0, fmt, args);
+    va_end(args);
+
+    // NOTE: the new_capacity needs to be +1 because of the null terminator.
+    // However, further below we increase sb->count by n, not n + 1.
+    // This is because we don't want the sb to include the null terminator. The user can always sb_append_null() if they want it
+    size_t new_capacity = sb->count + n + 1;
+    if (new_capacity > sb->capacity) {
+        sb->capacity = new_capacity;
+        sb->items = NOB_REALLOC(sb->items, new_capacity);
+        NOB_ASSERT(sb->items != NULL && "Buy more RAM lol!!!!");
+    }
+    char *dest = sb->items + sb->count;
+    va_start(args, fmt);
+    vsprintf(dest, fmt, args);
+    va_end(args);
+
+    sb->count += n;
+
+    return n;
+}
+
 Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim)
 {
     size_t i = 0;
@@ -1785,6 +1813,7 @@ int closedir(DIR *dirp)
         #define da_resize nob_da_resize
         #define String_Builder Nob_String_Builder
         #define read_entire_file nob_read_entire_file
+        #define sb_appendf nob_sb_appendf
         #define sb_append_buf nob_sb_append_buf
         #define sb_append_cstr nob_sb_append_cstr
         #define sb_append_null nob_sb_append_null
