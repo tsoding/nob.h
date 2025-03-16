@@ -20,7 +20,7 @@ jobs:
       - name: Clone GIT repo
         uses: actions/checkout@v4
       - name: Build nob
-        run: ${{ matrix.cc }} -o nob nob.c
+        run: ${{ matrix.cc }} -Wall -Wextra -std=c99 -D_POSIX_SOURCE -o nob nob.c
       - name: Run nob
         run: ./nob
   windows:

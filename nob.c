@@ -16,6 +16,8 @@ const char *test_names[] = {
     "da_resize",
     "da_last",
     "da_remove_unordered",
+    "da_append",
+    "sb_appendf",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
