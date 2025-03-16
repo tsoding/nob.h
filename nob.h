@@ -1,4 +1,4 @@
-/* nob - v1.15.1 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.16.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -211,6 +211,14 @@
 #    define NOB_LINE_END "\n"
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+// https://gcc.gnu.org/onlinedocs/gcc-4.7.2/gcc/Function-Attributes.html
+#define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (printf, STRING_INDEX, FIRST_TO_CHECK)))
+#else
+// TODO: implement NOB_PRINTF_FORMAT for MSVC
+#define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK)
+#endif
+
 #define NOB_UNUSED(value) (void)(value)
 #define NOB_TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
 #define NOB_UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
@@ -229,7 +237,7 @@ typedef enum {
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 extern Nob_Log_Level nob_minimal_log_level;
 
-void nob_log(Nob_Log_Level level, const char *fmt, ...);
+void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
 
 // It is an equivalent of shift command from bash. It basically pops an element from
 // the beginning of a sized array.
@@ -439,7 +447,7 @@ bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect
 #endif // NOB_TEMP_CAPACITY
 char *nob_temp_strdup(const char *cstr);
 void *nob_temp_alloc(size_t size);
-char *nob_temp_sprintf(const char *format, ...);
+char *nob_temp_sprintf(const char *format, ...) NOB_PRINTF_FORMAT(1, 2);
 void nob_temp_reset(void);
 size_t nob_temp_save(void);
 void nob_temp_rewind(size_t checkpoint);
@@ -1065,7 +1073,7 @@ bool nob_proc_wait(Nob_Proc proc)
         }
 
         if (WIFSIGNALED(wstatus)) {
-            nob_log(NOB_ERROR, "command process was terminated by signal %s", WTERMSIG(wstatus));
+            nob_log(NOB_ERROR, "command process was terminated by signal %d", WTERMSIG(wstatus));
             return false;
         }
     }
@@ -1876,6 +1884,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.16.0 (2025-03-16) Introduce NOB_PRINTF_FORMAT
      1.15.1 (2025-03-16) Make nob.h compilable in gcc/clang with -std=c99 on POSIX. This includes:
                            not using strsignal()
                            using S_IS* stat macros instead of S_IF* flags
