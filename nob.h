@@ -201,6 +201,7 @@
 #    include <sys/types.h>
 #    include <sys/wait.h>
 #    include <sys/stat.h>
+#    include <sys/mman.h>
 #    include <unistd.h>
 #    include <fcntl.h>
 #endif
@@ -364,6 +365,21 @@ typedef int Nob_Fd;
 Nob_Fd nob_fd_open_for_read(const char *path);
 Nob_Fd nob_fd_open_for_write(const char *path);
 void nob_fd_close(Nob_Fd fd);
+
+typedef struct {
+    const char *data;
+    size_t count;
+#ifdef _WIN32
+    Nob_Fd fd;
+    HANDLE file_mapping;
+#endif
+} Nob_Mapped_File;
+
+// Indicates failure by returning Mapped_File with data == NULL
+Nob_Mapped_File nob_mmap_file(const char *path);
+void nob_munmap_file(Nob_Mapped_File mf);
+
+#define nob_mf_to_sv(mf) nob_sv_from_parts((mf).data, (mf).count)
 
 typedef struct {
     Nob_Proc *items;
@@ -1006,6 +1022,73 @@ void nob_fd_close(Nob_Fd fd)
 #endif // _WIN32
 }
 
+Nob_Mapped_File nob_mmap_file(const char *path) {
+    Nob_Mapped_File result = {0};
+
+    Nob_Fd fd = nob_fd_open_for_read(path);
+    if (fd == NOB_INVALID_FD) nob_return_defer((Nob_Mapped_File) {0});
+
+#ifdef _WIN32
+    HANDLE file_mapping = CreateFileMappingA(fd, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (file_mapping == INVALID_HANDLE_VALUE) {
+        nob_log(NOB_ERROR, "Could not mmap file %s: %s", path, nob_win32_error_message(GetLastError()));
+        nob_return_defer((Nob_Mapped_File) {0});
+    }
+
+    const char *data = MapViewOfFile(file_mapping, FILE_MAP_READ, 0, 0, 0);
+    if (data == NULL) {
+        nob_log(NOB_ERROR, "Could not mmap file %s: %s", path, nob_win32_error_message(GetLastError()));
+        nob_return_defer((Nob_Mapped_File) {0});
+    }
+
+    DWORD file_size_dwords[2];
+    file_size_dwords[0] = GetFileSize(fd, &file_size_dwords[1]);
+
+    size_t size = *(size_t*)file_size_dwords;
+
+    result.fd = fd;
+    result.file_mapping = file_mapping;
+    result.data = data;
+    result.count = size;
+
+defer:
+    return result;
+
+#else
+
+    struct stat stat;
+    if (fstat(fd, &stat) < 0) {
+        nob_log(NOB_ERROR, "could not fstat file: %s", strerror(errno));
+        nob_return_defer((Nob_Mapped_File) {0});
+    }
+
+    size_t size = stat.st_size;
+    const char *data = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (data == MAP_FAILED) {
+        nob_log(NOB_ERROR, "could not mmap file: %s", strerror(errno));
+        nob_return_defer((Nob_Mapped_File) {0});
+    }
+
+    result.data = data;
+    result.count = size;
+
+defer:
+    if (result.data == NULL) nob_log(NOB_ERROR, "Could not mmap file %s: %s", path, strerror(errno));
+    if (fd != NOB_INVALID_FD) nob_fd_close(fd);
+    return result;
+#endif // _WIN32
+}
+
+void nob_munmap_file(Nob_Mapped_File mf) {
+#ifdef _WIN32
+    UnmapViewOfFile(mf.data);
+    CloseHandle(mf.file_mapping);
+    CloseHandle(mf.fd);
+#else
+    munmap((char*)mf.data, mf.count);
+#endif // _WIN32
+}
+
 bool nob_procs_wait(Nob_Procs procs)
 {
     bool success = true;
@@ -1579,6 +1662,7 @@ Nob_String_View nob_sv_from_parts(const char *data, size_t count)
     return sv;
 }
 
+
 Nob_String_View nob_sv_trim_left(Nob_String_View sv)
 {
     size_t i = 0;
@@ -1854,6 +1938,10 @@ int closedir(DIR *dirp)
         #define fd_open_for_read nob_fd_open_for_read
         #define fd_open_for_write nob_fd_open_for_write
         #define fd_close nob_fd_close
+        #define Mapped_File Nob_Mapped_File
+        #define mmap_file nob_mmap_file
+        #define munmap_file nob_munmap_file
+        #define mf_to_sv nob_mf_to_sv
         #define Procs Nob_Procs
         #define procs_wait nob_procs_wait
         #define procs_wait_and_reset nob_procs_wait_and_reset
