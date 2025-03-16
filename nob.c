@@ -1,5 +1,6 @@
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
+#define NOB_EXPERIMENTAL_DELETE_OLD
 #include "nob.h"
 #include "shared.h"
 
@@ -14,6 +15,10 @@ const char *test_names[] = {
     "read_entire_dir",
     "da_resize",
     "mmap_file",
+    "da_last",
+    "da_remove_unordered",
+    "da_append",
+    "sb_appendf",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
