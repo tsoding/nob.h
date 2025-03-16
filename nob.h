@@ -1,4 +1,4 @@
-/* nob - v1.16.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.16.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -310,7 +310,12 @@ bool nob_delete_file(const char *path);
 #define nob_da_resize(da, new_size)                                                        \
     do {                                                                                   \
         if ((new_size) > (da)->capacity) {                                                 \
-            (da)->capacity = (new_size);                                                   \
+            if ((da)->capacity == 0) {                                                     \
+                (da)->capacity = NOB_DA_INIT_CAP;                                          \
+            }                                                                              \
+            while ((new_size) > (da)->capacity) {                                          \
+                (da)->capacity *= 2;                                                       \
+            }                                                                              \
             (da)->items = NOB_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items)); \
             NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                         \
         }                                                                                  \
@@ -1884,6 +1889,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.16.1 (2025-03-16) Make nob_da_resize() exponentially grow capacity similar to no_da_append_many()
      1.16.0 (2025-03-16) Introduce NOB_PRINTF_FORMAT
      1.15.1 (2025-03-16) Make nob.h compilable in gcc/clang with -std=c99 on POSIX. This includes:
                            not using strsignal()
