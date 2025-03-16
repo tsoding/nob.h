@@ -1,4 +1,4 @@
-/* nob - v1.16.1 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.17.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -276,50 +276,41 @@ bool nob_delete_file(const char *path);
 #define NOB_DA_INIT_CAP 256
 #endif
 
-// Append an item to a dynamic array
-#define nob_da_append(da, item)                                                          \
-    do {                                                                                 \
-        if ((da)->count >= (da)->capacity) {                                             \
-            (da)->capacity = (da)->capacity == 0 ? NOB_DA_INIT_CAP : (da)->capacity*2;   \
-            (da)->items = NOB_REALLOC((da)->items, (da)->capacity*sizeof(*(da)->items)); \
-            NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                       \
-        }                                                                                \
-                                                                                         \
-        (da)->items[(da)->count++] = (item);                                             \
-    } while (0)
-
-#define nob_da_free(da) NOB_FREE((da).items)
-
-// Append several items to a dynamic array
-#define nob_da_append_many(da, new_items, new_items_count)                                  \
-    do {                                                                                    \
-        if ((da)->count + (new_items_count) > (da)->capacity) {                               \
-            if ((da)->capacity == 0) {                                                      \
-                (da)->capacity = NOB_DA_INIT_CAP;                                           \
-            }                                                                               \
-            while ((da)->count + (new_items_count) > (da)->capacity) {                        \
-                (da)->capacity *= 2;                                                        \
-            }                                                                               \
-            (da)->items = NOB_REALLOC((da)->items, (da)->capacity*sizeof(*(da)->items)); \
-            NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                          \
-        }                                                                                   \
-        memcpy((da)->items + (da)->count, (new_items), (new_items_count)*sizeof(*(da)->items)); \
-        (da)->count += (new_items_count);                                                     \
-    } while (0)
-
-#define nob_da_resize(da, new_size)                                                        \
+#define nob_da_reserve(da, expected_capacity)                                              \
     do {                                                                                   \
-        if ((new_size) > (da)->capacity) {                                                 \
+        if ((expected_capacity) > (da)->capacity) {                                        \
             if ((da)->capacity == 0) {                                                     \
                 (da)->capacity = NOB_DA_INIT_CAP;                                          \
             }                                                                              \
-            while ((new_size) > (da)->capacity) {                                          \
+            while ((expected_capacity) > (da)->capacity) {                                 \
                 (da)->capacity *= 2;                                                       \
             }                                                                              \
             (da)->items = NOB_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items)); \
             NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                         \
         }                                                                                  \
-        (da)->count = (new_size);                                                          \
+    } while (0)
+
+// Append an item to a dynamic array
+#define nob_da_append(da, item)                \
+    do {                                       \
+        nob_da_reserve((da), (da)->count + 1); \
+        (da)->items[(da)->count++] = (item);   \
+    } while (0)
+
+#define nob_da_free(da) NOB_FREE((da).items)
+
+// Append several items to a dynamic array
+#define nob_da_append_many(da, new_items, new_items_count)                                      \
+    do {                                                                                        \
+        nob_da_reserve((da), (da)->count + (new_items_count));                                  \
+        memcpy((da)->items + (da)->count, (new_items), (new_items_count)*sizeof(*(da)->items)); \
+        (da)->count += (new_items_count);                                                       \
+    } while (0)
+
+#define nob_da_resize(da, new_size)     \
+    do {                                \
+        nob_da_reserve((da), new_size); \
+        (da)->count = (new_size);       \
     } while (0)
 
 #define nob_da_last(da) (da)->items[(NOB_ASSERT((da)->count > 0), (da)->count-1)]
@@ -337,6 +328,7 @@ typedef struct {
 } Nob_String_Builder;
 
 bool nob_read_entire_file(const char *path, Nob_String_Builder *sb);
+int nob_sb_appendf(Nob_String_Builder *sb, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
 
 // Append a sized buffer to a string builder
 #define nob_sb_append_buf(sb, buf, size) nob_da_append_many(sb, buf, size)
@@ -1523,6 +1515,28 @@ defer:
     return result;
 }
 
+int nob_sb_appendf(Nob_String_Builder *sb, const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    int n = vsnprintf(NULL, 0, fmt, args);
+    va_end(args);
+
+    // NOTE: the new_capacity needs to be +1 because of the null terminator.
+    // However, further below we increase sb->count by n, not n + 1.
+    // This is because we don't want the sb to include the null terminator. The user can always sb_append_null() if they want it
+    nob_da_reserve(sb, sb->count + n + 1);
+    char *dest = sb->items + sb->count;
+    va_start(args, fmt);
+    vsprintf(dest, fmt, args);
+    va_end(args);
+
+    sb->count += n;
+
+    return n;
+}
+
 Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim)
 {
     size_t i = 0;
@@ -1823,10 +1837,12 @@ int closedir(DIR *dirp)
         #define da_free nob_da_free
         #define da_append_many nob_da_append_many
         #define da_resize nob_da_resize
+        #define da_reserve nob_da_reserve
         #define da_last nob_da_last
         #define da_remove_unordered nob_da_remove_unordered
         #define String_Builder Nob_String_Builder
         #define read_entire_file nob_read_entire_file
+        #define sb_appendf nob_sb_appendf
         #define sb_append_buf nob_sb_append_buf
         #define sb_append_cstr nob_sb_append_cstr
         #define sb_append_null nob_sb_append_null
@@ -1889,6 +1905,8 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.17.0 (2025-03-16) Factor out nob_da_reserve() (By @rexim)
+                         Add nob_sb_appendf() (By @angelcaru)
      1.16.1 (2025-03-16) Make nob_da_resize() exponentially grow capacity similar to no_da_append_many()
      1.16.0 (2025-03-16) Introduce NOB_PRINTF_FORMAT
      1.15.1 (2025-03-16) Make nob.h compilable in gcc/clang with -std=c99 on POSIX. This includes:
