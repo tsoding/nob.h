@@ -1,3 +1,5 @@
+//bin/false; cc nob.c -Wall -Wextra -o nob; exit
+
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 #define NOB_EXPERIMENTAL_DELETE_OLD
