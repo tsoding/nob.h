@@ -1,4 +1,4 @@
-/* nob - v1.15.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.15.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -1065,7 +1065,7 @@ bool nob_proc_wait(Nob_Proc proc)
         }
 
         if (WIFSIGNALED(wstatus)) {
-            nob_log(NOB_ERROR, "command process was terminated by %s", strsignal(WTERMSIG(wstatus)));
+            nob_log(NOB_ERROR, "command process was terminated by signal %s", WTERMSIG(wstatus));
             return false;
         }
     }
@@ -1227,12 +1227,10 @@ Nob_File_Type nob_get_file_type(const char *path)
         return -1;
     }
 
-    switch (statbuf.st_mode & S_IFMT) {
-        case S_IFDIR:  return NOB_FILE_DIRECTORY;
-        case S_IFREG:  return NOB_FILE_REGULAR;
-        case S_IFLNK:  return NOB_FILE_SYMLINK;
-        default:       return NOB_FILE_OTHER;
-    }
+    if (S_ISREG(statbuf.st_mode)) return NOB_FILE_REGULAR;
+    if (S_ISDIR(statbuf.st_mode)) return NOB_FILE_DIRECTORY;
+    if (S_ISLNK(statbuf.st_mode)) return NOB_FILE_SYMLINK;
+    return NOB_FILE_OTHER;
 #endif // _WIN32
 }
 
@@ -1878,6 +1876,9 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.15.1 (2025-03-16) Make nob.h compilable in gcc/clang with -std=c99 on POSIX. This includes:
+                           not using strsignal()
+                           using S_IS* stat macros instead of S_IF* flags
      1.15.0 (2025-03-03) Add nob_sv_chop_left()
      1.14.1 (2025-03-02) Add NOB_EXPERIMENTAL_DELETE_OLD flag that enables deletion of nob.old in Go Rebuild Urself™ Technology
      1.14.0 (2025-02-17) Add nob_da_last()
