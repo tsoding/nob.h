@@ -1,3 +1,6 @@
+//bin/false; cc nob.c -Wall -Wextra -o nob; exit
+// ^ This line will make the build script act as a shell script when made executable with `chmod +x nob.c`.
+
 // This is your build script. You only need to "bootstrap" it once with `cc -o nob nob.c` (you can
 // call it whatever actually) or `cl nob.c` on MSVC and thanks to NOB_GO_REBUILD_URSELF (see below).
 // After that every time you run the `nob` executable if it detects that you modifed nob.c it will
