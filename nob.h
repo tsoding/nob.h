@@ -1006,7 +1006,7 @@ Nob_Fd nob_fd_open_for_write(const char *path)
                     GENERIC_WRITE,                   // open for writing
                     0,                               // do not share
                     &saAttr,                         // default security
-                    OPEN_ALWAYS,                     // open always
+                    CREATE_ALWAYS,                   // create always
                     FILE_ATTRIBUTE_NORMAL,           // normal file
                     NULL                             // no attr. template
                 );
@@ -1935,6 +1935,7 @@ int closedir(DIR *dirp)
 
      1.18.0 (2025-03-24) Add nob_da_foreach() (By @rexim)
                          Allow file sizes greater than 2GB to be read on windows (By @satchelfrost and @KillerxDBr)
+                         Fix nob_fd_open_for_write behaviour on windows so it truncates the opened files (By @twixuss)
      1.17.0 (2025-03-16) Factor out nob_da_reserve() (By @rexim)
                          Add nob_sb_appendf() (By @angelcaru)
      1.16.1 (2025-03-16) Make nob_da_resize() exponentially grow capacity similar to no_da_append_many()
