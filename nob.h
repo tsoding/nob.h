@@ -1514,7 +1514,11 @@ bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
     FILE *f = fopen(path, "rb");
     if (f == NULL)                 nob_return_defer(false);
     if (fseek(f, 0, SEEK_END) < 0) nob_return_defer(false);
+#ifndef _WIN32
     long m = ftell(f);
+#else
+    long long m = _ftelli64(f);
+#endif
     if (m < 0)                     nob_return_defer(false);
     if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
 
@@ -1930,6 +1934,7 @@ int closedir(DIR *dirp)
    Revision history:
 
      1.18.0 (2025-03-24) Add nob_da_foreach() (By @rexim)
+                         Allow file sizes greater than 2GB to be read on windows (By @satchelfrost and @KillerxDBr)
      1.17.0 (2025-03-16) Factor out nob_da_reserve() (By @rexim)
                          Add nob_sb_appendf() (By @angelcaru)
      1.16.1 (2025-03-16) Make nob_da_resize() exponentially grow capacity similar to no_da_append_many()
