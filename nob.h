@@ -1,4 +1,4 @@
-/* nob - v1.17.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.18.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -320,6 +320,29 @@ bool nob_delete_file(const char *path);
         NOB_ASSERT(j < (da)->count);                 \
         (da)->items[j] = (da)->items[--(da)->count]; \
     } while(0)
+
+// Foreach over Dynamic Arrays. Example:
+// ```c
+// typedef struct {
+//     int *items;
+//     size_t count;
+//     size_t capacity;
+// } Numbers;
+//
+// Numbers xs = {0};
+//
+// nob_da_append(&xs, 69);
+// nob_da_append(&xs, 420);
+// nob_da_append(&xs, 1337);
+//
+// nob_da_foreach(int, x, &xs) {
+//     // `x` here is a pointer to the current element. You can get its index by taking a difference
+//     // between `x` and the start of the array which is `x.items`.
+//     size_t index = x - xs.items;
+//     nob_log(INFO, "%zu: %d", index, *x);
+// }
+// ```
+#define nob_da_foreach(Type, it, da) for (Type *it = (da)->items; it < (da)->items + (da)->count; ++it)
 
 typedef struct {
     char *items;
@@ -983,7 +1006,7 @@ Nob_Fd nob_fd_open_for_write(const char *path)
                     GENERIC_WRITE,                   // open for writing
                     0,                               // do not share
                     &saAttr,                         // default security
-                    OPEN_ALWAYS,                     // open always
+                    CREATE_ALWAYS,                   // create always
                     FILE_ATTRIBUTE_NORMAL,           // normal file
                     NULL                             // no attr. template
                 );
@@ -1491,7 +1514,11 @@ bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
     FILE *f = fopen(path, "rb");
     if (f == NULL)                 nob_return_defer(false);
     if (fseek(f, 0, SEEK_END) < 0) nob_return_defer(false);
+#ifndef _WIN32
     long m = ftell(f);
+#else
+    long long m = _ftelli64(f);
+#endif
     if (m < 0)                     nob_return_defer(false);
     if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
 
@@ -1840,6 +1867,7 @@ int closedir(DIR *dirp)
         #define da_reserve nob_da_reserve
         #define da_last nob_da_last
         #define da_remove_unordered nob_da_remove_unordered
+        #define da_foreach nob_da_foreach
         #define String_Builder Nob_String_Builder
         #define read_entire_file nob_read_entire_file
         #define sb_appendf nob_sb_appendf
@@ -1905,6 +1933,9 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.18.0 (2025-03-24) Add nob_da_foreach() (By @rexim)
+                         Allow file sizes greater than 2GB to be read on windows (By @satchelfrost and @KillerxDBr)
+                         Fix nob_fd_open_for_write behaviour on windows so it truncates the opened files (By @twixuss)
      1.17.0 (2025-03-16) Factor out nob_da_reserve() (By @rexim)
                          Add nob_sb_appendf() (By @angelcaru)
      1.16.1 (2025-03-16) Make nob_da_resize() exponentially grow capacity similar to no_da_append_many()
