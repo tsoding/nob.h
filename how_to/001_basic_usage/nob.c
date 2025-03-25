@@ -1,7 +1,7 @@
-// This is your build script. You only need to "bootstrap" it once with `cc -o nob nob.c` (you can
-// call it whatever actually) or `cl nob.c` on MSVC and thanks to NOB_GO_REBUILD_URSELF (see below).
-// After that every time you run the `nob` executable if it detects that you modifed nob.c it will
-// rebuild itself automatically
+// This is your build script. You only need to "bootstrap" it once with `cc -o nob nob.c`
+// (you can call the executable whatever actually) or `cl nob.c` on MSVC. After that every
+// time you run the `nob` executable if it detects that you modifed nob.c it will rebuild
+// itself automatically thanks to NOB_GO_REBUILD_URSELF (see below)
 
 // nob.h is an stb-style library https://github.com/nothings/stb/blob/master/docs/stb_howto.txt
 // What that means is that it's a single file that acts both like .c and .h files, but by default
@@ -14,26 +14,45 @@
 // and Autotools is that the codebases that use them naturally rot. That is if you do not actively update
 // your build scripts, they may not work with the latest version of the build tools. Here we basically
 // include the entirety of the source code of the tool along with the code base. It will never get
-// outdated.
+// outdated (unless you got no standard compliant C compiler lying around, but at that point why are
+// you trying to build a C project?)
 //
 // (In these examples we actually symlinking nob.h, but this is to keep nob.h-s synced among all the
 // examples)
 #include "nob.h"
 
-// TODO: add more comments in here
-
+// Some folder paths that we use throughout the build process.
 #define BUILD_FOLDER "build/"
 #define SRC_FOLDER   "src/"
 
 int main(int argc, char **argv)
 {
+    // This line enables the self-rebuilding. It detects when nob.c is updated and auto rebuilds it then
+    // runs it again.
     NOB_GO_REBUILD_URSELF(argc, argv);
 
-    Nob_Cmd cmd = {0};
-
+    // It's better to keep all the building artifacts in a separate build folder. Let's create it if it
+    // does not exist yet.
+    //
+    // Majority of the nob command return bool which indicates whether operation has failed or not (true -
+    // success, false - failure). If the operation returned false you don't need to log anything, the
+    // convention is usually that the function logs what happened to itself. Just do
+    // `if (!nob_function()) return;`
     if (!nob_mkdir_if_not_exists(BUILD_FOLDER)) return 1;
-    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"main", SRC_FOLDER"main.c");
+
+    // The working horse of nob is the Nob_Cmd structure. It's a Dynamic Array of strings which represent
+    // command line that you want to execute.
+    Nob_Cmd cmd = {0};
+    // Let's append the command line arguments
+    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"hello", SRC_FOLDER"hello.c");
+    // Let's execute the command synchronously, that is it will be blocked until it's finished.
     if (!nob_cmd_run_sync(cmd)) return 1;
+    // Reset the cmd array so you can use it again for another command
+    cmd.count = 0;
+
+    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"foo", SRC_FOLDER"foo.c");
+    // nob_cmd_run_sync_and_reset() resets the cmd for you automatically
+    if (!nob_cmd_run_sync_and_reset(&cmd)) return 1;
 
     return 0;
 }

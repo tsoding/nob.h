@@ -1,4 +1,4 @@
-/* nob - v1.17.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.19.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -321,6 +321,29 @@ bool nob_delete_file(const char *path);
         (da)->items[j] = (da)->items[--(da)->count]; \
     } while(0)
 
+// Foreach over Dynamic Arrays. Example:
+// ```c
+// typedef struct {
+//     int *items;
+//     size_t count;
+//     size_t capacity;
+// } Numbers;
+//
+// Numbers xs = {0};
+//
+// nob_da_append(&xs, 69);
+// nob_da_append(&xs, 420);
+// nob_da_append(&xs, 1337);
+//
+// nob_da_foreach(int, x, &xs) {
+//     // `x` here is a pointer to the current element. You can get its index by taking a difference
+//     // between `x` and the start of the array which is `x.items`.
+//     size_t index = x - xs.items;
+//     nob_log(INFO, "%zu: %d", index, *x);
+// }
+// ```
+#define nob_da_foreach(Type, it, da) for (Type *it = (da)->items; it < (da)->items + (da)->count; ++it)
+
 typedef struct {
     char *items;
     size_t count;
@@ -371,11 +394,14 @@ typedef struct {
     size_t capacity;
 } Nob_Procs;
 
-bool nob_procs_wait(Nob_Procs procs);
-bool nob_procs_wait_and_reset(Nob_Procs *procs);
-
 // Wait until the process has finished
 bool nob_proc_wait(Nob_Proc proc);
+// Wait until all the processes have finished
+bool nob_procs_wait(Nob_Procs procs);
+// Wait until all the processes have finished and empty the procs array
+bool nob_procs_wait_and_reset(Nob_Procs *procs);
+// Append a new process to procs array and if procs.count reaches max_procs_count call nob_procs_wait_and_reset() on it
+bool nob_procs_append_with_flush(Nob_Procs *procs, Nob_Proc proc, size_t max_procs_count);
 
 // A command - the main workhorse of Nob. Nob is all about building commands an running them
 typedef struct {
@@ -993,7 +1019,7 @@ Nob_Fd nob_fd_open_for_write(const char *path)
                     GENERIC_WRITE,                   // open for writing
                     0,                               // do not share
                     &saAttr,                         // default security
-                    OPEN_ALWAYS,                     // open always
+                    CREATE_ALWAYS,                   // create always
                     FILE_ATTRIBUTE_NORMAL,           // normal file
                     NULL                             // no attr. template
                 );
@@ -1087,6 +1113,17 @@ bool nob_proc_wait(Nob_Proc proc)
 
     return true;
 #endif
+}
+
+bool nob_procs_append_with_flush(Nob_Procs *procs, Nob_Proc proc, size_t max_procs_count)
+{
+    nob_da_append(procs, proc);
+
+    if (procs->count >= max_procs_count) {
+        if (!nob_procs_wait_and_reset(procs)) return false;
+    }
+
+    return true;
 }
 
 bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
@@ -1501,13 +1538,11 @@ bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
     FILE *f = fopen(path, "rb");
     if (f == NULL)                 nob_return_defer(false);
     if (fseek(f, 0, SEEK_END) < 0) nob_return_defer(false);
-
 #ifndef _WIN32
     long m = ftell(f);
 #else
     long long m = _ftelli64(f);
 #endif
-
     if (m < 0)                     nob_return_defer(false);
     if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
 
@@ -1861,6 +1896,7 @@ int closedir(DIR *dirp)
         #define da_reserve nob_da_reserve
         #define da_last nob_da_last
         #define da_remove_unordered nob_da_remove_unordered
+        #define da_foreach nob_da_foreach
         #define String_Builder Nob_String_Builder
         #define read_entire_file nob_read_entire_file
         #define sb_appendf nob_sb_appendf
@@ -1876,9 +1912,10 @@ int closedir(DIR *dirp)
         #define fd_open_for_write nob_fd_open_for_write
         #define fd_close nob_fd_close
         #define Procs Nob_Procs
+        #define proc_wait nob_proc_wait
         #define procs_wait nob_procs_wait
         #define procs_wait_and_reset nob_procs_wait_and_reset
-        #define proc_wait nob_proc_wait
+        #define procs_append_with_flush nob_procs_append_with_flush
         #define Cmd Nob_Cmd
         #define Cmd_Redirect Nob_Cmd_Redirect
         #define cmd_render nob_cmd_render
@@ -1926,6 +1963,10 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.19.0 (2025-03-25) Add nob_procs_append_with_flush() (By @rexim and @anion155)
+     1.18.0 (2025-03-24) Add nob_da_foreach() (By @rexim)
+                         Allow file sizes greater than 2GB to be read on windows (By @satchelfrost and @KillerxDBr)
+                         Fix nob_fd_open_for_write behaviour on windows so it truncates the opened files (By @twixuss)
      1.17.0 (2025-03-16) Factor out nob_da_reserve() (By @rexim)
                          Add nob_sb_appendf() (By @angelcaru)
      1.16.1 (2025-03-16) Make nob_da_resize() exponentially grow capacity similar to no_da_append_many()
