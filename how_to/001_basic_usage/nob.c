@@ -44,11 +44,15 @@ int main(int argc, char **argv)
     // command line that you want to execute.
     Nob_Cmd cmd = {0};
     // Let's append the command line arguments
-    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"main", SRC_FOLDER"main.c");
+    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"hello", SRC_FOLDER"hello.c");
     // Let's execute the command synchronously, that is it will be blocked until it's finished.
     if (!nob_cmd_run_sync(cmd)) return 1;
+    // Reset the cmd array so you can use it again for another command
+    cmd.count = 0;
 
-    // TODO: add more examples in here
+    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"foo", SRC_FOLDER"foo.c");
+    // nob_cmd_run_sync_and_reset() resets the cmd for you automatically
+    if (!nob_cmd_run_sync_and_reset(&cmd)) return 1;
 
     return 0;
 }
