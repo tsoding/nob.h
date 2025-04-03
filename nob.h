@@ -728,62 +728,62 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     
 
     Nob_String_Builder sb = {0};
-
     nob_cmd_render(cmd, &sb);
     nob_sb_append_null(&sb);
 
     Nob_String_Builder db_content = {0};
     if (!nob_read_entire_file(db_path, &db_content)) {
-        nob_log(NOB_ERROR, "Failed to read %s", db_path);
+        nob_log(NOB_ERROR, "failed to read '%s'", db_path);
         return;
     }
 
     // check if db is empty
     int is_empty = (db_content.count == 4 && memcmp(db_content.items, "[\n\n]", 4) == 0);
 
-
     const char* current_dir = nob_get_current_dir_temp();
     if (!current_dir) {
-        nob_log(NOB_ERROR, "Failed to get current directory");
+        nob_log(NOB_ERROR, "failed to get current directory");
         NOB_FREE(db_content.items);
         return;
     }
 
-    const char* source_file = NULL;
+    Nob_File_Paths source_files = {0};
     for (size_t i = 0; i < cmd.count; ++i) {
         const char* arg = cmd.items[i];
+        // TODO: better source file recognition
         if (strstr(arg, ".c")) {
-            source_file = arg;
-            break;
+            nob_da_append(&source_files, arg);
         }
     }
 
-    if (!source_file) {
-        nob_log(NOB_ERROR, "Could not determine source file from command");
+    if (source_files.count == 0) {
+        nob_log(NOB_ERROR, "no source files detected in command");
         NOB_FREE(db_content.items);
         return;
     }
 
-    Nob_String_Builder entry_sb = {0};
-    nob_sb_append_cstr(&entry_sb, "{\n");
-    nob_sb_append_cstr(&entry_sb, "  \"directory\": \"");
-    nob_sb_append_cstr(&entry_sb, current_dir);
-    nob_sb_append_cstr(&entry_sb, "\",\n");
-    nob_sb_append_cstr(&entry_sb, "  \"command\": \"");
-    // NOTE: this does not escape quotes in the command, which could break LSP
-    nob_sb_append_cstr(&entry_sb, sb.items);
-    nob_sb_append_cstr(&entry_sb, "\",\n");
-    nob_sb_append_cstr(&entry_sb, "  \"file\": \"");
-    nob_sb_append_cstr(&entry_sb, source_file);
-    nob_sb_append_cstr(&entry_sb, "\"\n");
-    nob_sb_append_cstr(&entry_sb, "}");
-    nob_sb_append_null(&entry_sb);
+    Nob_String_Builder entries_sb = {0};
+    for (size_t i = 0; i < source_files.count; ++i) {
+        const char* source_file = source_files.items[i];
+        Nob_String_Builder entry_sb = {0};
+        nob_sb_appendf(&entry_sb, "{\n\t\"directory\": \"%s\",\n", current_dir);
+        
+        // TODO: this does not escape quotes in the command, which could break LSP
+        nob_sb_appendf(&entry_sb, "\t\"commands\": \"%s\",\n", sb.items);
+        nob_sb_appendf(&entry_sb, "\t\"file\": \"%s\"\n}", source_file);
+
+        if (i > 0) {
+            nob_sb_append_cstr(&entries_sb, ",\n");
+        }
+        nob_sb_append_buf(&entries_sb, entry_sb.items, entry_sb.count);
+        NOB_FREE(entry_sb.items);
+    }
 
     // build new database content
     Nob_String_Builder new_db = {0};
     if (is_empty) {
         nob_sb_append_cstr(&new_db, "[\n");
-        nob_sb_append_buf(&new_db, entry_sb.items, entry_sb.count - 1); // Exclude null terminator
+        nob_sb_append_buf(&new_db, entries_sb.items, entries_sb.count);
         nob_sb_append_cstr(&new_db, "\n]");
     } else {
         // find the last ']'
@@ -794,9 +794,9 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
             }
         }
         if (last_brace_pos == 0) {
-            nob_log(NOB_ERROR, "Invalid compile_commands.json format");
+            nob_log(NOB_ERROR, "invalid 'compile_commands.json' format");
             NOB_FREE(db_content.items);
-            NOB_FREE(entry_sb.items);
+            NOB_FREE(entries_sb.items);
             return;
         }
         // append up to the last ']'
@@ -804,7 +804,7 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
 
         // insert comma and new entry
         nob_sb_append_cstr(&new_db, ",\n");
-        nob_sb_append_buf(&new_db, entry_sb.items, entry_sb.count - 1);
+        nob_sb_append_buf(&new_db, entries_sb.items, entries_sb.count);
         nob_sb_append_cstr(&new_db, "\n]");
     }
 
@@ -817,17 +817,19 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     fseek(compile_database, 0, SEEK_SET);
     size_t written = fwrite(new_db.items, 1, new_db.count, compile_database);
     if (written != new_db.count) {
-        nob_log(NOB_ERROR, "Failed to write to %s", db_path);
+        nob_log(NOB_ERROR, "failed to write to '%s'", db_path);
     }
+
     // truncate in case new content is shorter
+    // TODO: windows version
     int fd = fileno(compile_database);
     if (ftruncate(fd, new_db.count) != 0) {
-        nob_log(NOB_ERROR, "Failed to truncate %s", db_path);
+        nob_log(NOB_ERROR, "failed to truncate '%s'", db_path);
     }
 
     // cleanup
     NOB_FREE(db_content.items);
-    NOB_FREE(entry_sb.items);
+    NOB_FREE(entries_sb.items);
     NOB_FREE(new_db.items);
     fclose(compile_database);
 }
