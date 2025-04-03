@@ -465,6 +465,8 @@ bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
 // Run redirected command synchronously and set cmd.count to 0 and close all the opened files
 bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
 
+void nob_add_to_compile_database(Nob_Cmd cmd);
+
 #ifndef NOB_TEMP_CAPACITY
 #define NOB_TEMP_CAPACITY (8*1024*1024)
 #endif // NOB_TEMP_CAPACITY
@@ -636,12 +638,15 @@ char *nob_win32_error_message(DWORD err);
 
 #endif // _WIN32
 
+extern const char* nob__binary_path;
+
 #endif // NOB_H_
 
 #ifdef NOB_IMPLEMENTATION
-
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
+
+const char* nob__binary_path = NULL;
 
 #ifdef _WIN32
 
@@ -683,6 +688,150 @@ char *nob_win32_error_message(DWORD err) {
 
 #endif // _WIN32
 
+void nob_add_to_compile_database(Nob_Cmd cmd) {
+    const char* db_path = "compile_commands.json";
+
+    // empty out compile_database.json on the first call,
+    // then use "a" mode on all consecutive runs
+    static bool is_first_call = true;
+
+    if (!nob__binary_path) {
+        // i don't like the idea of using a global variable here,
+        // but passing entire argv just to add an entry to
+        // compile db is absurd. maybe there's a better way?
+        nob_log(NOB_ERROR, "nob__binary_path is not set. (did you call NOB_GO_REBUILD_URSELF prior?)");
+        return;
+    }
+
+    Nob_File_Paths input_paths = {0};
+    nob_da_append(&input_paths, __FILE__);
+    int rebuild_is_needed = nob_needs_rebuild(nob__binary_path, input_paths.items, input_paths.count);
+
+    if (!rebuild_is_needed && nob_file_exists(nob__binary_path) == 0) {
+        // nothing about compilation changed, no reason to rewrite compile_database.json
+        NOB_FREE(input_paths.items);
+        return;
+    }
+
+    if (is_first_call) {
+        is_first_call = false;
+
+        FILE *file = fopen(db_path, "w");
+        if (!file) {
+            nob_log(NOB_ERROR, "couldn't open '%s' for initial write", db_path);
+            return;
+        }
+
+        fprintf(file, "[\n\n]");
+        fclose(file);
+    }
+    
+
+    Nob_String_Builder sb = {0};
+
+    nob_cmd_render(cmd, &sb);
+    nob_sb_append_null(&sb);
+
+    Nob_String_Builder db_content = {0};
+    if (!nob_read_entire_file(db_path, &db_content)) {
+        nob_log(NOB_ERROR, "Failed to read %s", db_path);
+        return;
+    }
+
+    // check if db is empty
+    int is_empty = (db_content.count == 4 && memcmp(db_content.items, "[\n\n]", 4) == 0);
+
+
+    const char* current_dir = nob_get_current_dir_temp();
+    if (!current_dir) {
+        nob_log(NOB_ERROR, "Failed to get current directory");
+        NOB_FREE(db_content.items);
+        return;
+    }
+
+    const char* source_file = NULL;
+    for (size_t i = 0; i < cmd.count; ++i) {
+        const char* arg = cmd.items[i];
+        if (strstr(arg, ".c")) {
+            source_file = arg;
+            break;
+        }
+    }
+
+    if (!source_file) {
+        nob_log(NOB_ERROR, "Could not determine source file from command");
+        NOB_FREE(db_content.items);
+        return;
+    }
+
+    Nob_String_Builder entry_sb = {0};
+    nob_sb_append_cstr(&entry_sb, "{\n");
+    nob_sb_append_cstr(&entry_sb, "  \"directory\": \"");
+    nob_sb_append_cstr(&entry_sb, current_dir);
+    nob_sb_append_cstr(&entry_sb, "\",\n");
+    nob_sb_append_cstr(&entry_sb, "  \"command\": \"");
+    // NOTE: this does not escape quotes in the command, which could break LSP
+    nob_sb_append_cstr(&entry_sb, sb.items);
+    nob_sb_append_cstr(&entry_sb, "\",\n");
+    nob_sb_append_cstr(&entry_sb, "  \"file\": \"");
+    nob_sb_append_cstr(&entry_sb, source_file);
+    nob_sb_append_cstr(&entry_sb, "\"\n");
+    nob_sb_append_cstr(&entry_sb, "}");
+    nob_sb_append_null(&entry_sb);
+
+    // build new database content
+    Nob_String_Builder new_db = {0};
+    if (is_empty) {
+        nob_sb_append_cstr(&new_db, "[\n");
+        nob_sb_append_buf(&new_db, entry_sb.items, entry_sb.count - 1); // Exclude null terminator
+        nob_sb_append_cstr(&new_db, "\n]");
+    } else {
+        // find the last ']'
+        size_t last_brace_pos = 0;
+        for (size_t i = 0; i < db_content.count; ++i) {
+            if (db_content.items[i] == ']') {
+                last_brace_pos = i;
+            }
+        }
+        if (last_brace_pos == 0) {
+            nob_log(NOB_ERROR, "Invalid compile_commands.json format");
+            NOB_FREE(db_content.items);
+            NOB_FREE(entry_sb.items);
+            return;
+        }
+        // append up to the last ']'
+        nob_sb_append_buf(&new_db, db_content.items, last_brace_pos);
+
+        // insert comma and new entry
+        nob_sb_append_cstr(&new_db, ",\n");
+        nob_sb_append_buf(&new_db, entry_sb.items, entry_sb.count - 1);
+        nob_sb_append_cstr(&new_db, "\n]");
+    }
+
+    FILE* compile_database = fopen(db_path, "r+");
+    if (!compile_database) {
+        nob_log(NOB_ERROR, "couldn't open '%s' for write", db_path);
+        return;
+    }
+
+    fseek(compile_database, 0, SEEK_SET);
+    size_t written = fwrite(new_db.items, 1, new_db.count, compile_database);
+    if (written != new_db.count) {
+        nob_log(NOB_ERROR, "Failed to write to %s", db_path);
+    }
+    // truncate in case new content is shorter
+    int fd = fileno(compile_database);
+    if (ftruncate(fd, new_db.count) != 0) {
+        nob_log(NOB_ERROR, "Failed to truncate %s", db_path);
+    }
+
+    // cleanup
+    NOB_FREE(db_content.items);
+    NOB_FREE(entry_sb.items);
+    NOB_FREE(new_db.items);
+    fclose(compile_database);
+}
+
 // The implementation idea is stolen from https://github.com/zhiayang/nabs
 void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
 {
@@ -694,6 +843,7 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
         binary_path = nob_temp_sprintf("%s.exe", binary_path);
     }
 #endif
+    nob__binary_path = binary_path;
 
     Nob_File_Paths source_paths = {0};
     nob_da_append(&source_paths, source_path);
