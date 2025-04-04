@@ -688,6 +688,37 @@ char *nob_win32_error_message(DWORD err) {
 
 #endif // _WIN32
 
+// helper function to check if a flag expects an argument
+static bool nob__process_compiler_flag(const char* arg, bool* skip_next) {
+    const char* flags_with_arg[] = {
+        "-o", "-I", "-L", "-l", "-D", "-U", "-include",
+        "-imacros", "-idirafter", "-isystem", "-iquote",
+        "-MF", "-MT", "-MQ", "-x", "-std", "-stdlib", "-B",
+        "-specs", "-fdebug-prefix-map", "-fmacro-prefix-map"
+    };
+    const size_t flags_count = sizeof(flags_with_arg)/sizeof(flags_with_arg[0]);
+
+    for (size_t i = 0; i < flags_count; ++i) {
+        const char* flag = flags_with_arg[i];
+        size_t flag_len = strlen(flag);
+        
+        // case 1: exact match (e.g., "-I")
+        if (strcmp(arg, flag) == 0) {
+            *skip_next = true;
+            return true;
+        }
+        
+        // case 2: combined flag+arg (e.g., "-I/include")
+        if (strncmp(arg, flag, flag_len) == 0) {
+            // check if it's not a longer flag prefix (e.g., "-isystem" vs "-i")
+            if (arg[flag_len] != '\0' && !isalpha(arg[flag_len])) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void nob_add_to_compile_database(Nob_Cmd cmd) {
     const char* db_path = "compile_commands.json";
 
@@ -748,10 +779,28 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     }
 
     Nob_File_Paths source_files = {0};
+    bool skip_next = false;
     for (size_t i = 0; i < cmd.count; ++i) {
         const char* arg = cmd.items[i];
-        // TODO: better source file recognition
-        if (strstr(arg, ".c")) {
+        if (skip_next) {
+            skip_next = false;
+            continue;
+        }
+        
+        // handle compiler flags
+        if (arg[0] == '-') {
+            if (nob__process_compiler_flag(arg, &skip_next)) {
+                continue;
+            }
+        }
+        
+        const char* ext = strrchr(arg, '.');
+        if (ext && (
+            strcmp(ext, ".c")   == 0 ||
+            strcmp(ext, ".cpp") == 0 ||
+            strcmp(ext, ".cc")  == 0 ||
+            strcmp(ext, ".cxx") == 0
+        )) {
             nob_da_append(&source_files, arg);
         }
     }
@@ -769,7 +818,7 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
         nob_sb_appendf(&entry_sb, "{\n\t\"directory\": \"%s\",\n", current_dir);
         
         // TODO: this does not escape quotes in the command, which could break LSP
-        nob_sb_appendf(&entry_sb, "\t\"commands\": \"%s\",\n", sb.items);
+        nob_sb_appendf(&entry_sb, "\t\"command\": \"%s\",\n", sb.items);
         nob_sb_appendf(&entry_sb, "\t\"file\": \"%s\"\n}", source_file);
 
         if (i > 0) {
