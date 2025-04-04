@@ -726,6 +726,7 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     // then use "a" mode on all consecutive runs
     static bool is_first_call = true;
 
+    // TODO: fix this not working properly
     if (nob__rebuild_needed && nob_file_exists(db_path)) {
         // nothing about compilation changed, no reason to rewrite compile_database.json
         return;
@@ -835,21 +836,30 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
         // find the last ']'
         size_t last_brace_pos = 0;
         for (size_t i = 0; i < db_content.count; ++i) {
-            if (db_content.items[i] == ']') {
-                last_brace_pos = i;
-            }
+            if (db_content.items[i] == ']') last_brace_pos = i;
         }
-        if (last_brace_pos == 0) {
-            nob_log(NOB_ERROR, "invalid 'compile_commands.json' format");
-            NOB_FREE(db_content.items);
-            NOB_FREE(entries_sb.items);
-            return;
-        }
-        // append up to the last ']'
-        nob_sb_append_buf(&new_db, db_content.items, last_brace_pos);
 
-        // insert comma and new entry
-        nob_sb_append_cstr(&new_db, ",\n");
+        // trim whitespace before the ']'
+        size_t last_char_pos = last_brace_pos;
+        while (last_char_pos > 0 && isspace(db_content.items[last_char_pos - 1])) {
+            last_char_pos--;
+        }
+
+        // check if last non-whitespace character is a comma
+        bool needs_comma = true;
+        if (last_char_pos > 0 && db_content.items[last_char_pos - 1] == ',') {
+            needs_comma = false;
+        }
+
+        nob_sb_append_buf(&new_db, db_content.items, last_char_pos);
+
+        // add comma only if needed
+        if (needs_comma && last_char_pos > 1) {
+            nob_sb_append_cstr(&new_db, ",");
+        }
+
+        // add new entries and close
+        nob_sb_append_cstr(&new_db, "\n");
         nob_sb_append_buf(&new_db, entries_sb.items, entries_sb.count);
         nob_sb_append_cstr(&new_db, "\n]");
     }
