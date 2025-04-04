@@ -638,15 +638,11 @@ char *nob_win32_error_message(DWORD err);
 
 #endif // _WIN32
 
-extern int nob__rebuild_needed;
-
 #endif // NOB_H_
 
 #ifdef NOB_IMPLEMENTATION
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
-
-int nob__rebuild_needed = 0;
 
 #ifdef _WIN32
 
@@ -931,7 +927,6 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
     va_end(args);
 
     int rebuild_is_needed = nob_needs_rebuild(binary_path, source_paths.items, source_paths.count);
-    nob__rebuild_needed = rebuild_is_needed;
 
     if (rebuild_is_needed < 0) exit(1); // error
     if (!rebuild_is_needed) {           // no rebuild is needed
