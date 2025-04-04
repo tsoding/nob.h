@@ -738,7 +738,7 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     nob_da_append(&input_paths, __FILE__);
     int rebuild_is_needed = nob_needs_rebuild(nob__binary_path, input_paths.items, input_paths.count);
 
-    if (!rebuild_is_needed && nob_file_exists(nob__binary_path) == 0) {
+    if (!rebuild_is_needed && nob_file_exists(db_path) == 1) {
         // nothing about compilation changed, no reason to rewrite compile_database.json
         NOB_FREE(input_paths.items);
         return;
