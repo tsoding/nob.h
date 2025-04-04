@@ -746,10 +746,7 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
         if (!exe_path) return;
 
         // rebuild compile_commands.json only if nob.c was changed
-        if (nob_needs_rebuild1(db_path, exe_path) <= 0) {
-            nob_log(NOB_INFO, "skipping rebuild");
-            return;
-        }
+        if (nob_needs_rebuild1(db_path, exe_path) <= 0) return;
     }
 
     if (is_first_call) {
