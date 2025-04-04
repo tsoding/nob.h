@@ -888,6 +888,7 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     size_t written = fwrite(new_db.items, 1, new_db.count, compile_database);
     if (written != new_db.count) {
         nob_log(NOB_ERROR, "failed to write to '%s'", db_path);
+        goto full_clean;
     }
 
     // truncate in case new content is shorter
@@ -907,6 +908,7 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
         nob_log(NOB_ERROR, "failed to truncate '%s'", db_path);
     }
 
+full_clean:
     // cleanup
     NOB_FREE(db_content.items);
     NOB_FREE(entries_sb.items);
