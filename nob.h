@@ -778,6 +778,18 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
         return;
     }
 
+    // escape special characters in command
+    Nob_String_Builder escaped_cmd = {0};
+    const char* cmd_str = sb.items;
+    for (const char* p = cmd_str; *p != '\0'; ++p) {
+        switch (*p) {
+        case  '"': { nob_sb_append_cstr(&escaped_cmd, "\\\""); } break;
+        case '\\': { nob_sb_append_cstr(&escaped_cmd, "\\\\"); } break;
+        default:   { nob_da_append(&escaped_cmd, *p); } break;
+        }
+    }
+    nob_sb_append_null(&escaped_cmd);
+
     Nob_File_Paths source_files = {0};
     bool skip_next = false;
     for (size_t i = 0; i < cmd.count; ++i) {
@@ -816,9 +828,7 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
         const char* source_file = source_files.items[i];
         Nob_String_Builder entry_sb = {0};
         nob_sb_appendf(&entry_sb, "{\n\t\"directory\": \"%s\",\n", current_dir);
-        
-        // TODO: this does not escape quotes in the command, which could break LSP
-        nob_sb_appendf(&entry_sb, "\t\"command\": \"%s\",\n", sb.items);
+        nob_sb_appendf(&entry_sb, "\t\"command\": \"%s\",\n", escaped_cmd.items);
         nob_sb_appendf(&entry_sb, "\t\"file\": \"%s\"\n}", source_file);
 
         if (i > 0) {
@@ -880,6 +890,7 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     NOB_FREE(db_content.items);
     NOB_FREE(entries_sb.items);
     NOB_FREE(new_db.items);
+    NOB_FREE(escaped_cmd.items);
     fclose(compile_database);
 }
 
