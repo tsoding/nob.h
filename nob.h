@@ -641,6 +641,7 @@ char *nob_win32_error_message(DWORD err);
 #endif // NOB_H_
 
 #ifdef NOB_IMPLEMENTATION
+
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 
@@ -939,6 +940,7 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
         binary_path = nob_temp_sprintf("%s.exe", binary_path);
     }
 #endif
+
     Nob_File_Paths source_paths = {0};
     nob_da_append(&source_paths, source_path);
     va_list args;
@@ -951,7 +953,6 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
     va_end(args);
 
     int rebuild_is_needed = nob_needs_rebuild(binary_path, source_paths.items, source_paths.count);
-
     if (rebuild_is_needed < 0) exit(1); // error
     if (!rebuild_is_needed) {           // no rebuild is needed
         NOB_FREE(source_paths.items);
