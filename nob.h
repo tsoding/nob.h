@@ -821,6 +821,7 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     if (source_files.count == 0) {
         nob_log(NOB_ERROR, "no source files detected in command");
         NOB_FREE(db_content.items);
+        NOB_FREE(escaped_cmd.items);
         return;
     }
 
@@ -890,9 +891,19 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     }
 
     // truncate in case new content is shorter
-    // TODO: windows version
+#ifndef _WIN32
     int fd = fileno(compile_database);
-    if (ftruncate(fd, new_db.count) != 0) {
+#else
+    int fd = _fileno(compile_database);
+#endif
+
+    if (
+#ifndef _WIN32
+        ftruncate(fd, new_db.count)
+#else
+        _chsize_s(fd, new_db.count)
+#endif
+    ) {
         nob_log(NOB_ERROR, "failed to truncate '%s'", db_path);
     }
 
