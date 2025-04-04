@@ -784,9 +784,20 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     const char* cmd_str = sb.items;
     for (const char* p = cmd_str; *p != '\0'; ++p) {
         switch (*p) {
-        case  '"': { nob_sb_append_cstr(&escaped_cmd, "\\\""); } break;
+        case '\"': { nob_sb_append_cstr(&escaped_cmd, "\\\""); } break;
         case '\\': { nob_sb_append_cstr(&escaped_cmd, "\\\\"); } break;
-        default:   { nob_da_append(&escaped_cmd, *p); } break;
+        case '\b': { nob_sb_append_cstr(&escaped_cmd, "\\b");  } break;
+        case '\f': { nob_sb_append_cstr(&escaped_cmd, "\\f");  } break;
+        case '\n': { nob_sb_append_cstr(&escaped_cmd, "\\n");  } break;
+        case '\r': { nob_sb_append_cstr(&escaped_cmd, "\\r");  } break;
+        case '\t': { nob_sb_append_cstr(&escaped_cmd, "\\t");  } break;
+        default: {
+            if (*p < 0x20) {
+                nob_sb_appendf(&escaped_cmd, "\\u%04x", *p);
+            } else {
+                nob_da_append(&escaped_cmd, *p);
+            }
+        }
         }
     }
     nob_sb_append_null(&escaped_cmd);
