@@ -688,6 +688,21 @@ char *nob_win32_error_message(DWORD err) {
 
 #endif // _WIN32
 
+// cross-platform(?) executable retrieval (no argv hassle, but if nob is forked then the result is not correct)
+const char* nob_get_current_executable_path_temp(void) {
+#ifdef _WIN32
+    static char path[MAX_PATH];
+    DWORD len = GetModuleFileNameA(NULL, path, MAX_PATH);
+    return (len > 0) ? path : NULL;
+#else
+    static char path[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", path, PATH_MAX);
+    if (len < 0) return NULL;
+    path[len] = '\0';
+    return path;
+#endif
+}
+
 // helper function to check if a flag expects an argument
 static bool nob__process_compiler_flag(const char* arg, bool* skip_next) {
     const char* flags_with_arg[] = {
@@ -726,10 +741,15 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     // then use "a" mode on all consecutive runs
     static bool is_first_call = true;
 
-    // TODO: fix this not working properly
-    if (nob__rebuild_needed && nob_file_exists(db_path)) {
-        // nothing about compilation changed, no reason to rewrite compile_database.json
-        return;
+    if (nob_file_exists(db_path)) {
+        const char* exe_path = nob_get_current_executable_path_temp();
+        if (!exe_path) return;
+
+        // rebuild compile_commands.json only if nob.c was changed
+        if (nob_needs_rebuild1(db_path, exe_path) <= 0) {
+            nob_log(NOB_INFO, "skipping rebuild");
+            return;
+        }
     }
 
     if (is_first_call) {
