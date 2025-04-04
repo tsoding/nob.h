@@ -638,7 +638,7 @@ char *nob_win32_error_message(DWORD err);
 
 #endif // _WIN32
 
-extern const char* nob__binary_path;
+extern int nob__rebuild_needed;
 
 #endif // NOB_H_
 
@@ -646,7 +646,7 @@ extern const char* nob__binary_path;
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 
-const char* nob__binary_path = NULL;
+int nob__rebuild_needed = 0;
 
 #ifdef _WIN32
 
@@ -726,21 +726,8 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     // then use "a" mode on all consecutive runs
     static bool is_first_call = true;
 
-    if (!nob__binary_path) {
-        // i don't like the idea of using a global variable here,
-        // but passing entire argv just to add an entry to
-        // compile db is absurd. maybe there's a better way?
-        nob_log(NOB_ERROR, "nob__binary_path is not set. (did you call NOB_GO_REBUILD_URSELF prior?)");
-        return;
-    }
-
-    Nob_File_Paths input_paths = {0};
-    nob_da_append(&input_paths, __FILE__);
-    int rebuild_is_needed = nob_needs_rebuild(nob__binary_path, input_paths.items, input_paths.count);
-
-    if (!rebuild_is_needed && nob_file_exists(db_path) == 1) {
+    if (nob__rebuild_needed && nob_file_exists(db_path)) {
         // nothing about compilation changed, no reason to rewrite compile_database.json
-        NOB_FREE(input_paths.items);
         return;
     }
 
@@ -905,8 +892,6 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
         binary_path = nob_temp_sprintf("%s.exe", binary_path);
     }
 #endif
-    nob__binary_path = binary_path;
-
     Nob_File_Paths source_paths = {0};
     nob_da_append(&source_paths, source_path);
     va_list args;
@@ -919,6 +904,8 @@ void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
     va_end(args);
 
     int rebuild_is_needed = nob_needs_rebuild(binary_path, source_paths.items, source_paths.count);
+    nob__rebuild_needed = rebuild_is_needed;
+
     if (rebuild_is_needed < 0) exit(1); // error
     if (!rebuild_is_needed) {           // no rebuild is needed
         NOB_FREE(source_paths.items);
