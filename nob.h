@@ -906,7 +906,8 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     fseek(compile_database, 0, SEEK_SET);
     size_t written = fwrite(new_db.items, 1, new_db.count, compile_database);
     if (written != new_db.count) {
-        nob_log(NOB_ERROR, "failed to write to '%s'", db_path);
+        nob_log(NOB_ERROR, "failed to write %zu/%zu bytes to %s: %s", 
+            written, new_db.count, db_path, strerror(errno));
         goto full_clean;
     }
 
@@ -917,13 +918,11 @@ void nob_add_to_compile_database(Nob_Cmd cmd) {
     int fd = _fileno(compile_database);
 #endif
 
-    if (
-#ifndef _WIN32
-        ftruncate(fd, new_db.count)
+#ifdef _WIN32
+    if (_chsize_s(fd, new_db.count) != 0) {
 #else
-        _chsize_s(fd, new_db.count)
+    if (ftruncate(fd, new_db.count) != 0) {
 #endif
-    ) {
         nob_log(NOB_ERROR, "failed to truncate '%s'", db_path);
     }
 
