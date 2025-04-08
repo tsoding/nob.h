@@ -465,6 +465,9 @@ bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
 // Run redirected command synchronously and set cmd.count to 0 and close all the opened files
 bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
 
+#ifndef NOB_COMPILE_COMMANDS_PATH
+#define NOB_COMPILE_COMMANDS_PATH "compile_commands.json"
+#endif
 void nob_add_to_compile_database(Nob_Cmd cmd);
 
 #ifndef NOB_TEMP_CAPACITY
@@ -732,10 +735,14 @@ static bool nob__process_compiler_flag(const char* arg, bool* skip_next) {
 }
 
 void nob_add_to_compile_database(Nob_Cmd cmd) {
-    const char* db_path = "compile_commands.json";
+    const char* db_path = NOB_COMPILE_COMMANDS_PATH;
 
-    // empty out compile_database.json on the first call,
-    // then use "a" mode on all consecutive runs
+    // on first call:
+    // 1. empty out compile_database.json
+    // 2. add `[\n\n]` as a base
+    //
+    // on consecutive calls after:
+    // - insert entries within the `[\n\n]`
     static bool is_first_call = true;
 
     if (nob_file_exists(db_path)) {
