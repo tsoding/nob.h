@@ -403,7 +403,7 @@ bool nob_procs_wait_and_reset(Nob_Procs *procs);
 // Append a new process to procs array and if procs.count reaches max_procs_count call nob_procs_wait_and_reset() on it
 bool nob_procs_append_with_flush(Nob_Procs *procs, Nob_Proc proc, size_t max_procs_count);
 
-// A command - the main workhorse of Nob. Nob is all about building commands an running them
+// A command - the main workhorse of Nob. Nob is all about building commands and running them
 typedef struct {
     const char **items;
     size_t count;
