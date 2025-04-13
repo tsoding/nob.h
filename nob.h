@@ -179,6 +179,11 @@
 #define NOB_FREE free
 #endif /* NOB_FREE */
 
+#ifndef NOB_FCLOSE
+#include <stdio.h>
+#define NOB_FCLOSE fclose
+#endif /* NOB_FCLOSE */
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -343,6 +348,45 @@ bool nob_delete_file(const char *path);
 // }
 // ```
 #define nob_da_foreach(Type, it, da) for (Type *it = (da)->items; it < (da)->items + (da)->count; ++it)
+
+// Implementation of a defer feature
+typedef struct {
+    void (*func)(void*);
+    void* arg;
+} NOB_DEFER_DATA;
+
+// Function declarations
+void nob_defer_cleanup(NOB_DEFER_DATA *data);
+void nob_cleanup_free(void* ptr);
+void nob_cleanup_fclose(void* ptr);
+
+// Helper macro to create unique variable names
+#define NOB_DEFER_CONCAT_(a, b) a##b
+#define NOB_DEFER_CONCAT(a, b) NOB_DEFER_CONCAT_(a, b)
+
+// Macro to create a defer statement with unique variable names
+#define nob_defer(func, arg) \
+    __attribute__((cleanup(nob_defer_cleanup))) \
+    NOB_DEFER_DATA NOB_DEFER_CONCAT(__defer_data_, __LINE__) = { (void (*)(void*))func, arg }
+
+// Example:
+// ```c
+// void print_message(void* arg) {
+//     printf("Cleanup: %s\n", (char*)arg);
+// }
+//
+// int main() {
+//     char* message = "Function is ending";
+//     defer(print_message, message);
+//     printf("Function is running...\n");
+//     return 0;
+// }
+// ```
+
+// Convenience macros for common operations
+#define nob_defer_free(ptr) nob_defer(nob_cleanup_free, &(ptr))
+#define nob_defer_fclose(fp) nob_defer(nob_cleanup_fclose, &(fp))
+
 
 typedef struct {
     char *items;
@@ -1521,6 +1565,24 @@ bool nob_rename(const char *old_path, const char *new_path)
     return true;
 }
 
+// Cleanup function that gets called at scope exit
+void nob_defer_cleanup(NOB_DEFER_DATA *data) {
+    if (data && data->func) {
+        data->func(data->arg);
+    }
+}
+
+// Generic cleanup functions
+void nob_cleanup_free(void* ptr) {
+    NOB_FREE(*(void**)ptr);
+}
+
+void nob_cleanup_fclose(void* ptr) {
+    if (*(FILE**)ptr) {
+        NOB_FCLOSE(*(FILE**)ptr);
+    }
+}
+
 bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 {
     bool result = true;
@@ -1882,6 +1944,9 @@ int closedir(DIR *dirp)
         #define da_last nob_da_last
         #define da_remove_unordered nob_da_remove_unordered
         #define da_foreach nob_da_foreach
+        #define defer nob_defer
+        #define defer_free nob_defer_free
+        #define defer_fclose nob_defer_fclose
         #define String_Builder Nob_String_Builder
         #define read_entire_file nob_read_entire_file
         #define sb_appendf nob_sb_appendf
