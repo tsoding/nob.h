@@ -9,10 +9,14 @@
 
 bool build_exec(Cmd *cmd, const char *bin_path, const char *src_path)
 {
-#ifdef _MSC_VER
+#if defined(_MSC_VER)
     cmd_append(cmd, "cl", "-I.", "-o", bin_path, src_path);
+#elif defined(__APPLE__) || defined(__MACH__)
+    // TODO: "-std=c99", "-D_POSIX_SOURCE" didn't work for MacOS, don't know why, don't really care that much at the moment.
+    //   Anybody who does feel free to investigate.
+    cmd_append(cmd, "cc", "-Wall", "-Wextra", "-Wswitch-enum", "-I.", "-o", bin_path, src_path);
 #else
-    cmd_append(cmd, "cc", "-Wall", "-Wextra", "-Wswitch-enum", "-ggdb", "-I.", "-o", bin_path, src_path);
+    cmd_append(cmd, "cc", "-Wall", "-Wextra", "-Wswitch-enum", "-std=c99", "-D_POSIX_SOURCE", "-ggdb", "-I.", "-o", bin_path, src_path);
 #endif //  _MSC_VER
     return cmd_run_sync_and_reset(cmd);
 }
