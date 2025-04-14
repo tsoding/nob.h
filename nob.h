@@ -349,6 +349,7 @@ bool nob_delete_file(const char *path);
 // ```
 #define nob_da_foreach(Type, it, da) for (Type *it = (da)->items; it < (da)->items + (da)->count; ++it)
 
+
 // Implementation of a defer feature
 typedef struct {
     void (*func)(void*);
@@ -361,13 +362,64 @@ void nob_cleanup_free(void* ptr);
 void nob_cleanup_fclose(void* ptr);
 
 // Helper macro to create unique variable names
-#define NOB_DEFER_CONCAT_(a, b) a##b
-#define NOB_DEFER_CONCAT(a, b) NOB_DEFER_CONCAT_(a, b)
+#define NOB_DEFER_CONCAT(a, b) a##b
 
 // Macro to create a defer statement with unique variable names
-#define nob_defer(func, arg) \
-    __attribute__((cleanup(nob_defer_cleanup))) \
-    NOB_DEFER_DATA NOB_DEFER_CONCAT(__defer_data_, __LINE__) = { (void (*)(void*))func, arg }
+// MSVC-compatible implementation
+#ifdef _MSC_VER
+   // Stack to hold cleanup functions
+    static NOB_DEFER_DATA* nob_defer_stack = NULL;
+    static size_t nob_defer_stack_size = 0;
+    static size_t nob_defer_stack_capacity = 0;
+
+    // Function to push cleanup function onto stack
+    static void nob_defer_push(NOB_DEFER_DATA data) {
+        if (nob_defer_stack_size >= nob_defer_stack_capacity) {
+            size_t new_capacity = nob_defer_stack_capacity ? nob_defer_stack_capacity * 2 : 16;
+            NOB_DEFER_DATA* new_stack = (NOB_DEFER_DATA*)NOB_REALLOC(nob_defer_stack, new_capacity * sizeof(NOB_DEFER_DATA));
+            if (new_stack) {
+                nob_defer_stack = new_stack;
+                nob_defer_stack_capacity = new_capacity;
+            }
+        }
+        if (nob_defer_stack_size < nob_defer_stack_capacity) {
+            nob_defer_stack[nob_defer_stack_size++] = data;
+        }
+    }
+
+    // Function to pop and execute cleanup function
+    static void nob_defer_pop(void) {
+        if (nob_defer_stack_size > 0) {
+            NOB_DEFER_DATA data = nob_defer_stack[--nob_defer_stack_size];
+            if (data.func && data.arg) {
+                data.func(data.arg);
+            }
+        }
+    }
+
+    #define nob_defer(func, arg) \
+        nob_defer_push((NOB_DEFER_DATA){ (void (*)(void*))func, (void*)(arg) }); \
+        atexit(nob_defer_pop)
+
+    #define nob_defer_free(ptr) \
+        void* NOB_DEFER_CONCAT(__defer_ptr_, __LINE__) = (void*)(ptr); \
+        nob_defer_push((NOB_DEFER_DATA){ nob_cleanup_free, NOB_DEFER_CONCAT(__defer_ptr_, __LINE__) }); \
+        atexit(nob_defer_pop)
+
+    #define nob_defer_fclose(fp) \
+        FILE* NOB_DEFER_CONCAT(__defer_fp_, __LINE__) = (FILE*)(fp); \
+        nob_defer_push((NOB_DEFER_DATA){ nob_cleanup_fclose, NOB_DEFER_CONCAT(__defer_fp_, __LINE__) }); \
+        atexit(nob_defer_pop)
+
+#else
+    // GCC / Clang implementation
+    #define nob_defer(func, arg) \
+        __attribute__((cleanup(nob_defer_cleanup))) \
+        NOB_DEFER_DATA NOB_DEFER_CONCAT(__defer_data_, __LINE__) = { (void (*)(void*))func, arg }
+
+    #define nob_defer_free(ptr) nob_defer(nob_cleanup_free, ptr)
+    #define nob_defer_fclose(fp) nob_defer(nob_cleanup_fclose, fp)
+#endif
 
 // Example:
 // ```c
@@ -382,10 +434,6 @@ void nob_cleanup_fclose(void* ptr);
 //     return 0;
 // }
 // ```
-
-// Convenience macros for common operations
-#define nob_defer_free(ptr) nob_defer(nob_cleanup_free, &(ptr))
-#define nob_defer_fclose(fp) nob_defer(nob_cleanup_fclose, &(fp))
 
 
 typedef struct {
@@ -1567,14 +1615,16 @@ bool nob_rename(const char *old_path, const char *new_path)
 
 // Cleanup function that gets called at scope exit
 void nob_defer_cleanup(NOB_DEFER_DATA *data) {
-    if (data && data->func) {
+    if (data && data->func && data->arg) {
         data->func(data->arg);
     }
 }
 
 // Generic cleanup functions
 void nob_cleanup_free(void* ptr) {
-    NOB_FREE(*(void**)ptr);
+    if (ptr) {
+        NOB_FREE(ptr);
+    }
 }
 
 void nob_cleanup_fclose(void* ptr) {
