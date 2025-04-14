@@ -29,8 +29,6 @@ int main(int argc, char **argv)
         nob_log(INFO, "==================================");
     }
 
-    // TODO: add support for MSVC
-    // TODO: build and run this how_to on GitHub CI
     const char *output_path = BUILD_FOLDER"nob_configed";
     const char *input_path = SRC_BUILD_FOLDER"nob_configed.c";
     cmd_append(&cmd,

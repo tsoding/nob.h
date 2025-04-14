@@ -7,10 +7,15 @@ jobs:
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
-      - name: Build nob
-        run: clang -o nob nob.c
-      - name: Run nob
-        run: ./nob
+      - name: Run tests
+        run: |
+          clang -o nob nob.c
+          ./nob
+      - name: Build how_to-s
+        run: |
+          cd how_to/
+          clang -o nob nob.c
+          ./nob
   ubuntu:
     strategy:
       matrix:
@@ -19,16 +24,21 @@ jobs:
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
-      - name: Build nob
-        run: ${{ matrix.cc }} -Wall -Wextra -std=c99 -D_POSIX_SOURCE -o nob nob.c
-      - name: Run nob
-        run: ./nob
+      - name: Build tests
+        run: |
+          ${{ matrix.cc }} -o nob nob.c
+          ./nob
+      - name: Build how_to-s
+        run: |
+          cd how_to/
+          ${{ matrix.cc }} -o nob nob.c
+          ./nob
   windows:
     runs-on: windows-latest
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
-      - name: Build nob
+      - name: Build tests
         shell: cmd
         # cl.exe isn't available as-is in Github images because they don't want
         # to, so we need to pull env vars ourselves. Refs:
@@ -37,8 +47,11 @@ jobs:
         run: |
           call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
           cl.exe ${{ matrix.hotreload }} -o nob.exe nob.c
-      - name: Run nob
+          nob.exe
+      - name: Build how_to-s
         shell: cmd
         run: |
           call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+          cd how_to/
+          cl.exe ${{ matrix.hotreload }} -o nob.exe nob.c
           nob.exe
