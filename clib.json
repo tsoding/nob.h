@@ -1,0 +1,16 @@
+{
+  "name": "nob",
+  "version": "main",
+  "description": "Header only library for writing build recipes in C.",
+  "repo": "tsoding/nob.h",
+  "src": ["nob.h", "nob.c"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tsoding/nob.h.git"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/tsoding/nob.h/issues"
+  },
+  "homepage": "https://github.com/tsoding/nob.h#readme"
+}
