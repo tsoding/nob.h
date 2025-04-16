@@ -7,7 +7,6 @@
 // Folder must end with forward slash /
 #define BUILD_FOLDER "build/"
 #define TESTS_FOLDER "tests/"
-#define TOOLS_FOLDER "tools/"
 
 #if defined(_MSC_VER)
 #  define nob_cc_flags(cmd) cmd_append(cmd, "-I.")
