@@ -24,6 +24,8 @@ const char *test_names[] = {
 
 bool build_and_run_test(Cmd *cmd, const char *test_name)
 {
+    size_t mark = temp_save();
+
     const char *bin_path = temp_sprintf("%s%s", BUILD_FOLDER TESTS_FOLDER, test_name);
     const char *src_path = temp_sprintf("%s%s.c", TESTS_FOLDER, test_name);
     nob_cc(cmd);
@@ -31,9 +33,17 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
     nob_cc_output(cmd, bin_path);
     nob_cc_inputs(cmd, src_path);
     if (!cmd_run_sync_and_reset(cmd)) return false;
-    cmd_append(cmd, bin_path);
-    if (!cmd_run_sync_and_reset(cmd)) return false;
+
+    const char *test_cwd_path = temp_sprintf("%s%s%s.cwd", BUILD_FOLDER, TESTS_FOLDER, test_name);
+    if (!mkdir_if_not_exists(test_cwd_path)) return false;
+    if (!set_current_dir(test_cwd_path)) return false;
+    cmd_append(cmd, temp_sprintf("../%s", test_name));
+    if (!cmd_run_sync_and_reset(cmd))    return false;
+    if (!set_current_dir("../../../")) return false;
+
     nob_log(INFO, "--- %s finished ---", bin_path);
+
+    temp_rewind(mark);
     return true;
 }
 
@@ -49,7 +59,6 @@ int main(int argc, char **argv)
 
     if (!mkdir_if_not_exists(BUILD_FOLDER)) return 1;
     if (!mkdir_if_not_exists(BUILD_FOLDER TESTS_FOLDER)) return 1;
-    if (!mkdir_if_not_exists(BUILD_FOLDER TOOLS_FOLDER)) return 1;
 
     if (strcmp(command_name, "test") == 0) {
         if (argc <= 0) {
