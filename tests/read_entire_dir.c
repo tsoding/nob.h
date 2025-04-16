@@ -1,7 +1,7 @@
+#include "shared.h"
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 #include "nob.h"
-#include "shared.h"
 
 int main(void)
 {

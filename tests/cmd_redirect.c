@@ -1,7 +1,7 @@
+#include "shared.h"
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 #include "nob.h"
-#include "shared.h"
 
 int main(void)
 {
@@ -11,7 +11,12 @@ int main(void)
     Fd fdout = INVALID_FD;
     String_Builder sb = {0};
 
-    if (!build_tool(&cmd, "echo")) return_defer(1);
+    // TODO: we should probably bake the source code of echo.c into this test and get rid of tools/ folder completely
+    nob_cc(&cmd);
+    nob_cc_flags(&cmd);
+    nob_cc_output(&cmd, BUILD_FOLDER TOOLS_FOLDER "echo");
+    nob_cc_inputs(&cmd, TOOLS_FOLDER "echo.c");
+    if (!cmd_run_sync_and_reset(&cmd)) return_defer(1);
 
     // TODO: fix the rendering of the shell command on Windows.
     //   It prevents use from using the message with spaces here.

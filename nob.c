@@ -1,8 +1,8 @@
+#include "shared.h"
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 #define NOB_EXPERIMENTAL_DELETE_OLD
 #include "nob.h"
-#include "shared.h"
 
 const char *test_names[] = {
     "minimal_log_level",
@@ -26,7 +26,11 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
 {
     const char *bin_path = temp_sprintf("%s%s", BUILD_FOLDER TESTS_FOLDER, test_name);
     const char *src_path = temp_sprintf("%s%s.c", TESTS_FOLDER, test_name);
-    if (!build_exec(cmd, bin_path, src_path)) return false;
+    nob_cc(cmd);
+    nob_cc_flags(cmd);
+    nob_cc_output(cmd, bin_path);
+    nob_cc_inputs(cmd, src_path);
+    if (!cmd_run_sync_and_reset(cmd)) return false;
     cmd_append(cmd, bin_path);
     if (!cmd_run_sync_and_reset(cmd)) return false;
     nob_log(INFO, "--- %s finished ---", bin_path);

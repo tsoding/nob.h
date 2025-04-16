@@ -58,13 +58,13 @@ int main(int argc, char **argv)
     // Reset the cmd array so you can use it again for another command
     cmd.count = 0;
 
-#if !defined(_MSC_VER)
-    // On POSIX
-    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"foo", SRC_FOLDER"foo.c");
-#else
-    // On MSVC
-    nob_cmd_append(&cmd, "cl", "-I.", "-o", BUILD_FOLDER"foo", SRC_FOLDER"foo.c");
-#endif
+    // nob.h ships with a bunch of nob_cc_* macros that try abstract away the specific compiler.
+    // They are verify basic and not particularly flexible, but you can redefine them if you need to
+    // or not use them at all and create your own abstraction on top of Nob_Cmd.
+    nob_cc(&cmd);
+    nob_cc_flags(&cmd);
+    nob_cc_output(&cmd, BUILD_FOLDER "foo");
+    nob_cc_inputs(&cmd, SRC_FOLDER "foo.c");
 
     // nob_cmd_run_sync_and_reset() resets the cmd for you automatically
     if (!nob_cmd_run_sync_and_reset(&cmd)) return 1;
