@@ -207,8 +207,10 @@
 
 #ifdef _WIN32
 #    define NOB_LINE_END "\r\n"
+#    define NOB_CMD_QUOTES '\"'
 #else
 #    define NOB_LINE_END "\n"
+#    define NOB_CMD_QUOTES '\''
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -876,9 +878,9 @@ void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render)
         if (!strchr(arg, ' ')) {
             nob_sb_append_cstr(render, arg);
         } else {
-            nob_da_append(render, '\'');
+            nob_da_append(render, NOB_CMD_QUOTES);
             nob_sb_append_cstr(render, arg);
-            nob_da_append(render, '\'');
+            nob_da_append(render, NOB_CMD_QUOTES);
         }
     }
 }
