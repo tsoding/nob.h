@@ -29,15 +29,13 @@ int main(int argc, char **argv)
         nob_log(INFO, "==================================");
     }
 
-    // TODO: add support for MSVC
-    // TODO: build and run this how_to on GitHub CI
     const char *output_path = BUILD_FOLDER"nob_configed";
     const char *input_path = SRC_BUILD_FOLDER"nob_configed.c";
-    cmd_append(&cmd,
-               "gcc",
-               "-Wall", "-Wextra", "-ggdb",
-               "-I.", "-I"BUILD_FOLDER, "-I"SRC_BUILD_FOLDER,
-               "-o", output_path, input_path);
+    nob_cc(&cmd);
+    nob_cc_flags(&cmd);
+    nob_cmd_append(&cmd, "-I.", "-I"BUILD_FOLDER, "-I"SRC_BUILD_FOLDER); // -I is usually the same across all compilers
+    nob_cc_output(&cmd, output_path);
+    nob_cc_inputs(&cmd, input_path);
     if (!cmd_run_sync_and_reset(&cmd)) return 1;
 
     cmd_append(&cmd, output_path);
