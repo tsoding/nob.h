@@ -205,6 +205,12 @@
 #    include <fcntl.h>
 #endif
 
+#ifdef __cplusplus
+#   define CPP_CAST(type) (decltype(type))
+#else
+#   define CPP_CAST(type)
+#endif
+
 #ifdef _WIN32
 #    define NOB_LINE_END "\r\n"
 #else
@@ -285,7 +291,7 @@ bool nob_delete_file(const char *path);
             while ((expected_capacity) > (da)->capacity) {                                 \
                 (da)->capacity *= 2;                                                       \
             }                                                                              \
-            (da)->items = NOB_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items)); \
+            (da)->items = CPP_CAST((da)->items) NOB_REALLOC((da)->items, (da)->capacity * sizeof(*(da)->items)); \
             NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                         \
         }                                                                                  \
     } while (0)
@@ -501,6 +507,8 @@ bool nob_set_current_dir(const char *path);
 #    elif defined(_MSC_VER)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "cl.exe")
 #    endif
+#  elif defined(__cplusplus)
+#    define nob_cc(cmd) nob_cmd_append(cmd, "g++")
 #  else
 #    define nob_cc(cmd) nob_cmd_append(cmd, "cc")
 #  endif
@@ -818,7 +826,7 @@ bool nob_copy_file(const char *src_path, const char *dst_path)
     int src_fd = -1;
     int dst_fd = -1;
     size_t buf_size = 32*1024;
-    char *buf = NOB_REALLOC(NULL, buf_size);
+    char *buf = (char *) NOB_REALLOC(NULL, buf_size);
     NOB_ASSERT(buf != NULL && "Buy more RAM lol!!");
     bool result = true;
 
@@ -1234,6 +1242,7 @@ bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
     DIR *dir = NULL;
 
     dir = opendir(parent);
+    struct dirent *ent = readdir(dir);
     if (dir == NULL) {
         #ifdef _WIN32
         nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, nob_win32_error_message(GetLastError()));
@@ -1244,7 +1253,7 @@ bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
     }
 
     errno = 0;
-    struct dirent *ent = readdir(dir);
+    //struct dirent *ent = readdir(dir);
     while (ent != NULL) {
         nob_da_append(children, nob_temp_strdup(ent->d_name));
         ent = readdir(dir);
@@ -1267,6 +1276,7 @@ defer:
 bool nob_write_entire_file(const char *path, const void *data, size_t size)
 {
     bool result = true;
+    const char *buf = (const char *) data;
 
     FILE *f = fopen(path, "wb");
     if (f == NULL) {
@@ -1280,7 +1290,7 @@ bool nob_write_entire_file(const char *path, const void *data, size_t size)
     //     ^
     //     data
 
-    const char *buf = data;
+    // const char *buf = (const char *) data;
     while (size > 0) {
         size_t n = fwrite(buf, 1, size, f);
         if (ferror(f)) {
@@ -1312,7 +1322,7 @@ Nob_File_Type nob_get_file_type(const char *path)
     struct stat statbuf;
     if (stat(path, &statbuf) < 0) {
         nob_log(NOB_ERROR, "Could not get stat of %s: %s", path, strerror(errno));
-        return -1;
+        return (Nob_File_Type) -1;
     }
 
     if (S_ISREG(statbuf.st_mode)) return NOB_FILE_REGULAR;
@@ -1407,7 +1417,7 @@ defer:
 char *nob_temp_strdup(const char *cstr)
 {
     size_t n = strlen(cstr);
-    char *result = nob_temp_alloc(n + 1);
+    char *result = (char *) nob_temp_alloc(n + 1);
     NOB_ASSERT(result != NULL && "Increase NOB_TEMP_CAPACITY");
     memcpy(result, cstr, n);
     result[n] = '\0';
@@ -1430,7 +1440,7 @@ char *nob_temp_sprintf(const char *format, ...)
     va_end(args);
 
     NOB_ASSERT(n >= 0);
-    char *result = nob_temp_alloc(n + 1);
+    char *result = (char *) nob_temp_alloc(n + 1);
     NOB_ASSERT(result != NULL && "Extend the size of the temporary allocator");
     // TODO: use proper arenas for the temporary allocator;
     va_start(args, format);
@@ -1457,7 +1467,7 @@ void nob_temp_rewind(size_t checkpoint)
 
 const char *nob_temp_sv_to_cstr(Nob_String_View sv)
 {
-    char *result = nob_temp_alloc(sv.count + 1);
+    char *result = (char *) nob_temp_alloc(sv.count + 1);
     NOB_ASSERT(result != NULL && "Extend the size of the temporary allocator");
     memcpy(result, sv.data, sv.count);
     result[sv.count] = '\0';
@@ -1570,21 +1580,27 @@ bool nob_rename(const char *old_path, const char *new_path)
 bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 {
     bool result = true;
+    size_t new_count;
+#ifndef _WIN32
+    long m;
+#else
+    long long m;
+#endif
 
     FILE *f = fopen(path, "rb");
     if (f == NULL)                 nob_return_defer(false);
     if (fseek(f, 0, SEEK_END) < 0) nob_return_defer(false);
 #ifndef _WIN32
-    long m = ftell(f);
+    m = ftell(f);
 #else
-    long long m = _ftelli64(f);
+    m = _ftelli64(f);
 #endif
     if (m < 0)                     nob_return_defer(false);
     if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
 
-    size_t new_count = sb->count + m;
+    new_count = sb->count + m;
     if (new_count > sb->capacity) {
-        sb->items = NOB_REALLOC(sb->items, new_count);
+        sb->items = CPP_CAST(sb->items) NOB_REALLOC(sb->items, new_count);
         NOB_ASSERT(sb->items != NULL && "Buy more RAM lool!!");
         sb->capacity = new_count;
     }
