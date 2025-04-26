@@ -1259,7 +1259,6 @@ bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
     }
 
     errno = 0;
-    //struct dirent *ent = readdir(dir);
     while (ent != NULL) {
         nob_da_append(children, nob_temp_strdup(ent->d_name));
         ent = readdir(dir);
@@ -1296,7 +1295,6 @@ bool nob_write_entire_file(const char *path, const void *data, size_t size)
     //     ^
     //     data
 
-    // const char *buf = (const char *) data;
     while (size > 0) {
         size_t n = fwrite(buf, 1, size, f);
         if (ferror(f)) {
