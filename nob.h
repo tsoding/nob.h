@@ -507,10 +507,16 @@ bool nob_set_current_dir(const char *path);
 #    elif defined(_MSC_VER)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "cl.exe")
 #    endif
-#  elif defined(__cplusplus)
-#    define nob_cc(cmd) nob_cmd_append(cmd, "g++")
 #  else
-#    define nob_cc(cmd) nob_cmd_append(cmd, "cc")
+#    if defined(__cplusplus)
+#       if defined(__GNUC__)
+#           define nob_cc(cmd) nob_cmd_append(cmd, "g++")
+#       else
+#           define nob_cc(cmd) nob_cmd_append(cmd, "clang++")
+#       endif
+#    else
+#       define nob_cc(cmd) nob_cmd_append(cmd, "cc")
+#    endif
 #  endif
 #endif // nob_cc
 
