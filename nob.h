@@ -734,6 +734,16 @@ char *nob_win32_error_message(DWORD err) {
 
 #endif // _WIN32
 
+#ifndef _WIN32
+
+#if defined(__GLIBC__) && (defined(__STDC_VERSION__) && __STDC_VERSION__ < 200809L)
+// explicit declarations for strict C mode on glibc (fix for ubuntu)
+static ssize_t readlink(const char *path, char *buf, size_t bufsiz);
+static int ftruncate(int fd, off_t length);
+#endif
+
+#endif // _WIN32
+
 // cross-platform(?) executable retrieval (no argv hassle, but if nob is forked then the result is not correct)
 const char* nob_get_current_executable_path_temp(void) {
 #ifdef _WIN32
