@@ -43,14 +43,29 @@ int main(int argc, char **argv)
     // The working horse of nob is the Nob_Cmd structure. It's a Dynamic Array of strings which represent
     // command line that you want to execute.
     Nob_Cmd cmd = {0};
+
     // Let's append the command line arguments
+#if !defined(_MSC_VER)
+    // On POSIX
     nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"hello", SRC_FOLDER"hello.c");
+#else
+    // On MSVC
+    nob_cmd_append(&cmd, "cl", "-I.", "-o", BUILD_FOLDER"hello", SRC_FOLDER"hello.c");
+#endif // _MSC_VER
+
     // Let's execute the command synchronously, that is it will be blocked until it's finished.
     if (!nob_cmd_run_sync(cmd)) return 1;
     // Reset the cmd array so you can use it again for another command
     cmd.count = 0;
 
-    nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"foo", SRC_FOLDER"foo.c");
+    // nob.h ships with a bunch of nob_cc_* macros that try abstract away the specific compiler.
+    // They are verify basic and not particularly flexible, but you can redefine them if you need to
+    // or not use them at all and create your own abstraction on top of Nob_Cmd.
+    nob_cc(&cmd);
+    nob_cc_flags(&cmd);
+    nob_cc_output(&cmd, BUILD_FOLDER "foo");
+    nob_cc_inputs(&cmd, SRC_FOLDER "foo.c");
+
     // nob_cmd_run_sync_and_reset() resets the cmd for you automatically
     if (!nob_cmd_run_sync_and_reset(&cmd)) return 1;
 

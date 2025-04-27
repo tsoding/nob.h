@@ -15,11 +15,22 @@ int main(int argc, char **argv)
     if (!mkdir_if_not_exists(BUILD_FOLDER)) return 1;
 
     // Spawn three async processes collecting them to procs dynamic array
-    cmd_append(&cmd, "cc", "-o", BUILD_FOLDER"foo", SRC_FOLDER"foo.c");
+    nob_cc(&cmd);
+    nob_cc_flags(&cmd);
+    nob_cc_output(&cmd, BUILD_FOLDER"foo");
+    nob_cc_inputs(&cmd, SRC_FOLDER"foo.c");
     da_append(&procs, cmd_run_async_and_reset(&cmd));
-    cmd_append(&cmd, "cc", "-o", BUILD_FOLDER"bar", SRC_FOLDER"bar.c");
+
+    nob_cc(&cmd);
+    nob_cc_flags(&cmd);
+    nob_cc_output(&cmd, BUILD_FOLDER"bar");
+    nob_cc_inputs(&cmd, SRC_FOLDER"bar.c");
     da_append(&procs, cmd_run_async_and_reset(&cmd));
-    cmd_append(&cmd, "cc", "-o", BUILD_FOLDER"baz", SRC_FOLDER"baz.c");
+
+    nob_cc(&cmd);
+    nob_cc_flags(&cmd);
+    nob_cc_output(&cmd, BUILD_FOLDER"baz");
+    nob_cc_inputs(&cmd, SRC_FOLDER"baz.c");
     da_append(&procs, cmd_run_async_and_reset(&cmd));
 
     // Wait on all the async processes to finish
