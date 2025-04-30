@@ -321,6 +321,17 @@ bool nob_delete_file(const char *path);
         (da)->items[j] = (da)->items[--(da)->count]; \
     } while(0)
 
+#define nob_da_swap(da, i, j)                           \
+    do {                                                \
+        size_t ii = (i);                                \
+        size_t jj = (j);                                \
+        NOB_ASSERT(ii < (da)->count);                   \
+        NOB_ASSERT(jj < (da)->count);                   \
+        nob_da_append((da), (da)->items[ii]);           \
+        (da)->items[ii] = (da)->items[jj];              \
+        (da)->items[jj] = (da)->items[--((da)->count)]; \
+    } while(0)
+
 // Foreach over Dynamic Arrays. Example:
 // ```c
 // typedef struct {
@@ -1927,6 +1938,7 @@ int closedir(DIR *dirp)
         #define da_reserve nob_da_reserve
         #define da_last nob_da_last
         #define da_remove_unordered nob_da_remove_unordered
+        #define da_swap nob_da_swap
         #define da_foreach nob_da_foreach
         #define String_Builder Nob_String_Builder
         #define read_entire_file nob_read_entire_file
