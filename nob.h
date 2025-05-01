@@ -388,6 +388,17 @@ Nob_Fd nob_fd_open_for_read(const char *path);
 Nob_Fd nob_fd_open_for_write(const char *path);
 void nob_fd_close(Nob_Fd fd);
 
+
+// TODO: Nob_File name may lead to confusion. Should be change.
+typedef struct {
+    Nob_Fd fd;
+    const char *path;
+} Nob_File;
+
+Nob_File nob_file_open_for_read(const char *path);
+Nob_File nob_file_open_for_write(const char *path);
+void nob_file_close(Nob_File file);
+
 typedef struct {
     Nob_Proc *items;
     size_t count;
@@ -429,6 +440,12 @@ typedef struct {
     Nob_Fd *fderr;
 } Nob_Cmd_Redirect;
 
+typedef struct {
+    Nob_File *fin;
+    Nob_File *fout;
+    Nob_File *ferr;
+} Nob_Cmd_Redirect_File;
+
 // Render a string representation of a command into a string builder. Keep in mind the the
 // string builder is not NULL-terminated by default. Use nob_sb_append_null if you plan to
 // use it as a C string.
@@ -453,6 +470,7 @@ void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
 Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd);
 // Run redirected command asynchronously
 Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
+Nob_Proc nob_cmd_run_async_redirect_file(Nob_Cmd cmd, Nob_Cmd_Redirect_File redirect);
 // Run redirected command asynchronously and set cmd.count to 0 and close all the opened files
 Nob_Proc nob_cmd_run_async_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
 
@@ -463,8 +481,11 @@ bool nob_cmd_run_sync(Nob_Cmd cmd);
 bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd);
 // Run redirected command synchronously
 bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
+bool nob_cmd_run_sync_redirect_file(Nob_Cmd, Nob_Cmd_Redirect_File redirect);
 // Run redirected command synchronously and set cmd.count to 0 and close all the opened files
 bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
+// Run redirected command synchronously and set cmd.count to 0 and close all the opened files
+bool nob_cmd_run_sync_redirect_file_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect_File redirect);
 
 #ifndef NOB_TEMP_CAPACITY
 #define NOB_TEMP_CAPACITY (8*1024*1024)
@@ -883,20 +904,8 @@ void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render)
     }
 }
 
-Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
+static Nob_Proc nob__spawn_with_pipe(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
 {
-    if (cmd.count < 1) {
-        nob_log(NOB_ERROR, "Could not run empty command");
-        return NOB_INVALID_PROC;
-    }
-
-    Nob_String_Builder sb = {0};
-    nob_cmd_render(cmd, &sb);
-    nob_sb_append_null(&sb);
-    nob_log(NOB_INFO, "CMD: %s", sb.items);
-    nob_sb_free(sb);
-    memset(&sb, 0, sizeof(sb));
-
 #ifdef _WIN32
     // https://docs.microsoft.com/en-us/windows/win32/procthread/creating-a-child-process-with-redirected-input-and-output
 
@@ -973,6 +982,60 @@ Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
 
     return cpid;
 #endif
+}
+
+Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
+{
+    if (cmd.count < 1) {
+        nob_log(NOB_ERROR, "Could not run empty command");
+        return NOB_INVALID_PROC;
+    }
+
+    Nob_String_Builder sb = {0};
+    nob_cmd_render(cmd, &sb);
+    nob_sb_append_null(&sb);
+    nob_log(NOB_INFO, "CMD: %s", sb.items);
+    nob_sb_free(sb);
+    memset(&sb, 0, sizeof(sb));
+
+    return nob__spawn_with_pipe(cmd, redirect);
+}
+
+Nob_Proc nob_cmd_run_async_redirect_file(Nob_Cmd cmd, Nob_Cmd_Redirect_File redirect)
+{
+    if (cmd.count < 1) {
+        nob_log(NOB_ERROR, "Could not run empty command");
+        return NOB_INVALID_PROC;
+    }
+
+    Nob_String_Builder sb = {0};
+    nob_cmd_render(cmd, &sb);
+    if (redirect.fin && redirect.fin->path) {
+        nob_sb_appendf(&sb, " < %s", redirect.fin->path);
+    }
+    if (redirect.fout && redirect.fout->path) {
+        nob_sb_appendf(&sb, " > %s", redirect.fout->path);
+    }
+    if (redirect.ferr && redirect.ferr->path) {
+        nob_sb_appendf(&sb, " 2> %s", redirect.ferr->path);
+    }
+    nob_sb_append_null(&sb);
+    nob_log(NOB_INFO, "CMD: %s", sb.items);
+    nob_sb_free(sb);
+    memset(&sb, 0, sizeof(sb));
+
+    Nob_Cmd_Redirect fds = { 0 };
+    if (redirect.fin) {
+        fds.fdin = &redirect.fin->fd;
+    }
+    if (redirect.fout) {
+        fds.fdout = &redirect.fout->fd;
+    }
+    if (redirect.ferr) {
+        fds.fderr = &redirect.ferr->fd;
+    }
+
+    return nob__spawn_with_pipe(cmd, fds);
 }
 
 Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd)
@@ -1078,6 +1141,28 @@ void nob_fd_close(Nob_Fd fd)
 #endif // _WIN32
 }
 
+Nob_File nob_file_open_for_read(const char *path)
+{
+    Nob_File file = { 0 };
+    file.path = path;
+    file.fd = nob_fd_open_for_read(path);
+    return file;
+}
+
+Nob_File nob_file_open_for_write(const char *path)
+{
+    Nob_File file = { 0 };
+    file.path = path;
+    file.fd = nob_fd_open_for_write(path);
+    return file;
+}
+
+void nob_file_close(Nob_File file)
+{
+    nob_fd_close(file.fd);
+    file.path = NULL;
+}
+
 bool nob_procs_wait(Nob_Procs procs)
 {
     bool success = true;
@@ -1169,6 +1254,13 @@ bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
     return nob_proc_wait(p);
 }
 
+bool nob_cmd_run_sync_redirect_file(Nob_Cmd cmd, Nob_Cmd_Redirect_File redirect)
+{
+    Nob_Proc p = nob_cmd_run_async_redirect_file(cmd, redirect);
+    if (p == NOB_INVALID_PROC) return false;
+    return nob_proc_wait(p);
+}
+
 bool nob_cmd_run_sync(Nob_Cmd cmd)
 {
     Nob_Proc p = nob_cmd_run_async(cmd);
@@ -1198,6 +1290,29 @@ bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect
     if (redirect.fderr) {
         nob_fd_close(*redirect.fderr);
         *redirect.fderr = NOB_INVALID_FD;
+    }
+    return p;
+}
+
+bool nob_cmd_run_sync_redirect_file_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect_File redirect)
+{
+    const Nob_File NOB_INVALID_FILE = {
+        .fd = NOB_INVALID_FD,
+        .path = NULL,
+    };
+    bool p = nob_cmd_run_sync_redirect_file(*cmd, redirect);
+    cmd->count = 0;
+    if (redirect.fin && redirect.fin->fd) {
+        nob_file_close(*redirect.fin);
+        *redirect.fin = NOB_INVALID_FILE;
+    }
+    if (redirect.fout && redirect.fout->fd) {
+        nob_file_close(*redirect.fout);
+        *redirect.fout = NOB_INVALID_FILE;
+    }
+    if (redirect.ferr && redirect.ferr->fd) {
+        nob_file_close(*redirect.ferr);
+        *redirect.ferr = NOB_INVALID_FILE;
     }
     return p;
 }
