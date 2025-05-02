@@ -618,6 +618,41 @@ Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 //   String_View name = ...;
 //   printf("Name: "SV_Fmt"\n", SV_Arg(name));
 
+//////////////////////////////////////////////
+// Incremental build
+/*
+The idea is that the user could explicitly specify the dependency tree of their project.
+That way, if they make small changes in some file, they don't need to rebuild the entire project
+for each debug/design iteration.
+*/
+#ifndef MAX_INCREMENTAL_BUILD_DEPTH
+#define MAX_INCREMENTAL_BUILD_DEPTH 128
+#endif // MAX_INCREMENTAL_BUILD_DEPTH;
+typedef struct Nob_Dependency Nob_Dependency;
+typedef struct {
+    Nob_Dependency *items;
+    size_t count;
+    size_t capacity;
+} Nob_Prerequisits;
+struct Nob_Dependency {
+    const char       *target; // Name of the target, e.g., "./build/main"
+    Nob_Prerequisits *preq; // Array of pointers to the prerequisites of the build target.
+    Nob_Cmd          *cmd; // Command to build the target.
+};
+// Walk the dependency tree and rebuild only what is required to build the target.
+bool nob_incremental_build(Nob_Dependency main_target);
+bool nob__incremental_build(Nob_Dependency main_target, size_t *depth); // internal
+#define nob_preq_append(preq, ...) \
+    nob_da_append_many(preq, \
+                       ((Nob_Dependency[]){__VA_ARGS__}), \
+                       (sizeof((Nob_Dependency[]){__VA_ARGS__})/sizeof(Nob_Dependency)))
+
+#define nob_create_dependency(source_file) { \
+    .target=source_file, .preq=&((Nob_Prerequisits) {0}), .cmd=&((Nob_Cmd) {0})}
+
+#define NOB_FREE_DEPENDENCY(dep) \
+    do { NOB_FREE(dep.preq->items); NOB_FREE(dep.cmd->items); } while(0)
+
 
 // minirent.h HEADER BEGIN ////////////////////////////////////////
 // Copyright 2021 Alexey Kutepov <reximkut@gmail.com>
@@ -1792,6 +1827,44 @@ bool nob_set_current_dir(const char *path)
 #endif // _WIN32
 }
 
+bool nob_incremental_build(Nob_Dependency main_target) 
+{
+    size_t depth = 0;
+    return nob__incremental_build(main_target, &depth);
+}
+
+bool nob__incremental_build(Nob_Dependency main_target, size_t *depth)
+{
+    if (*depth >= MAX_INCREMENTAL_BUILD_DEPTH) {
+        nob_log(NOB_ERROR, "Reached MAX_INCREMENTAL_BUILD_DEPTH of %d", MAX_INCREMENTAL_BUILD_DEPTH);
+        return false;
+    }
+    *depth += 1;
+
+    // Source files mark the end of the recursion as they should not have a build command.
+    if (main_target.cmd->count == 0) return true;
+
+    Nob_File_Paths preq_paths = {0};
+    for (size_t i = 0; i < main_target.preq->count; ++i) {
+        nob_da_append(&preq_paths, (main_target.preq->items)[i].target);
+        if (!nob__incremental_build(main_target.preq->items[i], depth)) return false; // recursivly build dependencies
+    }
+
+    // once all dependencies are built, just GO_REBUILD_URSELF
+    int rebuild_is_needed = nob_needs_rebuild(main_target.target, preq_paths.items, preq_paths.count);
+    NOB_FREE(preq_paths.items);
+    if (rebuild_is_needed < 0) exit(1); // error
+    if (!rebuild_is_needed) {           // no rebuild is needed
+        return true;
+    }
+    if (!nob_cmd_run_sync(*main_target.cmd)) {
+        nob_log(NOB_ERROR, "Could not build dependencies for: %s", main_target.target);
+        return false;
+    }
+
+    return true;
+}
+
 // minirent.h SOURCE BEGIN ////////////////////////////////////////
 #ifdef _WIN32
 struct DIR
@@ -1988,6 +2061,10 @@ int closedir(DIR *dirp)
         #define sv_from_parts nob_sv_from_parts
         #define sb_to_sv nob_sb_to_sv
         #define win32_error_message nob_win32_error_message
+        #define Dependency Nob_Dependency
+        #define create_dependency nob_create_dependency
+        #define incremental_build nob_incremental_build
+        #define preq_append nob_preq_append
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
 

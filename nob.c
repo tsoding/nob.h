@@ -19,6 +19,7 @@ const char *test_names[] = {
     "da_append",
     "sb_appendf",
     "da_foreach",
+    "incremental_build",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
