@@ -29,22 +29,22 @@ int main(int argc, char **argv)
 
     // foo_so
     Nob_Dependency foo_so = nob_create_dependency(BUILD_FOLDER"foo.so");
-    nob_preq_append(foo_so.preq, foo_c, foo_h, baz_h);
-    nob_cc(foo_so.cmd);
-    nob_cc_flags(foo_so.cmd);
-    nob_cc_output(foo_so.cmd, foo_so.target);
-    nob_cc_inputs(foo_so.cmd, foo_c.target, foo_h.target, baz_h.target);
-    nob_cc_inputs(foo_so.cmd, "-fPIC", "-shared");
+    nob_preq_append(&foo_so.preq, &foo_c, &foo_h, &baz_h);
+    nob_cc(&foo_so.cmd);
+    nob_cc_flags(&foo_so.cmd);
+    nob_cc_output(&foo_so.cmd, foo_so.target);
+    nob_cc_inputs(&foo_so.cmd, foo_c.target, foo_h.target, baz_h.target);
+    nob_cc_inputs(&foo_so.cmd, "-fPIC", "-shared");
 
     // bin
     Nob_Dependency bin = nob_create_dependency(BUILD_FOLDER"main");
-    nob_preq_append(bin.preq, main_c, foo_so, bar_c, bar_h);
+    nob_preq_append(&bin.preq, &main_c, &foo_so, &bar_c, &bar_h);
 
-    nob_cc(bin.cmd);
-    nob_cc_flags (bin.cmd);
-    nob_cc_output(bin.cmd, bin.target);
-    nob_cc_inputs(bin.cmd, main_c.target, bar_c.target, bar_h.target);
-    nob_cc_inputs(bin.cmd, "-L"BUILD_FOLDER, foo_so.target);
+    nob_cc(&bin.cmd);
+    nob_cc_flags (&bin.cmd);
+    nob_cc_output(&bin.cmd, bin.target);
+    nob_cc_inputs(&bin.cmd, main_c.target, bar_c.target, bar_h.target);
+    nob_cc_inputs(&bin.cmd, "-L"BUILD_FOLDER, foo_so.target);
 
     if (!nob_incremental_build(bin)) return 1;
 

@@ -18,20 +18,21 @@ int test_circular_dependency()
     Dependency bar_o = create_dependency("./bar.o");
     Dependency bin   = create_dependency("./bin");
 
-    preq_append(foo_o.preq, foo_c, bar_o);
-    preq_append(bar_o.preq, bar_c, foo_o);
-    preq_append(bin.preq, bar_o, foo_o);
+    preq_append(&foo_o.preq, &foo_c, &bar_o);
+    preq_append(&bar_o.preq, &bar_c, &foo_o);
+    preq_append(&bin.preq  , &bar_o, &foo_o);
 
-    cmd_append(foo_o.cmd, "gcc", "-c", foo_c.target, bar_o.target); // circular dependency
-    cmd_append(bar_o.cmd, "gcc", "-c", bar_c.target, foo_o.target); // circular dependency
-    cmd_append(bin.cmd  , "gcc", "-o", bin.target, foo_o.target, bar_o.target);
+    cmd_append(&foo_o.cmd, "gcc", "-c", foo_c.target, bar_o.target); // circular dependency
+    cmd_append(&bar_o.cmd, "gcc", "-c", bar_c.target, foo_o.target); // circular dependency
+    cmd_append(&bin.cmd  , "gcc", "-o", bin.target, foo_o.target, bar_o.target);
 
     const char *src = "int main() {return 0;}";
     if (!nob_write_entire_file(bin_c.target, src, strlen(src))) return 1;
     if (!nob_write_entire_file(foo_c.target, "", strlen(""))) return 1;
-    if (!nob_write_entire_file(bin_c.target, "", strlen(""))) return 1;
+    if (!nob_write_entire_file(bar_c.target, "", strlen(""))) return 1;
 
     nob_log(NOB_WARNING, "This test should fail.");
+
     if (!incremental_build(bin)) {
         pass += 1;
         nob_log(NOB_INFO, "test_circular_dependency ... OK");

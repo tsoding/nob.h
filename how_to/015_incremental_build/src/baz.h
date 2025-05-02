@@ -9,7 +9,7 @@ int baz_hello();
 
 #ifdef BAZ_IMPLEMENTATION
 
-int baz_hello() 
+int baz_hello()
 {
     printf("[BAZ] Praise the sun!\n");
     return 42;

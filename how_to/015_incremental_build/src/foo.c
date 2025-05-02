@@ -2,7 +2,7 @@
 #define BAZ_IMPLEMENTATION
 #include "baz.h"
 
-void foo_hello() 
+void foo_hello()
 {
     printf("[FOO] Hello from Foo!\n");
     printf("[FOO] Baz says:\n");
