@@ -703,8 +703,15 @@ Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 
 char *nob_win32_error_message(DWORD err) {
     static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
+#ifdef UNICODE
+    WCHAR lpBuffer[NOB_WIN32_ERR_MSG_SIZE];
+    DWORD errMsgSize = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, LANG_USER_DEFAULT, lpBuffer,
+                                      NOB_WIN32_ERR_MSG_SIZE, NULL);
+    errMsgSize = WideCharToMultiByte(CP_UTF8, 0, lpBuffer, errMsgSize, win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, NULL, NULL);
+#else
     DWORD errMsgSize = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, LANG_USER_DEFAULT, win32ErrMsg,
                                       NOB_WIN32_ERR_MSG_SIZE, NULL);
+#endif
 
     if (errMsgSize == 0) {
         char *newErrMsg = NULL;
