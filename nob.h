@@ -795,7 +795,10 @@ bool nob_mkdir_if_not_exists(const char *path)
 {
 #ifdef _WIN32
     WCHAR wPath[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1);
+    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", path);
+        return false;
+    }
     int result = CreateDirectoryW(wPath, NULL);
     if (result == 0) {
         DWORD err = GetLastError();
@@ -826,10 +829,16 @@ bool nob_copy_file(const char *src_path, const char *dst_path)
 {
     nob_log(NOB_INFO, "copying %s -> %s", src_path, dst_path);
 #ifdef _WIN32
-    WCHAR wsrc_path[MAX_PATH+1], wdst_path[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, src_path, -1, wsrc_path, MAX_PATH+1);
-    MultiByteToWideChar(CP_UTF8, 0, dst_path, -1, wdst_path, MAX_PATH+1);
-    if (!CopyFileW(wsrc_path, wdst_path, FALSE)) {
+    WCHAR wSrcPath[MAX_PATH+1], wDstPath[MAX_PATH+1];
+    if (MultiByteToWideChar(CP_UTF8, 0, src_path, -1, wSrcPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", src_path);
+        return false;
+    }
+    if (MultiByteToWideChar(CP_UTF8, 0, dst_path, -1, wDstPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", dst_path);
+        return false;
+    }
+    if (!CopyFileW(wSrcPath, wDstPath, FALSE)) {
         nob_log(NOB_ERROR, "Could not copy file: %s", nob_win32_error_message(GetLastError()));
         return false;
     }
@@ -943,7 +952,8 @@ Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
     // per MSDN ref of `lpCommandLine`, "The maximum length of this string is 32,767 characters"
     wCmdLine = NOB_REALLOC(NULL, cchCmdLine * sizeof(WCHAR));
     NOB_ASSERT(wCmdLine != NULL && "Buy more RAM");
-    MultiByteToWideChar(CP_UTF8, 0, sb.items, -1, wCmdLine, cchCmdLine);
+    // It's impossible to now have a large enough buffer here and user will know if they have invalid character
+    (void)MultiByteToWideChar(CP_UTF8, 0, sb.items, -1, wCmdLine, cchCmdLine);
     BOOL bSuccess = CreateProcessW(NULL, wCmdLine, NULL, NULL, TRUE, 0, NULL, NULL, &siStartInfo, &piProcInfo);
     NOB_FREE(wCmdLine);
     nob_sb_free(sb);
@@ -1043,7 +1053,10 @@ Nob_Fd nob_fd_open_for_read(const char *path)
     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
     saAttr.bInheritHandle = TRUE;
     WCHAR wPath[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1);
+    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", path);
+        return NOB_INVALID_FD;
+    }
     Nob_Fd result = CreateFileW(
                     wPath,
                     GENERIC_READ,
@@ -1079,7 +1092,10 @@ Nob_Fd nob_fd_open_for_write(const char *path)
     saAttr.bInheritHandle = TRUE;
 
     WCHAR wPath[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1);
+    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", path);
+        return NOB_INVALID_FD;
+    }
     Nob_Fd result = CreateFileW(
                     wPath,                           // name of the write
                     GENERIC_WRITE,                   // open for writing
@@ -1330,7 +1346,10 @@ Nob_File_Type nob_get_file_type(const char *path)
 {
 #ifdef _WIN32
     WCHAR wPath[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1);
+    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", path);
+        return -1;
+    }
     DWORD attr = GetFileAttributesW(wPath);
     if (attr == INVALID_FILE_ATTRIBUTES) {
         nob_log(NOB_ERROR, "Could not get file attributes of %s: %s", path, nob_win32_error_message(GetLastError()));
@@ -1359,7 +1378,10 @@ bool nob_delete_file(const char *path)
     nob_log(NOB_INFO, "deleting %s", path);
 #ifdef _WIN32
     WCHAR wPath[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1);
+    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", path);
+        return false;
+    }
     if (!DeleteFileW(wPath)) {
         nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
         return false;
@@ -1503,7 +1525,10 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
 #ifdef _WIN32
     BOOL bSuccess;
     WCHAR wPath[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, output_path, -1, wPath, MAX_PATH+1);
+    if (MultiByteToWideChar(CP_UTF8, 0, output_path, -1, wPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", path);
+        return -1;
+    }
     HANDLE output_path_fd = CreateFileW(wPath, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
     if (output_path_fd == INVALID_HANDLE_VALUE) {
         // NOTE: if output does not exist it 100% must be rebuilt
@@ -1521,7 +1546,10 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
 
     for (size_t i = 0; i < input_paths_count; ++i) {
         const char *input_path = input_paths[i];
-        MultiByteToWideChar(CP_UTF8, 0, input_path, -1, wPath, MAX_PATH+1);
+        if (MultiByteToWideChar(CP_UTF8, 0, input_path, -1, wPath, MAX_PATH+1) == 0) {
+            nob_log(NOB_ERROR, "Path `%s` too long", path);
+            return -1;
+        }
         HANDLE input_path_fd = CreateFileW(wPath, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
         if (input_path_fd == INVALID_HANDLE_VALUE) {
             // NOTE: non-existing input is an error cause it is needed for building in the first place
@@ -1592,8 +1620,14 @@ bool nob_rename(const char *old_path, const char *new_path)
 #ifdef _WIN32
     WCHAR wOldPath[MAX_PATH+1];
     WCHAR wNewPath[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, old_path, -1, wOldPath, MAX_PATH+1);
-    MultiByteToWideChar(CP_UTF8, 0, new_path, -1, wNewPath, MAX_PATH+1);
+    if (MultiByteToWideChar(CP_UTF8, 0, old_path, -1, wOldPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", old_path);
+        return false;
+    }
+    if (MultiByteToWideChar(CP_UTF8, 0, new_path, -1, wNewPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", new_path);
+        return false;
+    }
     if (!MoveFileExW(wOldPath, wNewPath, MOVEFILE_REPLACE_EXISTING)) {
         nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, nob_win32_error_message(GetLastError()));
         return false;
@@ -1775,7 +1809,10 @@ int nob_file_exists(const char *file_path)
 {
 #if _WIN32
     WCHAR wPath[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, file_path, -1, wPath, MAX_PATH+1);
+    if (MultiByteToWideChar(CP_UTF8, 0, file_path, -1, wPath, MAX_PATH+1) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", file_path);
+        return -1;
+    }
     DWORD dwAttrib = GetFileAttributesW(wPath);
     if(dwAttrib == INVALID_FILE_ATTRIBUTES){
         DWORD err = GetLastError();
@@ -1829,7 +1866,10 @@ bool nob_set_current_dir(const char *path)
 {
 #ifdef _WIN32
     WCHAR wPath[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1);
+    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH) == 0) {
+        nob_log(NOB_ERROR, "Path `%s` too long", path);
+        return false;
+    }
     if (!SetCurrentDirectoryW(wPath)) {
         nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, nob_win32_error_message(GetLastError()));
         return false;
@@ -1864,7 +1904,10 @@ DIR *opendir(const char *dirpath)
     memset(dir, 0, sizeof(DIR));
 
     WCHAR wBuffer[MAX_PATH+1];
-    MultiByteToWideChar(CP_UTF8, 0, buffer, -1, wBuffer, MAX_PATH+1);
+    if (MultiByteToWideChar(CP_UTF8, 0, buffer, -1, wBuffer, MAX_PATH+1) == 0) {
+        errno = ENOSYS;
+        goto fail;
+    }
     dir->hFind = FindFirstFileW(wBuffer, &dir->data);
     if (dir->hFind == INVALID_HANDLE_VALUE) {
         // TODO: opendir should set errno accordingly on FindFirstFile fail
