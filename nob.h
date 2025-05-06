@@ -706,9 +706,8 @@ char *nob_win32_error_message(DWORD err) {
     WCHAR lpBuffer[NOB_WIN32_ERR_MSG_SIZE];
     DWORD cchBuffer = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, LANG_USER_DEFAULT, lpBuffer,
                                       NOB_WIN32_ERR_MSG_SIZE, NULL);
-    int errMsgSize = WideCharToMultiByte(CP_UTF8, 0, lpBuffer, cchBuffer, win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, NULL, NULL);
 
-    if (errMsgSize == 0) {
+    if (cchBuffer == 0) {
         char *newErrMsg = NULL;
         if (GetLastError() == ERROR_MR_MID_NOT_FOUND) {
             newErrMsg = "Invalid Win32 error code";
@@ -723,6 +722,10 @@ char *nob_win32_error_message(DWORD err) {
         }
     }
 
+    int errMsgSize = WideCharToMultiByte(CP_UTF8, 0, lpBuffer, cchBuffer, win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, NULL, NULL);
+    if (errMsgSize == 0) {
+        return "Insufficient error message buffer size";
+    }
     while (errMsgSize > 1 && isspace(win32ErrMsg[errMsgSize - 1])) {
         win32ErrMsg[--errMsgSize] = '\0';
     }
