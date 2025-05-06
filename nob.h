@@ -1526,7 +1526,7 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
     BOOL bSuccess;
     WCHAR wPath[MAX_PATH+1];
     if (MultiByteToWideChar(CP_UTF8, 0, output_path, -1, wPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", path);
+        nob_log(NOB_ERROR, "Path `%s` too long", output_path);
         return -1;
     }
     HANDLE output_path_fd = CreateFileW(wPath, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
@@ -1547,7 +1547,7 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
     for (size_t i = 0; i < input_paths_count; ++i) {
         const char *input_path = input_paths[i];
         if (MultiByteToWideChar(CP_UTF8, 0, input_path, -1, wPath, MAX_PATH+1) == 0) {
-            nob_log(NOB_ERROR, "Path `%s` too long", path);
+            nob_log(NOB_ERROR, "Path `%s` too long", input_path);
             return -1;
         }
         HANDLE input_path_fd = CreateFileW(wPath, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
