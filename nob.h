@@ -1,4 +1,4 @@
-/* nob - v1.20.2 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.20.3 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -1994,6 +1994,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.20.3 (2025-04-24) Add check for __clang__ along with _MSC_VER checks (By @nashiora)
      1.20.2 (2025-04-24) Report the program name that failed to start up in nob_cmd_run_async_redirect() (By @rexim)
      1.20.1 (2025-04-16) Use vsnprintf() in nob_sb_appendf() instead of vsprintf() (By @LainLayer)
      1.20.0 (2025-04-16) Introduce nob_cc(), nob_cc_flags(), nob_cc_inputs(), nob_cc_output() macros (By @rexim)
