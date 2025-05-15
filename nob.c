@@ -9,6 +9,7 @@ const char *test_names[] = {
     "nob_sv_end_with",
     "set_get_current_dir",
     "cmd_redirect",
+    "cmd_args_passing",
 #ifdef _WIN32
     "win32_error",
 #endif //_WIN32
