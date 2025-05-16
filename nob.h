@@ -704,8 +704,8 @@ Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 char *nob_win32_error_message(DWORD err) {
     static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
     WCHAR lpBuffer[NOB_WIN32_ERR_MSG_SIZE];
-    DWORD cchBuffer = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, LANG_USER_DEFAULT, lpBuffer,
-                                      NOB_WIN32_ERR_MSG_SIZE, NULL);
+    DWORD cchBuffer = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, 0, lpBuffer,
+                                     NOB_WIN32_ERR_MSG_SIZE, NULL);
 
     if (cchBuffer == 0) {
         char *newErrMsg = NULL;
