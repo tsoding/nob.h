@@ -124,17 +124,14 @@
       All the Zoo of `nob_cmd_run_*` functions follows the same pattern: sync/async,
       redirect/no redirect, and_reset/no and_reset. They always come in that order.
 
-   # Stripping off `nob_` Prefixes
+   # Using `nob_` Prefixes
 
-      Since Pure C does not have any namespaces we prefix each name of the API with the `nob_` to avoid any
-      potential conflicts with any other names in your code. But sometimes it is very annoying and makes
-      the code noisy. If you know that none of the names from nob.h conflict with anything in your code
-      you can enable NOB_STRIP_PREFIX macro and just drop all the prefixes:
+      Pure C does not have any namespaces. In some projects, this is not an issue, assuming that no names conflict with those of anything in nob. However, if you do find conflicts, you can define NOB_ADD_PREFIX. This will prefix names with NOB_, Nob_, or nob_.
 
+      Without prefixes:
       ```c
       // nob.c
       #define NOB_IMPLEMENTATION
-      #define NOB_STRIP_PREFIX
       #include "nob.h"
 
       int main(int argc, char **argv)
@@ -146,6 +143,22 @@
           return 0;
       }
       ```
+      With prefixes:
+      ```c
+      // nob.c
+      #define NOB_IMPLEMENTATION
+      #define NOB_ADD_PREFIX
+      #include "nob.h"
+
+      int main(int argc, char **argv)
+      {
+          NOB_GO_REBUILD_URSELF(argc, argv);
+          Nob_Cmd cmd = {0};
+          nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", "main", "main.c");
+          if (!nob_cmd_run_sync(cmd)) return 1;
+          return 0;
+      }
+      ```
 
       Not all the names have strippable prefixes. All the redefinable names like `NOB_GO_REBUILD_URSELF`
       for instance will retain their prefix even if NOB_STRIP_PREFIX is enabled. Notable exception is the
@@ -154,7 +167,7 @@
       off the prefix for nob_log(). Another exception is nob_rename() which collides with the widely known
       POSIX function rename(2) if you strip the prefix off.
 
-      The prefixes are stripped off only on the level of preprocessor. The names of the functions in the
+      The prefixes are omitted only on the level of preprocessor. The names of the functions in the
       compiled object file will still retain the `nob_` prefix. Keep that in mind when you FFI with nob.h
       from other languages (for whatever reason).
 
@@ -1927,15 +1940,15 @@ int closedir(DIR *dirp)
 
 #endif // NOB_IMPLEMENTATION
 
-#ifndef NOB_STRIP_PREFIX_GUARD_
-#define NOB_STRIP_PREFIX_GUARD_
+#ifndef NOB_PREFIX_GUARD_
+#define NOB_PREFIX_GUARD_
     // NOTE: The name stripping should be part of the header so it's not accidentally included
     // several times. At the same time, it should be at the end of the file so to not create any
     // potential conflicts in the NOB_IMPLEMENTATION. The header obviously cannot be at the end
     // of the file because NOB_IMPLEMENTATION needs the forward declarations from there. So the
     // solution is to split the header into two parts where the name stripping part is at the
     // end of the file after the NOB_IMPLEMENTATION.
-    #ifdef NOB_STRIP_PREFIX
+    #ifndef NOB_ADD_PREFIX
         #define TODO NOB_TODO
         #define UNREACHABLE NOB_UNREACHABLE
         #define UNUSED NOB_UNUSED
@@ -1948,7 +1961,7 @@ int closedir(DIR *dirp)
         #define Log_Level Nob_Log_Level
         #define minimal_log_level nob_minimal_log_level
         // NOTE: Name log is already defined in math.h and historically always was the natural logarithmic function.
-        // So there should be no reason to strip the `nob_` prefix in this specific case.
+        // So there should be no reason to not include the `nob_` prefix in this specific case.
         // #define log nob_log
         #define shift nob_shift
         #define shift_args nob_shift_args
@@ -2035,8 +2048,8 @@ int closedir(DIR *dirp)
         #define sv_from_parts nob_sv_from_parts
         #define sb_to_sv nob_sb_to_sv
         #define win32_error_message nob_win32_error_message
-    #endif // NOB_STRIP_PREFIX
-#endif // NOB_STRIP_PREFIX_GUARD_
+    #endif // NOB_ADD_PREFIX
+#endif // NOB_PREFIX_GUARD_
 
 /*
    Revision history:
@@ -2115,7 +2128,7 @@ int closedir(DIR *dirp)
    Naming Conventions:
 
       - All the user facing names should be prefixed with `nob_` or `NOB_` depending on the case.
-      - The prefixes of non-redefinable names should be strippable with NOB_STRIP_PREFIX (unless
+      - The prefixes of non-redefinable names should be optional, and available via NOB_ADD_PREFIX (unless
         explicitly stated otherwise like in case of nob_log).
       - Internal functions should be prefixed with `nob__` (double underscore).
 */
@@ -2161,3 +2174,4 @@ int closedir(DIR *dirp)
    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
    ------------------------------------------------------------------------------
 */
+

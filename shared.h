@@ -9,13 +9,14 @@
 #define TESTS_FOLDER "tests/"
 
 #if defined(_MSC_VER)
-#  define nob_cc_flags(cmd) cmd_append(cmd, "-I.")
+#  define nob_cc_flags(cmd) nob_cmd_append(cmd, "-I.")
 #elif defined(__APPLE__) || defined(__MACH__)
 // TODO: "-std=c99", "-D_POSIX_SOURCE" didn't work for MacOS, don't know why, don't really care that much at the moment.
 //   Anybody who does feel free to investigate.
-#  define nob_cc_flags(cmd) cmd_append(cmd, "-Wall", "-Wextra", "-Wswitch-enum", "-I.")
+#  define nob_cc_flags(cmd) nob_cmd_append(cmd, "-Wall", "-Wextra", "-Wswitch-enum", "-I.")
 #else
-#  define nob_cc_flags(cmd) cmd_append(cmd, "-Wall", "-Wextra", "-Wswitch-enum", "-std=c99", "-D_POSIX_SOURCE", "-ggdb", "-I.");
+#  define nob_cc_flags(cmd) nob_cmd_append(cmd, "-Wall", "-Wextra", "-Wswitch-enum", "-std=c99", "-D_POSIX_SOURCE", "-ggdb", "-I.");
 #endif
 
 #endif // SHARED_H_
+
