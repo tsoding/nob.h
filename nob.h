@@ -2005,8 +2005,7 @@ int closedir(DIR *dirp)
 
 /*
    Revision history:
-     
-     1.20.3 (2025-04-29) Reverse direction of prefix guard (opt-in rather than opt-out) (By @cello-ben)
+
      1.20.2 (2025-04-24) Report the program name that failed to start up in nob_cmd_run_async_redirect() (By @rexim)
      1.20.1 (2025-04-16) Use vsnprintf() in nob_sb_appendf() instead of vsprintf() (By @LainLayer)
      1.20.0 (2025-04-16) Introduce nob_cc(), nob_cc_flags(), nob_cc_inputs(), nob_cc_output() macros (By @rexim)
