@@ -204,6 +204,7 @@
 #    include <sys/stat.h>
 #    include <unistd.h>
 #    include <fcntl.h>
+#    include <signal.h>
 #endif
 
 #ifdef _WIN32
@@ -405,7 +406,9 @@ bool nob_proc_wait(Nob_Proc proc);
 bool nob_procs_wait(Nob_Procs procs);
 // Wait until all the processes have finished and empty the procs array
 bool nob_procs_wait_and_reset(Nob_Procs *procs);
-// Append a new process to procs array and if procs.count reaches max_procs_count call nob_procs_wait_and_reset() on it
+// Flush finished processes from the procs array
+bool nob_procs_flush(Nob_Procs *procs);
+// Append a new process to procs array and if procs.count reaches max_procs_count call nob_procs_flush() until it is below max_procs_count again
 bool nob_procs_append_with_flush(Nob_Procs *procs, Nob_Proc proc, size_t max_procs_count);
 
 // A command - the main workhorse of Nob. Nob is all about building commands and running them
@@ -1126,6 +1129,7 @@ void nob_fd_close(Nob_Fd fd)
 
 bool nob_procs_wait(Nob_Procs procs)
 {
+    nob_procs_flush(&procs);
     bool success = true;
     for (size_t i = 0; i < procs.count; ++i) {
         success = nob_proc_wait(procs.items[i]) && success;
@@ -1197,12 +1201,67 @@ bool nob_proc_wait(Nob_Proc proc)
 #endif
 }
 
+bool nob_procs_flush(Nob_Procs *procs)
+{
+    bool success = true;
+
+    Nob_Procs new_procs = {0};
+
+    for (size_t i = procs->count; i > 0; i--) {
+        Nob_Proc proc = procs->items[i - 1];
+#ifdef _WIN32
+        DWORD result = WaitForSingleObject(
+                       proc,    // HANDLE hHandle,
+                       0        // DWORD  dwMilliseconds
+                   );
+
+        if (result == WAIT_FAILED) {
+            nob_log(NOB_ERROR, "could not wait on child process: %s", nob_win32_error_message(GetLastError()));
+            return false;
+        }
+
+        if (result == WAIT_TIMEOUT) {
+            nob_da_append(&new_procs, proc);
+            continue;
+        }
+
+        DWORD exit_status;
+        if (!GetExitCodeProcess(proc, &exit_status)) {
+            nob_log(NOB_ERROR, "could not get process exit code: %s", nob_win32_error_message(GetLastError()));
+            success = false;
+            continue;
+        }
+
+        if (exit_status != 0) {
+            nob_log(NOB_ERROR, "command exited with exit code %lu", exit_status);
+            success = false;
+        }
+
+        CloseHandle(proc);
+#else
+        int status;
+        waitpid(proc, &status, WNOHANG);
+        if (kill(proc, 0) == -1) success = status == 0 && success;
+        else nob_da_append(&new_procs, proc);
+#endif
+    }
+
+    if (procs->count != new_procs.count) {
+        NOB_FREE(procs->items);
+        *procs = new_procs;
+    } else {
+        nob_da_free(new_procs);
+    }
+
+    return success;
+}
+
 bool nob_procs_append_with_flush(Nob_Procs *procs, Nob_Proc proc, size_t max_procs_count)
 {
     nob_da_append(procs, proc);
 
-    if (procs->count >= max_procs_count) {
-        if (!nob_procs_wait_and_reset(procs)) return false;
+    while (procs->count >= max_procs_count) {
+        if (!nob_procs_flush(procs)) return false;
     }
 
     return true;
