@@ -160,10 +160,12 @@
       }
       ```
 
-      Not all the names have optional prefixes. All the redefinable names like `NOB_GO_REBUILD_URSELF`
-      for instance will retain their prefix even if NOB_ADD_PREFIX is not defined. Notable exception is the
-      nob_log() function. Omitting the prefix results in log() which was historically always referring
-      to the natural logarithmic function that is already defined in math.h. So there is no reason to omit the prefix for nob_log().
+      Not all the names have strippable prefixes. All the redefinable names like `NOB_GO_REBUILD_URSELF`
+      for instance will retain their prefix even if NOB_STRIP_PREFIX is enabled. Notable exception is the
+      nob_log() function. Stripping away the prefix results in log() which was historically always referring
+      to the natural logarithmic function that is already defined in math.h. So there is no reason to strip
+      off the prefix for nob_log(). Another exception is nob_rename() which collides with the widely known
+      POSIX function rename(2) if you strip the prefix off.
 
       The prefixes are omitted only on the level of preprocessor. The names of the functions in the
       compiled object file will still retain the `nob_` prefix. Keep that in mind when you FFI with nob.h
