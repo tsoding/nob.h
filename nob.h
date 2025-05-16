@@ -1,4 +1,4 @@
-/* nob - v1.20.5 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.20.6 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -151,7 +151,8 @@
       for instance will retain their prefix even if NOB_STRIP_PREFIX is enabled. Notable exception is the
       nob_log() function. Stripping away the prefix results in log() which was historically always referring
       to the natural logarithmic function that is already defined in math.h. So there is no reason to strip
-      off the prefix for nob_log().
+      off the prefix for nob_log(). Another exception is nob_rename() which collides with the widely known
+      POSIX function rename(2) if you strip the prefix off.
 
       The prefixes are stripped off only on the level of preprocessor. The names of the functions in the
       compiled object file will still retain the `nob_` prefix. Keep that in mind when you FFI with nob.h
@@ -2013,7 +2014,8 @@ int closedir(DIR *dirp)
         #define temp_save nob_temp_save
         #define temp_rewind nob_temp_rewind
         #define path_name nob_path_name
-        #define rename nob_rename
+        // NOTE: rename(2) is widely known POSIX function. We never wanna collide with it.
+        // #define rename nob_rename
         #define needs_rebuild nob_needs_rebuild
         #define needs_rebuild1 nob_needs_rebuild1
         #define file_exists nob_file_exists
@@ -2039,8 +2041,9 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
-     1.20.5 (2025-05-16) NOB_PRINTF_FORMAT() support for MinGW (By KillerxDBr)
-     1.20.4 (2025-05-16) More reliable rendering of the Windows command (By vylsaz)
+     1.20.6 (2025-05-16) Never strip nob_* suffix from nob_rename (By @rexim)
+     1.20.5 (2025-05-16) NOB_PRINTF_FORMAT() support for MinGW (By @KillerxDBr)
+     1.20.4 (2025-05-16) More reliable rendering of the Windows command (By @vylsaz)
      1.20.3 (2025-05-16) Add check for __clang__ along with _MSC_VER checks (By @nashiora)
      1.20.2 (2025-04-24) Report the program name that failed to start up in nob_cmd_run_async_redirect() (By @rexim)
      1.20.1 (2025-04-16) Use vsnprintf() in nob_sb_appendf() instead of vsprintf() (By @LainLayer)
