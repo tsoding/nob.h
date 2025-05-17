@@ -509,11 +509,7 @@ bool nob_set_current_dir(const char *path);
 #    endif
 #  else
 #    if defined(__cplusplus)
-#       if defined(__GNUC__)
-#           define nob_cc(cmd) nob_cmd_append(cmd, "g++")
-#       else
-#           define nob_cc(cmd) nob_cmd_append(cmd, "clang++")
-#       endif
+#       define nob_cc(cmd) nob_cmd_append(cmd, "c++")
 #    else
 #       define nob_cc(cmd) nob_cmd_append(cmd, "cc")
 #    endif
