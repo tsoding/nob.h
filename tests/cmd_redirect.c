@@ -33,11 +33,7 @@ int main(void)
     nob_cc_inputs(&cmd, "./echo.c");
     if (!cmd_run_sync_and_reset(&cmd)) return_defer(1);
 
-    // TODO: fix the rendering of the shell command on Windows.
-    //   It prevents use from using the message with spaces here.
-    //   Steal some code from C3 compiler, I already implemented it there.
-    // const char *message = "Hello, World";
-    const char *message = "Hello";
+    const char *message = "Hello, World";
     const char *message_file_path = "./echo_message.txt";
 
     fdout = fd_open_for_write(message_file_path);
