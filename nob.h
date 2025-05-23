@@ -1387,8 +1387,21 @@ defer:
 bool nob_write_entire_file(const char *path, const void *data, size_t size)
 {
     bool result = true;
+    FILE *f = NULL;
 
-    FILE *f = fopen(path, "wb");
+#ifndef _WIN32
+    f = fopen(path, "wb");
+#else
+    WCHAR wPath[MAX_PATH];
+
+    int charCount = MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", path, nob_win32_error_message(GetLastError()));
+        nob_return_defer(false);
+    }
+
+    f = _wfopen(wPath, L"wb");
+#endif
     if (f == NULL) {
         nob_log(NOB_ERROR, "Could not open file %s for writing: %s\n", path, strerror(errno));
         nob_return_defer(false);
@@ -1735,8 +1748,21 @@ bool nob_rename(const char *old_path, const char *new_path)
 bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 {
     bool result = true;
+    FILE *f = NULL;
 
-    FILE *f = fopen(path, "rb");
+#ifndef _WIN32
+    f = fopen(path, "rb");
+#else
+    WCHAR wPath[MAX_PATH];
+
+    int charCount = MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", path, nob_win32_error_message(GetLastError()));
+        nob_return_defer(false);
+    }
+
+    f = _wfopen(wPath, L"rb");
+#endif
     if (f == NULL)                 nob_return_defer(false);
     if (fseek(f, 0, SEEK_END) < 0) nob_return_defer(false);
 #ifndef _WIN32
