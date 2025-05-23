@@ -9,7 +9,7 @@
 #define TESTS_FOLDER "tests/"
 
 #if defined(_MSC_VER)
-#  define nob_cc_flags(cmd) cmd_append(cmd, "-I.")
+#  define nob_cc_flags(cmd) cmd_append(cmd, "/I.", "/D_CRT_SECURE_NO_WARNINGS", "/W4", "/nologo")
 #elif defined(__APPLE__) || defined(__MACH__)
 // TODO: "-std=c99", "-D_POSIX_SOURCE" didn't work for MacOS, don't know why, don't really care that much at the moment.
 //   Anybody who does feel free to investigate.
