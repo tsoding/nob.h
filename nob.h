@@ -669,7 +669,7 @@ Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 
 struct dirent
 {
-    char d_name[MAX_PATH+1];
+    char d_name[MAX_PATH];
 };
 
 typedef struct DIR DIR;
@@ -707,7 +707,8 @@ Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 #endif // NOB_WIN32_ERR_MSG_SIZE
 
 char *nob_win32_error_message(DWORD err) {
-    static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
+    int errMsgSize;
+    static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE];
     WCHAR lpBuffer[NOB_WIN32_ERR_MSG_SIZE];
     DWORD cchBuffer = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, 0, lpBuffer,
                                      NOB_WIN32_ERR_MSG_SIZE, NULL);
@@ -720,15 +721,16 @@ char *nob_win32_error_message(DWORD err) {
             newErrMsg = "Could not get error message";
         }
 
-        if (snprintf(win32ErrMsg, sizeof(win32ErrMsg), "%s for 0x%lX", newErrMsg, err) > 0) {
-            return (char *)&win32ErrMsg;
-        } else {
+        // snprintf return DONT count the NULL terminator
+        errMsgSize = snprintf(win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, "%s for 0x%lX", newErrMsg, err);
+        if(errMsgSize < 1 || errMsgSize >= NOB_WIN32_ERR_MSG_SIZE) 
             return newErrMsg;
-        }
+
+        return (char *)&win32ErrMsg;
     }
 
-    int errMsgSize = WideCharToMultiByte(CP_UTF8, 0, lpBuffer, cchBuffer, win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, NULL, NULL);
-    if (errMsgSize == 0) {
+    errMsgSize = WideCharToMultiByte(CP_UTF8, 0, lpBuffer, -1, win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, NULL, NULL) -1;
+    if (errMsgSize < 1 || errMsgSize > NOB_WIN32_ERR_MSG_SIZE) {
         return "Insufficient error message buffer size";
     }
     while (errMsgSize > 1 && isspace(win32ErrMsg[errMsgSize - 1])) {
@@ -799,11 +801,14 @@ static char nob_temp[NOB_TEMP_CAPACITY] = {0};
 bool nob_mkdir_if_not_exists(const char *path)
 {
 #ifdef _WIN32
-    WCHAR wPath[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", path);
+    WCHAR wPath[MAX_PATH];
+
+    int charCount = MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", path, nob_win32_error_message(GetLastError()));
         return false;
     }
+
     int result = CreateDirectoryW(wPath, NULL);
     if (result == 0) {
         DWORD err = GetLastError();
@@ -834,15 +839,22 @@ bool nob_copy_file(const char *src_path, const char *dst_path)
 {
     nob_log(NOB_INFO, "copying %s -> %s", src_path, dst_path);
 #ifdef _WIN32
-    WCHAR wSrcPath[MAX_PATH+1], wDstPath[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, src_path, -1, wSrcPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", src_path);
+    int charCount;
+    WCHAR wSrcPath[MAX_PATH];
+    WCHAR wDstPath[MAX_PATH];
+    
+    charCount = MultiByteToWideChar(CP_UTF8, 0, src_path, -1, wSrcPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", src_path, nob_win32_error_message(GetLastError()));
         return false;
     }
-    if (MultiByteToWideChar(CP_UTF8, 0, dst_path, -1, wDstPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", dst_path);
+
+    charCount = MultiByteToWideChar(CP_UTF8, 0, dst_path, -1, wDstPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", dst_path, nob_win32_error_message(GetLastError()));
         return false;
     }
+
     if (!CopyFileW(wSrcPath, wDstPath, FALSE)) {
         nob_log(NOB_ERROR, "Could not copy file: %s", nob_win32_error_message(GetLastError()));
         return false;
@@ -971,10 +983,10 @@ Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
     nob_cmd_render(cmd, &sb);
     nob_sb_append_null(&sb);
     nob_log(NOB_INFO, "CMD: %s", sb.items);
-    nob_sb_free(sb);
-    memset(&sb, 0, sizeof(sb));
 
 #ifdef _WIN32
+    const size_t cp = nob_temp_save();
+
     // https://docs.microsoft.com/en-us/windows/win32/procthread/creating-a-child-process-with-redirected-input-and-output
     STARTUPINFOW siStartInfo;
     ZeroMemory(&siStartInfo, sizeof(siStartInfo));
@@ -990,18 +1002,28 @@ Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
     PROCESS_INFORMATION piProcInfo;
     ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
 
+    sb.count = 0;
     nob__win32_cmd_quote(cmd, &sb);
     nob_sb_append_null(&sb);
-    LPWSTR wCmdLine;
+
+    WCHAR *wCmdLine;
     int cchCmdLine = MultiByteToWideChar(CP_UTF8, 0, sb.items, -1, NULL, 0);
     // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw
     // per MSDN ref of `lpCommandLine`, "The maximum length of this string is 32,767 characters"
-    wCmdLine = NOB_REALLOC(NULL, cchCmdLine * sizeof(WCHAR));
-    NOB_ASSERT(wCmdLine != NULL && "Buy more RAM");
+    wCmdLine = nob_temp_alloc(cchCmdLine * sizeof(WCHAR));
+    NOB_ASSERT(wCmdLine != NULL && "Increase NOB_TEMP_CAPACITY");
+
     // It's impossible to now have a large enough buffer here and user will know if they have invalid character
-    (void)MultiByteToWideChar(CP_UTF8, 0, sb.items, -1, wCmdLine, cchCmdLine);
+    cchCmdLine = MultiByteToWideChar(CP_UTF8, 0, sb.items, -1, wCmdLine, cchCmdLine);
+    if (cchCmdLine < 1 || cchCmdLine > 0x7FFF) {
+        nob_log(NOB_ERROR, "Could not convert Command Line to Wide String: %s", nob_win32_error_message(GetLastError()));
+        nob_temp_rewind(cp);
+        return NOB_INVALID_PROC;
+    }
+
     BOOL bSuccess = CreateProcessW(NULL, wCmdLine, NULL, NULL, TRUE, 0, NULL, NULL, &siStartInfo, &piProcInfo);
-    NOB_FREE(wCmdLine);
+    // NOB_FREE(wCmdLine);
+    nob_temp_rewind(cp);
     nob_sb_free(sb);
 
     if (!bSuccess) {
@@ -1013,6 +1035,9 @@ Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
 
     return piProcInfo.hProcess;
 #else
+    nob_sb_free(sb);
+    memset(&sb, 0, sizeof(sb));
+
     pid_t cpid = fork();
     if (cpid < 0) {
         nob_log(NOB_ERROR, "Could not fork child process: %s", strerror(errno));
@@ -1098,9 +1123,11 @@ Nob_Fd nob_fd_open_for_read(const char *path)
     SECURITY_ATTRIBUTES saAttr = {0};
     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
     saAttr.bInheritHandle = TRUE;
-    WCHAR wPath[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", path);
+    WCHAR wPath[MAX_PATH];
+
+    int charCount = MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", path, nob_win32_error_message(GetLastError()));
         return NOB_INVALID_FD;
     }
     Nob_Fd result = CreateFileW(
@@ -1136,10 +1163,11 @@ Nob_Fd nob_fd_open_for_write(const char *path)
     SECURITY_ATTRIBUTES saAttr = {0};
     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
     saAttr.bInheritHandle = TRUE;
+    WCHAR wPath[MAX_PATH];
 
-    WCHAR wPath[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", path);
+    int charCount = MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", path, nob_win32_error_message(GetLastError()));
         return NOB_INVALID_FD;
     }
     Nob_Fd result = CreateFileW(
@@ -1391,14 +1419,17 @@ defer:
 Nob_File_Type nob_get_file_type(const char *path)
 {
 #ifdef _WIN32
-    WCHAR wPath[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", path);
+    WCHAR wPath[MAX_PATH];
+
+    int charCount = MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", path, nob_win32_error_message(GetLastError()));
         return -1;
     }
+
     DWORD attr = GetFileAttributesW(wPath);
     if (attr == INVALID_FILE_ATTRIBUTES) {
-        nob_log(NOB_ERROR, "Could not get file attributes of %s: %s", path, nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not get file attributes of `%s`: %s", path, nob_win32_error_message(GetLastError()));
         return -1;
     }
 
@@ -1423,11 +1454,14 @@ bool nob_delete_file(const char *path)
 {
     nob_log(NOB_INFO, "deleting %s", path);
 #ifdef _WIN32
-    WCHAR wPath[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", path);
+    WCHAR wPath[MAX_PATH];
+
+    int charCount = MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", path, nob_win32_error_message(GetLastError()));
         return false;
     }
+
     if (!DeleteFileW(wPath)) {
         nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
         return false;
@@ -1570,11 +1604,14 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
 {
 #ifdef _WIN32
     BOOL bSuccess;
-    WCHAR wPath[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, output_path, -1, wPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", output_path);
+    WCHAR wPath[MAX_PATH];
+
+    int charCount = MultiByteToWideChar(CP_UTF8, 0, output_path, -1, wPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", output_path, nob_win32_error_message(GetLastError()));
         return -1;
     }
+
     HANDLE output_path_fd = CreateFileW(wPath, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
     if (output_path_fd == INVALID_HANDLE_VALUE) {
         // NOTE: if output does not exist it 100% must be rebuilt
@@ -1592,8 +1629,10 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
 
     for (size_t i = 0; i < input_paths_count; ++i) {
         const char *input_path = input_paths[i];
-        if (MultiByteToWideChar(CP_UTF8, 0, input_path, -1, wPath, MAX_PATH+1) == 0) {
-            nob_log(NOB_ERROR, "Path `%s` too long", input_path);
+
+        charCount = MultiByteToWideChar(CP_UTF8, 0, input_path, -1, wPath, MAX_PATH);
+        if (charCount < 1 || charCount > MAX_PATH) {
+            nob_log(NOB_ERROR, "Path `%s` is invalid: %s", input_path, nob_win32_error_message(GetLastError()));
             return -1;
         }
         HANDLE input_path_fd = CreateFileW(wPath, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
@@ -1664,16 +1703,22 @@ bool nob_rename(const char *old_path, const char *new_path)
 {
     nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
 #ifdef _WIN32
-    WCHAR wOldPath[MAX_PATH+1];
-    WCHAR wNewPath[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, old_path, -1, wOldPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", old_path);
+    int charCount;
+    WCHAR wOldPath[MAX_PATH];
+    WCHAR wNewPath[MAX_PATH];
+    
+    charCount = MultiByteToWideChar(CP_UTF8, 0, old_path, -1, wOldPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", old_path, nob_win32_error_message(GetLastError()));
         return false;
     }
-    if (MultiByteToWideChar(CP_UTF8, 0, new_path, -1, wNewPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", new_path);
+
+    charCount = MultiByteToWideChar(CP_UTF8, 0, new_path, -1, wNewPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", new_path, nob_win32_error_message(GetLastError()));
         return false;
     }
+
     if (!MoveFileExW(wOldPath, wNewPath, MOVEFILE_REPLACE_EXISTING)) {
         nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, nob_win32_error_message(GetLastError()));
         return false;
@@ -1854,11 +1899,14 @@ bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_prefix)
 int nob_file_exists(const char *file_path)
 {
 #if _WIN32
-    WCHAR wPath[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, file_path, -1, wPath, MAX_PATH+1) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", file_path);
+    WCHAR wPath[MAX_PATH];
+
+    int charCount = MultiByteToWideChar(CP_UTF8, 0, file_path, -1, wPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", file_path, nob_win32_error_message(GetLastError()));
         return -1;
     }
+
     DWORD dwAttrib = GetFileAttributesW(wPath);
     if(dwAttrib == INVALID_FILE_ATTRIBUTES){
         DWORD err = GetLastError();
@@ -1883,24 +1931,29 @@ const char *nob_get_current_dir_temp(void)
 #ifdef _WIN32
     DWORD nBufferLength = GetCurrentDirectoryW(0, NULL);
     if (nBufferLength == 0) {
-        nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
 
-    WCHAR wCwd[MAX_PATH+1];
+    WCHAR wCwd[MAX_PATH];
     if (GetCurrentDirectoryW(nBufferLength, wCwd) == 0) {
-        nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
-    nBufferLength = WideCharToMultiByte(CP_UTF8, 0, wCwd, -1, NULL, 0, NULL, NULL);
-    char *buffer = (char*) nob_temp_alloc(nBufferLength);
-    WideCharToMultiByte(CP_UTF8, 0, wCwd, -1, buffer, nBufferLength, NULL, NULL);
 
+    nBufferLength = WideCharToMultiByte(CP_UTF8, 0, wCwd, -1, NULL, 0, NULL, NULL);
+    char *buffer  = (char *)nob_temp_alloc(nBufferLength);
+
+    int charCount = WideCharToMultiByte(CP_UTF8, 0, wCwd, -1, buffer, nBufferLength, NULL, NULL);
+    if (charCount < 1 || charCount > (int)nBufferLength) {
+        nob_log(NOB_ERROR, "Could not get current directory: %s", nob_win32_error_message(GetLastError()));
+        return NULL;
+    }
     return buffer;
 #else
     char *buffer = (char*) nob_temp_alloc(PATH_MAX);
     if (getcwd(buffer, PATH_MAX) == NULL) {
-        nob_log(NOB_ERROR, "could not get current directory: %s", strerror(errno));
+        nob_log(NOB_ERROR, "Could not get current directory: %s", strerror(errno));
         return NULL;
     }
 
@@ -1911,10 +1964,12 @@ const char *nob_get_current_dir_temp(void)
 bool nob_set_current_dir(const char *path)
 {
 #ifdef _WIN32
-    WCHAR wPath[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH) == 0) {
-        nob_log(NOB_ERROR, "Path `%s` too long", path);
-        return false;
+    WCHAR wPath[MAX_PATH];
+
+    int charCount = MultiByteToWideChar(CP_UTF8, 0, path, -1, wPath, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) {
+        nob_log(NOB_ERROR, "Path `%s` is invalid: %s", path, nob_win32_error_message(GetLastError()));
+        return -1;
     }
     if (!SetCurrentDirectoryW(wPath)) {
         nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, nob_win32_error_message(GetLastError()));
@@ -1941,24 +1996,53 @@ struct DIR
 
 DIR *opendir(const char *dirpath)
 {
-    NOB_ASSERT(dirpath);
+    NOB_ASSERT(dirpath != NULL);
+    if (!(*dirpath)) { // Checking for empty string
+        errno = ENOENT;
+        return NULL;
+    }
 
     char buffer[MAX_PATH];
-    snprintf(buffer, MAX_PATH, "%s\\*", dirpath);
+    int charCount = snprintf(buffer, MAX_PATH, "%s\\*", dirpath);
+    if(charCount < 1 || charCount >= MAX_PATH) { // snprintf return DONT count the NULL terminator
+        errno = ENAMETOOLONG;
+        return NULL;
+    }
 
-    DIR *dir = (DIR*)NOB_REALLOC(NULL, sizeof(DIR));
+    DIR *dir = (DIR *)NOB_REALLOC(NULL, sizeof(DIR));
     memset(dir, 0, sizeof(DIR));
 
-    WCHAR wBuffer[MAX_PATH+1];
-    if (MultiByteToWideChar(CP_UTF8, 0, buffer, -1, wBuffer, MAX_PATH+1) == 0) {
-        errno = ENOSYS;
+    WCHAR wBuffer[MAX_PATH];
+
+    SetLastError(0);
+    charCount = MultiByteToWideChar(CP_UTF8, 0, buffer, -1, wBuffer, MAX_PATH);
+    if (charCount < 1 || charCount > MAX_PATH) { // MultiByteToWideChar return count the NULL terminator
+        switch (GetLastError()) {
+        case ERROR_INSUFFICIENT_BUFFER:
+            errno = ENAMETOOLONG;
+            break;
+        case ERROR_INVALID_FLAGS:
+        case ERROR_INVALID_PARAMETER:
+            errno = EINVAL;
+            break;
+        case ERROR_NO_UNICODE_TRANSLATION:
+            errno = EILSEQ;
+            break;
+        default:
+            errno = ENOSYS;
+            break;
+        }
         goto fail;
     }
+
     dir->hFind = FindFirstFileW(wBuffer, &dir->data);
     if (dir->hFind == INVALID_HANDLE_VALUE) {
         // TODO: opendir should set errno accordingly on FindFirstFile fail
-        // https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror
-        errno = ENOSYS;
+        DWORD err = GetLastError();
+        if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND)
+            errno = ENOENT;
+        else
+            errno = ENOSYS;
         goto fail;
     }
 
@@ -1974,10 +2058,10 @@ fail:
 
 struct dirent *readdir(DIR *dirp)
 {
-    NOB_ASSERT(dirp);
+    NOB_ASSERT(dirp != NULL);
 
     if (dirp->dirent == NULL) {
-        dirp->dirent = (struct dirent*)NOB_REALLOC(NULL, sizeof(struct dirent));
+        dirp->dirent = (struct dirent *)NOB_REALLOC(NULL, sizeof(struct dirent));
         memset(dirp->dirent, 0, sizeof(struct dirent));
     } else {
         if(!FindNextFileW(dirp->hFind, &dirp->data)) {
@@ -1991,15 +2075,40 @@ struct dirent *readdir(DIR *dirp)
         }
     }
 
-    memset(dirp->dirent->d_name, 0, sizeof(dirp->dirent->d_name));
+    memset(dirp->dirent->d_name, 0, MAX_PATH);
 
-    WideCharToMultiByte(CP_UTF8, 0, dirp->data.cFileName, -1, dirp->dirent->d_name, MAX_PATH+1, NULL, NULL);
+    // WideCharToMultiByte return count the NULL terminator
+    int charCount = WideCharToMultiByte(CP_UTF8, 0, dirp->data.cFileName, -1, dirp->dirent->d_name, MAX_PATH, NULL, NULL);
+
+#if 1 // Set errno or just crash if conversion failed???
+    NOB_ASSERT((charCount > 0 && charCount <= MAX_PATH));
+#else
+    if (charCount < 1 || charCount > MAX_PATH) {
+        switch (GetLastError()) {
+        case ERROR_INSUFFICIENT_BUFFER:
+            errno = ENAMETOOLONG;
+            break;
+        case ERROR_INVALID_FLAGS:
+        case ERROR_INVALID_PARAMETER:
+            errno = EINVAL;
+            break;
+        case ERROR_NO_UNICODE_TRANSLATION:
+            errno = EILSEQ;
+            break;
+        default:
+            errno = ENOSYS;
+            break;
+        }
+        return NULL;
+    }
+#endif
+    
     return dirp->dirent;
 }
 
 int closedir(DIR *dirp)
 {
-    NOB_ASSERT(dirp);
+    NOB_ASSERT(dirp != NULL);
 
     if(!FindClose(dirp->hFind)) {
         // TODO: closedir should set errno accordingly on FindClose fail
