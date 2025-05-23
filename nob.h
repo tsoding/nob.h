@@ -713,7 +713,7 @@ char *nob_win32_error_message(DWORD err) {
     DWORD cchBuffer = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, 0, lpBuffer,
                                      NOB_WIN32_ERR_MSG_SIZE, NULL);
 
-    if (cchBuffer == 0) {
+    if (cchBuffer < 1 || cchBuffer > NOB_WIN32_ERR_MSG_SIZE) {
         char *newErrMsg = NULL;
         if (GetLastError() == ERROR_MR_MID_NOT_FOUND) {
             newErrMsg = "Invalid Win32 error code";
@@ -1429,7 +1429,7 @@ Nob_File_Type nob_get_file_type(const char *path)
 
     DWORD attr = GetFileAttributesW(wPath);
     if (attr == INVALID_FILE_ATTRIBUTES) {
-        nob_log(NOB_ERROR, "Could not get file attributes of `%s`: %s", path, nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not get file attributes of %s: %s", path, nob_win32_error_message(GetLastError()));
         return -1;
     }
 
@@ -1929,23 +1929,18 @@ int nob_file_exists(const char *file_path)
 const char *nob_get_current_dir_temp(void)
 {
 #ifdef _WIN32
-    DWORD nBufferLength = GetCurrentDirectoryW(0, NULL);
-    if (nBufferLength == 0) {
-        nob_log(NOB_ERROR, "Could not get current directory: %s", nob_win32_error_message(GetLastError()));
-        return NULL;
-    }
-
     WCHAR wCwd[MAX_PATH];
-    if (GetCurrentDirectoryW(nBufferLength, wCwd) == 0) {
+    DWORD WCharCount = GetCurrentDirectoryW(MAX_PATH, wCwd);
+    if (WCharCount < 1 || WCharCount >= MAX_PATH) {
         nob_log(NOB_ERROR, "Could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
 
-    nBufferLength = WideCharToMultiByte(CP_UTF8, 0, wCwd, -1, NULL, 0, NULL, NULL);
-    char *buffer  = (char *)nob_temp_alloc(nBufferLength);
+    int buffSize = WideCharToMultiByte(CP_UTF8, 0, wCwd, -1, NULL, 0, NULL, NULL);
+    char *buffer = (char *)nob_temp_alloc(buffSize);
 
-    int charCount = WideCharToMultiByte(CP_UTF8, 0, wCwd, -1, buffer, nBufferLength, NULL, NULL);
-    if (charCount < 1 || charCount > (int)nBufferLength) {
+    int charCount = WideCharToMultiByte(CP_UTF8, 0, wCwd, -1, buffer, buffSize, NULL, NULL);
+    if (charCount < 1 || charCount > buffSize) {
         nob_log(NOB_ERROR, "Could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
