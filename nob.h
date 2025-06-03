@@ -513,7 +513,7 @@ bool nob_set_current_dir(const char *path);
 
 #ifndef nob_cc_flags
 #  if defined(_MSC_VER) && !defined(__clang__)
-#    define nob_cc_flags(cmd) nob_cmd_append(cmd, "/W4")
+#    define nob_cc_flags(cmd) nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS")
 #  else
 #    define nob_cc_flags(cmd) nob_cmd_append(cmd, "-Wall", "-Wextra")
 #  endif
