@@ -1007,6 +1007,7 @@ Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
     if (cchCmdLine == 0 || cchCmdLine > 0x7FFF) {
         DWORD err = GetLastError();
         nob_log(NOB_ERROR, "Could not convert Command Line to Wide String: %s", nob_win32_error_message(err ? err : ERROR_INSUFFICIENT_BUFFER));
+        nob_sb_free(sb);
         return NOB_INVALID_PROC;
     }
     wCmdLine = nob_temp_alloc(cchCmdLine * sizeof(WCHAR));
@@ -1015,6 +1016,7 @@ Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
     if (MultiByteToWideChar(CP_UTF8, 0, sb.items, -1, wCmdLine, cchCmdLine) == 0) {
         nob_log(NOB_ERROR, "Could not convert Command Line to Wide String: %s", nob_win32_error_message(GetLastError()));
         nob_temp_rewind(cp);
+        nob_sb_free(sb);
         return NOB_INVALID_PROC;
     }
 
