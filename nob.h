@@ -560,10 +560,9 @@ bool nob_set_current_dir(const char *path);
 //         return 0;
 //     }
 //
-//   After your added this macro every time you run ./nob it will detect
-//   that you modified its original source code and will try to rebuild itself
-//   before doing any actual work. So you only need to bootstrap your build system
-//   once.
+//   After you add this macro ./nob it will detect modifications to its
+//   original source code and will try to rebuild itself before doing any actual 
+//   work. So you only need to bootstrap the build system once.
 //
 //   The modification is detected by comparing the last modified times of the executable
 //   and its source code. The same way the make utility usually does it.
