@@ -196,8 +196,8 @@
 #    define _IMM_
 #    define _WINCON_
 #    include <windows.h>
-#    include <direct.h>
 #    include <shellapi.h>
+#    include <stringapiset.h>
 #else
 #    include <sys/types.h>
 #    include <sys/wait.h>
@@ -707,35 +707,37 @@ Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 #endif // NOB_WIN32_ERR_MSG_SIZE
 
 const char *nob_win32_error_message(DWORD err) {
+    int errMsgSize;
     static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE];
     WCHAR lpBuffer[NOB_WIN32_ERR_MSG_SIZE];
     DWORD cchBuffer = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, 0, lpBuffer,
                                      NOB_WIN32_ERR_MSG_SIZE, NULL);
 
+    const char *newErrMsg = "Could not get error message";
     if (cchBuffer == 0) {
-        const char *newErrMsg = NULL;
         if (GetLastError() == ERROR_MR_MID_NOT_FOUND) {
             newErrMsg = "Invalid Win32 error code";
-        } else {
-            newErrMsg = "Could not get error message";
         }
 
         // snprintf return DONT count the NULL terminator
-        int errMsgSize = snprintf(win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, "%s for 0x%lX", newErrMsg, err);
+        errMsgSize = snprintf(win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, "%s for 0x%lX", newErrMsg, err);
         if (errMsgSize < 1 || errMsgSize >= NOB_WIN32_ERR_MSG_SIZE)
             return newErrMsg;
 
         return win32ErrMsg;
     }
 
-    if (WideCharToMultiByte(CP_UTF8, 0, lpBuffer, -1, win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, NULL, NULL) == 0) {
-        return "Could not get error message";
+    errMsgSize = WideCharToMultiByte(CP_UTF8, 0, lpBuffer, -1, win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, NULL, NULL);
+    if (errMsgSize == 0) {
+        return newErrMsg;
     }
 
-    Nob_String_View sv = nob_sv_trim(nob_sv_from_cstr(win32ErrMsg));
-    *(char *)&sv.data[sv.count] = '\0';
+    errMsgSize--;   // Remove null terminator from count
+    while (errMsgSize > 1 && isspace(win32ErrMsg[errMsgSize - 1])) {
+        win32ErrMsg[--errMsgSize] = '\0';
+    }
 
-    return sv.data;
+    return win32ErrMsg;
 }
 
 #endif // _WIN32
