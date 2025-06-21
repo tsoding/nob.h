@@ -1,4 +1,5 @@
 #include "shared.h"
+#define NOBDEF static inline
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 #define NOB_EXPERIMENTAL_DELETE_OLD
