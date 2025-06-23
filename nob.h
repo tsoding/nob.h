@@ -660,7 +660,7 @@ Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 //          platforms
 //    0.0.1 First Official Release
 
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(NOB_NO_MINIRENT)
 #include <dirent.h>
 #else // _WIN32
 
@@ -1839,7 +1839,7 @@ bool nob_set_current_dir(const char *path)
 }
 
 // minirent.h SOURCE BEGIN ////////////////////////////////////////
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(NOB_NO_MINIRENT)
 struct DIR
 {
     HANDLE hFind;
