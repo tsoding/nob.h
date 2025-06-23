@@ -1,4 +1,4 @@
-/* nob - v1.20.9 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.21.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -648,6 +648,9 @@ Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 //   String_View name = ...;
 //   printf("Name: "SV_Fmt"\n", SV_Arg(name));
 
+// DEPRECATED: Usage of the bundled minirent.h below is deprecated, because it introduces more
+// problems than it solves. It will be removed in the next major release of nob.h. In the meantime,
+// it is recommended to `#define NOB_NO_MINIRENT` if it causes problems for you.
 
 // minirent.h HEADER BEGIN ////////////////////////////////////////
 // Copyright 2021 Alexey Kutepov <reximkut@gmail.com>
@@ -685,7 +688,7 @@ Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 //          platforms
 //    0.0.1 First Official Release
 
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(NOB_NO_MINIRENT)
 #include <dirent.h>
 #else // _WIN32
 
@@ -1866,7 +1869,7 @@ bool nob_set_current_dir(const char *path)
 }
 
 // minirent.h SOURCE BEGIN ////////////////////////////////////////
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(NOB_NO_MINIRENT)
 struct DIR
 {
     HANDLE hFind;
@@ -2068,6 +2071,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.21.0 (2025-08-11) Add NOB_NO_MINIRENT guard for "minirent.h" (by @fietec)
      1.20.9 (2025-08-11) Fix warnings on Windows: Define _CRT_SECURE_NO_WARNINGS, Rename mkdir to _mkdir (by @OetkenPurveyorOfCode)
      1.20.8 (2025-08-11) Fix the bug with nob_get_file_type() not identifying symlinks correctly on POSIX (By @samuellieberman)
      1.20.7 (2025-07-29) Align nob_temp_alloc() allocations by the word size (By @rexim)
