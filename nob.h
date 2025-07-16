@@ -1288,13 +1288,13 @@ void nob_log(Nob_Log_Level level, const char *fmt, ...)
 
     switch (level) {
     case NOB_INFO:
-        fprintf(stderr, "[INFO] ");
+        fprintf(stderr, "[%sINFO%s] ", nob_get_ansi_color(NOB_GREEN), nob_get_ansi_color(NOB_RESET));
         break;
     case NOB_WARNING:
-        fprintf(stderr, "[WARNING] ");
+        fprintf(stderr, "[%sWARNING%s] ", nob_get_ansi_color(NOB_YELLOW), nob_get_ansi_color(NOB_RESET));
         break;
     case NOB_ERROR:
-        fprintf(stderr, "[ERROR] ");
+        fprintf(stderr, "[%sERROR%s] ", nob_get_ansi_color(NOB_RED), nob_get_ansi_color(NOB_RESET));
         break;
     case NOB_NO_LOGS: return;
     default:
