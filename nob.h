@@ -244,6 +244,21 @@ extern Nob_Log_Level nob_minimal_log_level;
 
 void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
 
+
+typedef enum {
+	NOB_RED,
+	NOB_YELLOW,
+	NOB_GREEN,
+	NOB_GRAY,
+	NOB_RESET, // I.e. reset to default.
+} Nob_Color;
+
+// Returns true if color should be disabled.
+bool nob_no_color(void);
+
+// Return ansi escape sequence for the given color.
+char *nob_get_ansi_color(Nob_Color color);
+
 // It is an equivalent of shift command from bash. It basically pops an element from
 // the beginning of a sized array.
 #define nob_shift(xs, xs_sz) (NOB_ASSERT((xs_sz) > 0), (xs_sz)--, *(xs)++)
@@ -693,6 +708,24 @@ char *nob_win32_error_message(DWORD err);
 
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
+
+bool nob_no_color(void) {
+    char *no_color = getenv("NO_COLOR");
+    return no_color != NULL && no_color[0] != '\0';
+}
+
+char *nob_get_ansi_color(Nob_Color color) {
+    if (nob_no_color())
+        return "";
+
+    switch (color) {
+        case NOB_RED:    return "\x1b[91m";
+        case NOB_YELLOW: return "\x1b[93m";
+        case NOB_GREEN:  return "\x1b[92m";
+        case NOB_GRAY:   return "\x1b[31m";
+        case NOB_RESET:  return "\x1b[0m";
+    }
+}
 
 #ifdef _WIN32
 
