@@ -164,6 +164,9 @@
 
 #ifndef NOB_H_
 #define NOB_H_
+#ifdef _WIN32
+#define _CRT_SECURE_NO_WARNINGS (1)
+#endif
 
 #ifndef NOB_ASSERT
 #include <assert.h>
