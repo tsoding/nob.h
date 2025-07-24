@@ -1,4 +1,4 @@
-/* nob - v1.20.8 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.20.9 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -164,6 +164,9 @@
 
 #ifndef NOB_H_
 #define NOB_H_
+#ifdef _WIN32
+#define _CRT_SECURE_NO_WARNINGS (1)
+#endif
 
 #ifndef NOB_ASSERT
 #include <assert.h>
@@ -815,7 +818,7 @@ static char nob_temp[NOB_TEMP_CAPACITY] = {0};
 bool nob_mkdir_if_not_exists(const char *path)
 {
 #ifdef _WIN32
-    int result = mkdir(path);
+    int result = _mkdir(path);
 #else
     int result = mkdir(path, 0755);
 #endif
@@ -2065,6 +2068,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.20.9 (2025-08-11) Fix warnings on Windows: Define _CRT_SECURE_NO_WARNINGS, Rename mkdir to _mkdir (by @OetkenPurveyorOfCode)
      1.20.8 (2025-08-11) Fix the bug with nob_get_file_type() not identifying symlinks correctly on POSIX (By @samuellieberman)
      1.20.7 (2025-07-29) Align nob_temp_alloc() allocations by the word size (By @rexim)
      1.20.6 (2025-05-16) Never strip nob_* suffix from nob_rename (By @rexim)
