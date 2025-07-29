@@ -472,6 +472,11 @@ bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
 // Run redirected command synchronously and set cmd.count to 0 and close all the opened files
 bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
 
+#ifndef NOB_COMPILE_COMMANDS_PATH
+#define NOB_COMPILE_COMMANDS_PATH "compile_commands.json"
+#endif
+void nob_add_to_compile_database(Nob_Cmd cmd);
+
 #ifndef NOB_TEMP_CAPACITY
 #define NOB_TEMP_CAPACITY (8*1024*1024)
 #endif // NOB_TEMP_CAPACITY
@@ -755,6 +760,263 @@ char *nob_win32_error_message(DWORD err) {
 }
 
 #endif // _WIN32
+
+#ifndef _WIN32
+
+#if defined(__GLIBC__) && (defined(__STDC_VERSION__) && __STDC_VERSION__ < 200809L)
+// explicit declarations for strict C mode on glibc (fix for ubuntu)
+ssize_t readlink(const char *path, char *buf, size_t bufsiz);
+int ftruncate(int fd, off_t length);
+#endif
+
+#endif // _WIN32
+
+// cross-platform(?) executable retrieval (no argv hassle, but if nob is forked then the result is not correct)
+const char* nob_get_current_executable_path_temp(void) {
+#ifdef _WIN32
+    static char path[MAX_PATH];
+    DWORD len = GetModuleFileNameA(NULL, path, MAX_PATH);
+    return (len > 0) ? path : NULL;
+#else
+    static char path[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", path, PATH_MAX);
+    if (len < 0) return NULL;
+    path[len] = '\0';
+    return path;
+#endif
+}
+
+// helper function to check if a flag expects an argument
+static bool nob__process_compiler_flag(const char* arg, bool* skip_next) {
+    const char* flags_with_arg[] = {
+        "-o", "-I", "-L", "-l", "-D", "-U", "-include",
+        "-imacros", "-idirafter", "-isystem", "-iquote",
+        "-MF", "-MT", "-MQ", "-x", "-std", "-stdlib", "-B",
+        "-specs", "-fdebug-prefix-map", "-fmacro-prefix-map"
+    };
+    const size_t flags_count = sizeof(flags_with_arg)/sizeof(flags_with_arg[0]);
+
+    for (size_t i = 0; i < flags_count; ++i) {
+        const char* flag = flags_with_arg[i];
+        size_t flag_len = strlen(flag);
+        
+        // case 1: exact match (e.g., "-I")
+        if (strcmp(arg, flag) == 0) {
+            *skip_next = true;
+            return true;
+        }
+        
+        // case 2: combined flag+arg (e.g., "-I/include")
+        if (strncmp(arg, flag, flag_len) == 0) {
+            // check if it's not a longer flag prefix (e.g., "-isystem" vs "-i")
+            if (arg[flag_len] != '\0' && !isalpha(arg[flag_len])) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void nob_add_to_compile_database(Nob_Cmd cmd) {
+    const char* db_path = NOB_COMPILE_COMMANDS_PATH;
+
+    // on first call:
+    // 1. empty out compile_database.json
+    // 2. add `[\n\n]` as a base
+    //
+    // on consecutive calls after:
+    // - insert entries within the `[\n\n]`
+    static bool is_first_call = true;
+
+    if (nob_file_exists(db_path)) {
+        const char* exe_path = nob_get_current_executable_path_temp();
+        if (!exe_path) return;
+
+        // rebuild compile_commands.json only if nob.c was changed
+        if (nob_needs_rebuild1(db_path, exe_path) <= 0) return;
+    }
+
+    if (is_first_call) {
+        is_first_call = false;
+
+        FILE *file = fopen(db_path, "w");
+        if (!file) {
+            nob_log(NOB_ERROR, "couldn't open '%s' for initial write", db_path);
+            return;
+        }
+
+        fprintf(file, "[\n\n]");
+        fclose(file);
+    }
+    
+
+    Nob_String_Builder sb = {0};
+    nob_cmd_render(cmd, &sb);
+    nob_sb_append_null(&sb);
+
+    Nob_String_Builder db_content = {0};
+    if (!nob_read_entire_file(db_path, &db_content)) {
+        nob_log(NOB_ERROR, "failed to read '%s'", db_path);
+        return;
+    }
+
+    // check if db is empty
+    int is_empty = (db_content.count == 4 && memcmp(db_content.items, "[\n\n]", 4) == 0);
+
+    const char* current_dir = nob_get_current_dir_temp();
+    if (!current_dir) {
+        nob_log(NOB_ERROR, "failed to get current directory");
+        NOB_FREE(db_content.items);
+        return;
+    }
+
+    // escape special characters in command
+    Nob_String_Builder escaped_cmd = {0};
+    const char* cmd_str = sb.items;
+    for (const char* p = cmd_str; *p != '\0'; ++p) {
+        switch (*p) {
+        case '\"': { nob_sb_append_cstr(&escaped_cmd, "\\\""); } break;
+        case '\\': { nob_sb_append_cstr(&escaped_cmd, "\\\\"); } break;
+        case '\b': { nob_sb_append_cstr(&escaped_cmd, "\\b");  } break;
+        case '\f': { nob_sb_append_cstr(&escaped_cmd, "\\f");  } break;
+        case '\n': { nob_sb_append_cstr(&escaped_cmd, "\\n");  } break;
+        case '\r': { nob_sb_append_cstr(&escaped_cmd, "\\r");  } break;
+        case '\t': { nob_sb_append_cstr(&escaped_cmd, "\\t");  } break;
+        default: {
+            if (*p < 0x20) {
+                nob_sb_appendf(&escaped_cmd, "\\u%04x", *p);
+            } else {
+                nob_da_append(&escaped_cmd, *p);
+            }
+        }
+        }
+    }
+    nob_sb_append_null(&escaped_cmd);
+
+    Nob_File_Paths source_files = {0};
+    bool skip_next = false;
+    for (size_t i = 0; i < cmd.count; ++i) {
+        const char* arg = cmd.items[i];
+        if (skip_next) {
+            skip_next = false;
+            continue;
+        }
+        
+        // handle compiler flags
+        if (arg[0] == '-') {
+            if (nob__process_compiler_flag(arg, &skip_next)) {
+                continue;
+            }
+        }
+        
+        const char* ext = strrchr(arg, '.');
+        if (ext && (
+            strcmp(ext, ".c")   == 0 ||
+            strcmp(ext, ".cpp") == 0 ||
+            strcmp(ext, ".cc")  == 0 ||
+            strcmp(ext, ".cxx") == 0
+        )) {
+            nob_da_append(&source_files, arg);
+        }
+    }
+
+    if (source_files.count == 0) {
+        nob_log(NOB_ERROR, "no source files detected in command");
+        NOB_FREE(db_content.items);
+        NOB_FREE(escaped_cmd.items);
+        return;
+    }
+
+    Nob_String_Builder entries_sb = {0};
+    for (size_t i = 0; i < source_files.count; ++i) {
+        const char* source_file = source_files.items[i];
+        Nob_String_Builder entry_sb = {0};
+        nob_sb_appendf(&entry_sb, "{\n\t\"directory\": \"%s\",\n", current_dir);
+        nob_sb_appendf(&entry_sb, "\t\"command\": \"%s\",\n", escaped_cmd.items);
+        nob_sb_appendf(&entry_sb, "\t\"file\": \"%s\"\n}", source_file);
+
+        if (i > 0) {
+            nob_sb_append_cstr(&entries_sb, ",\n");
+        }
+        nob_sb_append_buf(&entries_sb, entry_sb.items, entry_sb.count);
+        NOB_FREE(entry_sb.items);
+    }
+
+    // build new database content
+    Nob_String_Builder new_db = {0};
+    if (is_empty) {
+        nob_sb_append_cstr(&new_db, "[\n");
+        nob_sb_append_buf(&new_db, entries_sb.items, entries_sb.count);
+        nob_sb_append_cstr(&new_db, "\n]");
+    } else {
+        // find the last ']'
+        size_t last_brace_pos = 0;
+        for (size_t i = 0; i < db_content.count; ++i) {
+            if (db_content.items[i] == ']') last_brace_pos = i;
+        }
+
+        // trim whitespace before the ']'
+        size_t last_char_pos = last_brace_pos;
+        while (last_char_pos > 0 && isspace(db_content.items[last_char_pos - 1])) {
+            last_char_pos--;
+        }
+
+        // check if last non-whitespace character is a comma
+        bool needs_comma = true;
+        if (last_char_pos > 0 && db_content.items[last_char_pos - 1] == ',') {
+            needs_comma = false;
+        }
+
+        nob_sb_append_buf(&new_db, db_content.items, last_char_pos);
+
+        // add comma only if needed
+        if (needs_comma && last_char_pos > 1) {
+            nob_sb_append_cstr(&new_db, ",");
+        }
+
+        // add new entries and close
+        nob_sb_append_cstr(&new_db, "\n");
+        nob_sb_append_buf(&new_db, entries_sb.items, entries_sb.count);
+        nob_sb_append_cstr(&new_db, "\n]");
+    }
+
+    FILE* compile_database = fopen(db_path, "r+");
+    if (!compile_database) {
+        nob_log(NOB_ERROR, "couldn't open '%s' for write", db_path);
+        return;
+    }
+
+    fseek(compile_database, 0, SEEK_SET);
+    size_t written = fwrite(new_db.items, 1, new_db.count, compile_database);
+    if (written != new_db.count) {
+        nob_log(NOB_ERROR, "failed to write %zu/%zu bytes to %s: %s", 
+            written, new_db.count, db_path, strerror(errno));
+        goto full_clean;
+    }
+
+    // truncate in case new content is shorter
+#ifndef _WIN32
+    int fd = fileno(compile_database);
+#else
+    int fd = _fileno(compile_database);
+#endif
+
+#ifdef _WIN32
+    if (_chsize_s(fd, new_db.count) != 0) {
+#else
+    if (ftruncate(fd, new_db.count) != 0) {
+#endif
+        nob_log(NOB_ERROR, "failed to truncate '%s'", db_path);
+    }
+
+full_clean:
+    // cleanup
+    NOB_FREE(db_content.items);
+    NOB_FREE(entries_sb.items);
+    NOB_FREE(new_db.items);
+    NOB_FREE(escaped_cmd.items);
+    fclose(compile_database);
+}
 
 // The implementation idea is stolen from https://github.com/zhiayang/nabs
 void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
