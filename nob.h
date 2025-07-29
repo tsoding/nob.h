@@ -164,6 +164,9 @@
 
 #ifndef NOB_H_
 #define NOB_H_
+#ifdef _WIN32
+#define _CRT_SECURE_NO_WARNINGS (1)
+#endif
 
 #ifndef NOB_ASSERT
 #include <assert.h>
@@ -815,7 +818,7 @@ static char nob_temp[NOB_TEMP_CAPACITY] = {0};
 bool nob_mkdir_if_not_exists(const char *path)
 {
 #ifdef _WIN32
-    int result = mkdir(path);
+    int result = _mkdir(path);
 #else
     int result = mkdir(path, 0755);
 #endif
