@@ -847,24 +847,29 @@ bool nob_copy_file(const char *src_path, const char *dst_path)
     size_t buf_size = 32*1024;
     char *buf = NOB_REALLOC(NULL, buf_size);
     NOB_ASSERT(buf != NULL && "Buy more RAM lol!!");
-    bool result = true;
+
+    defer {
+        NOB_FREE(buf);
+        close(src_fd);
+        close(dst_fd);
+    }
 
     src_fd = open(src_path, O_RDONLY);
     if (src_fd < 0) {
         nob_log(NOB_ERROR, "Could not open file %s: %s", src_path, strerror(errno));
-        nob_return_defer(false);
+        return false;
     }
 
     struct stat src_stat;
     if (fstat(src_fd, &src_stat) < 0) {
         nob_log(NOB_ERROR, "Could not get mode of file %s: %s", src_path, strerror(errno));
-        nob_return_defer(false);
+        return false;
     }
 
     dst_fd = open(dst_path, O_CREAT | O_TRUNC | O_WRONLY, src_stat.st_mode);
     if (dst_fd < 0) {
         nob_log(NOB_ERROR, "Could not create file %s: %s", dst_path, strerror(errno));
-        nob_return_defer(false);
+        return false;
     }
 
     for (;;) {
@@ -872,25 +877,21 @@ bool nob_copy_file(const char *src_path, const char *dst_path)
         if (n == 0) break;
         if (n < 0) {
             nob_log(NOB_ERROR, "Could not read from file %s: %s", src_path, strerror(errno));
-            nob_return_defer(false);
+            return false;
         }
         char *buf2 = buf;
         while (n > 0) {
             ssize_t m = write(dst_fd, buf2, n);
             if (m < 0) {
                 nob_log(NOB_ERROR, "Could not write to file %s: %s", dst_path, strerror(errno));
-                nob_return_defer(false);
+                return false;
             }
             n    -= m;
             buf2 += m;
         }
     }
 
-defer:
-    NOB_FREE(buf);
-    close(src_fd);
-    close(dst_fd);
-    return result;
+    return true;
 #endif
 }
 
@@ -1298,17 +1299,18 @@ void nob_log(Nob_Log_Level level, const char *fmt, ...)
 
 bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
 {
-    bool result = true;
     DIR *dir = NULL;
 
     dir = opendir(parent);
+    defer if (dir) closedir(dir);
+
     if (dir == NULL) {
         #ifdef _WIN32
         nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, nob_win32_error_message(GetLastError()));
         #else
         nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, strerror(errno));
         #endif // _WIN32
-        nob_return_defer(false);
+        return false;
     }
 
     errno = 0;
@@ -1324,12 +1326,10 @@ bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
         #else
         nob_log(NOB_ERROR, "Could not read directory %s: %s", parent, strerror(errno));
         #endif // _WIN32
-        nob_return_defer(false);
+        return false;
     }
 
-defer:
-    if (dir) closedir(dir);
-    return result;
+    return true;
 }
 
 bool nob_write_entire_file(const char *path, const void *data, size_t size)
@@ -1337,9 +1337,11 @@ bool nob_write_entire_file(const char *path, const void *data, size_t size)
     bool result = true;
 
     FILE *f = fopen(path, "wb");
+    defer if (f) fclose(f);
+
     if (f == NULL) {
         nob_log(NOB_ERROR, "Could not open file %s for writing: %s\n", path, strerror(errno));
-        nob_return_defer(false);
+        return false;
     }
 
     //           len
@@ -1353,15 +1355,13 @@ bool nob_write_entire_file(const char *path, const void *data, size_t size)
         size_t n = fwrite(buf, 1, size, f);
         if (ferror(f)) {
             nob_log(NOB_ERROR, "Could not write into file %s: %s\n", path, strerror(errno));
-            nob_return_defer(false);
+            return false;
         }
         size -= n;
         buf  += n;
     }
 
-defer:
-    if (f) fclose(f);
-    return result;
+    return true;
 }
 
 Nob_File_Type nob_get_file_type(const char *path)
@@ -1419,10 +1419,17 @@ bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
     Nob_File_Type type = nob_get_file_type(src_path);
     if (type < 0) return false;
 
+    defer {
+        nob_temp_rewind(temp_checkpoint);
+        nob_da_free(src_sb);
+        nob_da_free(dst_sb);
+        nob_da_free(children);
+    }
+
     switch (type) {
         case NOB_FILE_DIRECTORY: {
-            if (!nob_mkdir_if_not_exists(dst_path)) nob_return_defer(false);
-            if (!nob_read_entire_dir(src_path, &children)) nob_return_defer(false);
+            if (!nob_mkdir_if_not_exists(dst_path)) return false;
+            if (!nob_read_entire_dir(src_path, &children)) return false;
 
             for (size_t i = 0; i < children.count; ++i) {
                 if (strcmp(children.items[i], ".") == 0) continue;
@@ -1441,14 +1448,14 @@ bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
                 nob_sb_append_null(&dst_sb);
 
                 if (!nob_copy_directory_recursively(src_sb.items, dst_sb.items)) {
-                    nob_return_defer(false);
+                    return false;
                 }
             }
         } break;
 
         case NOB_FILE_REGULAR: {
             if (!nob_copy_file(src_path, dst_path)) {
-                nob_return_defer(false);
+                return false;
             }
         } break;
 
@@ -1458,18 +1465,13 @@ bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
 
         case NOB_FILE_OTHER: {
             nob_log(NOB_ERROR, "Unsupported type of file %s", src_path);
-            nob_return_defer(false);
+            return false;
         } break;
 
         default: NOB_UNREACHABLE("nob_copy_directory_recursively");
     }
 
-defer:
-    nob_temp_rewind(temp_checkpoint);
-    nob_da_free(src_sb);
-    nob_da_free(dst_sb);
-    nob_da_free(children);
-    return result;
+    return true;
 }
 
 char *nob_temp_strdup(const char *cstr)
@@ -1642,15 +1644,19 @@ bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
     bool result = true;
 
     FILE *f = fopen(path, "rb");
-    if (f == NULL)                 nob_return_defer(false);
-    if (fseek(f, 0, SEEK_END) < 0) nob_return_defer(false);
+    defer {
+        if (!result) nob_log(NOB_ERROR, "Could not read file %s: %s", path, strerror(errno));
+        if (f) fclose(f);
+    }
+    if (f == NULL)                 return result = false;
+    if (fseek(f, 0, SEEK_END) < 0) return result = false;
 #ifndef _WIN32
     long m = ftell(f);
 #else
     long long m = _ftelli64(f);
 #endif
-    if (m < 0)                     nob_return_defer(false);
-    if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
+    if (m < 0)                     return result = false;
+    if (fseek(f, 0, SEEK_SET) < 0) return result = false;
 
     size_t new_count = sb->count + m;
     if (new_count > sb->capacity) {
@@ -1662,13 +1668,10 @@ bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
     fread(sb->items + sb->count, m, 1, f);
     if (ferror(f)) {
         // TODO: Afaik, ferror does not set errno. So the error reporting in defer is not correct in this case.
-        nob_return_defer(false);
+        return result = false;
     }
     sb->count = new_count;
 
-defer:
-    if (!result) nob_log(NOB_ERROR, "Could not read file %s: %s", path, strerror(errno));
-    if (f) fclose(f);
     return result;
 }
 
