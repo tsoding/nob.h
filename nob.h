@@ -1,4 +1,4 @@
-/* nob - v1.20.7 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.20.8 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -1378,7 +1378,7 @@ Nob_File_Type nob_get_file_type(const char *path)
     return NOB_FILE_REGULAR;
 #else // _WIN32
     struct stat statbuf;
-    if (stat(path, &statbuf) < 0) {
+    if (lstat(path, &statbuf) < 0) {
         nob_log(NOB_ERROR, "Could not get stat of %s: %s", path, strerror(errno));
         return -1;
     }
@@ -2065,6 +2065,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.20.8 (2025-08-11) Fix the bug with nob_get_file_type() not identifying symlinks correctly on POSIX (By @samuellieberman)
      1.20.7 (2025-07-29) Align nob_temp_alloc() allocations by the word size (By @rexim)
      1.20.6 (2025-05-16) Never strip nob_* suffix from nob_rename (By @rexim)
      1.20.5 (2025-05-16) NOB_PRINTF_FORMAT() support for MinGW (By @KillerxDBr)
