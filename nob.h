@@ -1,4 +1,4 @@
-/* nob - v1.20.6 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.20.7 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -184,6 +184,7 @@
 #endif /* NOB_FREE */
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -480,6 +481,27 @@ bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect
 char *nob_temp_strdup(const char *cstr);
 void *nob_temp_alloc(size_t size);
 char *nob_temp_sprintf(const char *format, ...) NOB_PRINTF_FORMAT(1, 2);
+// nob_temp_reset() - Resets the entire temporary storage to 0.
+//
+// It is generally not recommended to call this function ever. What you usually want to do is let's say you have a loop,
+// that allocates some temporary objects and cleans them up at the end of each iteration. You should use
+// nob_temp_save() and nob_temp_rewind() to organize such loop like this:
+//
+// ```c
+// char *message = nob_temp_sprintf("This message is still valid after the loop below");
+// while (!quit) {
+//     size_t mark = nob_temp_save();
+//     nob_temp_alloc(69);
+//     nob_temp_alloc(420);
+//     nob_temp_alloc(1337);
+//     nob_temp_rewind(mark);
+// }
+// printf("%s\n", message);
+// ```
+//
+// That way all the temporary allocations created before the loop are still valid even after the loop.
+// Such save/rewind blocks define lifetime boundaries of the temporary objects which also could be nested.
+// This turns the temporary storage into kind of a second stack with a more manual management.
 void nob_temp_reset(void);
 size_t nob_temp_save(void);
 void nob_temp_rewind(size_t checkpoint);
@@ -1463,8 +1485,10 @@ char *nob_temp_strdup(const char *cstr)
     return result;
 }
 
-void *nob_temp_alloc(size_t size)
+void *nob_temp_alloc(size_t requested_size)
 {
+    size_t word_size = sizeof(uintptr_t);
+    size_t size = (requested_size + word_size - 1)/word_size*word_size;
     if (nob_temp_size + size > NOB_TEMP_CAPACITY) return NULL;
     void *result = &nob_temp[nob_temp_size];
     nob_temp_size += size;
@@ -2044,6 +2068,7 @@ int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.20.7 (2025-07-29) Align nob_temp_alloc() allocations by the word size (By @rexim)
      1.20.6 (2025-05-16) Never strip nob_* suffix from nob_rename (By @rexim)
      1.20.5 (2025-05-16) NOB_PRINTF_FORMAT() support for MinGW (By @KillerxDBr)
      1.20.4 (2025-05-16) More reliable rendering of the Windows command (By @vylsaz)
