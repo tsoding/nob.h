@@ -593,7 +593,7 @@ NOBDEF bool nob_set_current_dir(const char *path);
 //         return 0;
 //     }
 //
-//   After your added this macro every time you run ./nob it will detect
+//   After you added this macro every time you run ./nob it will detect
 //   that you modified its original source code and will try to rebuild itself
 //   before doing any actual work. So you only need to bootstrap your build system
 //   once.
