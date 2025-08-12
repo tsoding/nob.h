@@ -1,14 +1,17 @@
 #include "shared.h"
+#define NOBDEF static inline
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 #define NOB_EXPERIMENTAL_DELETE_OLD
 #include "nob.h"
+#undef rename                   // Testing for backward compatibility after v1.20.6
 
 const char *test_names[] = {
     "minimal_log_level",
     "nob_sv_end_with",
     "set_get_current_dir",
     "cmd_redirect",
+    "cmd_args_passing",
 #ifdef _WIN32
     "win32_error",
 #endif //_WIN32
@@ -20,6 +23,7 @@ const char *test_names[] = {
     "sb_appendf",
     "da_foreach",
     "swap",
+    "temp_aligned_alloc",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
