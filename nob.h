@@ -1,4 +1,4 @@
-/* nob - v1.21.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.22.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -2079,6 +2079,8 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.22.0 (2025-08-12) Add NOBDEF macro to the beginning of function declarations (by @minefreak19)
+                         Add more flags to MSVC nob_cc_flags() (by @PieVieRo)
      1.21.0 (2025-08-11) Add NOB_NO_MINIRENT guard for "minirent.h" (by @fietec)
      1.20.9 (2025-08-11) Fix warnings on Windows: Define _CRT_SECURE_NO_WARNINGS, Rename mkdir to _mkdir (by @OetkenPurveyorOfCode)
      1.20.8 (2025-08-11) Fix the bug with nob_get_file_type() not identifying symlinks correctly on POSIX (By @samuellieberman)
