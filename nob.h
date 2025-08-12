@@ -517,8 +517,7 @@ NOBDEF void nob_temp_rewind(size_t checkpoint);
 #define nob_swap(a, b)                       \
     do {                                     \
         size_t sza = sizeof(a);              \
-        size_t szb = sizeof(b);              \
-        NOB_ASSERT(sza == szb);              \
+        NOB_ASSERT(sza == sizeof(b));        \
         size_t checkpoint = nob_temp_save(); \
         void *tmp = nob_temp_alloc(sza);     \
         memcpy(tmp, &a, sza);                \
