@@ -514,6 +514,18 @@ NOBDEF void nob_temp_reset(void);
 NOBDEF size_t nob_temp_save(void);
 NOBDEF void nob_temp_rewind(size_t checkpoint);
 
+#define nob_swap(a, b)                       \
+    do {                                     \
+        size_t sza = sizeof(a);              \
+        NOB_ASSERT(sza == sizeof(b));        \
+        size_t checkpoint = nob_temp_save(); \
+        void *tmp = nob_temp_alloc(sza);     \
+        memcpy(tmp, &a, sza);                \
+        memcpy(&a, &b, sza);                 \
+        memcpy(&b, tmp, sza);                \
+        nob_temp_rewind(checkpoint);         \
+    } while(0)
+
 // Given any path returns the last part of that path.
 // "/path/to/a/file.c" -> "file.c"; "/path/to/a/directory" -> "directory"
 NOBDEF const char *nob_path_name(const char *path);
@@ -2019,6 +2031,7 @@ NOBDEF int closedir(DIR *dirp)
         #define sb_append_cstr nob_sb_append_cstr
         #define sb_append_null nob_sb_append_null
         #define sb_free nob_sb_free
+        #define swap nob_swap
         #define Proc Nob_Proc
         #define INVALID_PROC NOB_INVALID_PROC
         #define Fd Nob_Fd
