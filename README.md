@@ -39,3 +39,12 @@ You know all these BS movements that supposedly remove the root cause of your pr
 ## How to use the library in your own project
 
 The only file you need from here is [nob.h](https://raw.githubusercontent.com/tsoding/nob.h/refs/heads/main/nob.h). Just copy-paste it to your project and start using it. See [how_to/](how_to/) folder for examples.
+
+## NoBuild in Other Languages
+
+This is obviously applicable not only to C. You can implement the same kind of approach for other languages (apart from the languages that support this natively, of course). Here is few examples in the wild:
+
+- Java - [https://gitlab.com/NikaDev/arris](https://gitlab.com/NikaDev/arris)
+- ...
+
+*Feel free to contribute more*
