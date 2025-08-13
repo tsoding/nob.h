@@ -19,19 +19,19 @@ int main(int argc, char **argv)
     nob_cc_flags(&cmd);
     nob_cc_output(&cmd, BUILD_FOLDER"foo");
     nob_cc_inputs(&cmd, SRC_FOLDER"foo.c");
-    da_append(&procs, cmd_run_async_and_reset(&cmd));
+    if (!cmd_run(&cmd, .async = &procs)) return 1;
 
     nob_cc(&cmd);
     nob_cc_flags(&cmd);
     nob_cc_output(&cmd, BUILD_FOLDER"bar");
     nob_cc_inputs(&cmd, SRC_FOLDER"bar.c");
-    da_append(&procs, cmd_run_async_and_reset(&cmd));
+    if (!cmd_run(&cmd, .async = &procs)) return 1;
 
     nob_cc(&cmd);
     nob_cc_flags(&cmd);
     nob_cc_output(&cmd, BUILD_FOLDER"baz");
     nob_cc_inputs(&cmd, SRC_FOLDER"baz.c");
-    da_append(&procs, cmd_run_async_and_reset(&cmd));
+    if (!cmd_run(&cmd, .async = &procs)) return 1;
 
     // Wait on all the async processes to finish
     if (!procs_wait_and_reset(&procs)) return 1;

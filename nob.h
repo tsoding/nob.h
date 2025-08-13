@@ -27,103 +27,6 @@
       The `nob` automatically rebuilds itself if `nob.c` is modified thanks to
       the `NOB_GO_REBUILD_URSELF` macro (don't forget to check out how it works below)
 
-   # The Zoo of `nob_cmd_run_*` Functions
-
-      `Nob_Cmd` is just a dynamic array of strings which represents a command and its arguments.
-      First you append the arguments
-
-      ```c
-      Nob_Cmd cmd = {0};
-      nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", "main", "main.c");
-      ```
-
-      Then you run it
-
-      ```c
-      if (!nob_cmd_run_sync(cmd)) return 1;
-      ```
-
-      `*_sync` at the end indicates that the function blocks until the command finishes executing
-      and returns `true` on success and `false` on failure. You can run the command asynchronously
-      but you have to explitictly wait for it afterwards:
-
-      ```c
-      Nob_Proc p = nob_cmd_run_async(cmd);
-      if (p == NOB_INVALID_PROC) return 1;
-      if (!nob_proc_wait(p)) return 1;
-      ```
-
-      One of the problems with running commands like that is that `Nob_Cmd` still contains the arguments
-      from the previously run command. If you want to reuse the same `Nob_Cmd` you have to not forget to reset
-      it
-
-      ```c
-      Nob_Cmd cmd = {0};
-
-      nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", "main", "main.c");
-      if (!nob_cmd_run_sync(cmd)) return 1;
-      cmd.count = 0;
-
-      nob_cmd_append(&cmd, "./main", "foo", "bar", "baz");
-      if (!nob_cmd_run_sync(cmd)) return 1;
-      cmd.count = 0;
-      ```
-
-      Which is a bit error prone. To make it a bit easier we have `nob_cmd_run_sync_and_reset()` which
-      accepts `Nob_Cmd` by reference and resets it for you:
-
-      ```c
-      Nob_Cmd cmd = {0};
-
-      nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", "main", "main.c");
-      if (!nob_cmd_run_sync_and_reset(&cmd)) return 1;
-
-      nob_cmd_append(&cmd, "./main", "foo", "bar", "baz");
-      if (!nob_cmd_run_sync_and_reset(&cmd)) return 1;
-      ```
-
-      There is of course also `nob_cmd_run_async_and_reset()` to maintain the pattern.
-
-      The stdin, stdout and stderr of any command can be redirected by using `Nob_Cmd_Redirect` structure
-      along with `nob_cmd_run_sync_redirect()` or `nob_cmd_run_async_redirect()`
-
-      ```c
-      // Opening all the necessary files
-      Nob_Fd fdin = nob_fd_open_for_read("input.txt");
-      if (fdin == NOB_INVALID_FD) return 1;
-      Nob_Fd fdout = nob_fd_open_for_write("output.txt");
-      if (fdout == NOB_INVALID_FD) return 1;
-      Nob_Fd fderr = nob_fd_open_for_write("error.txt");
-      if (fderr == NOB_INVALID_FD) return 1;
-
-      // Preparing the command
-      Nob_Cmd cmd = {0};
-      nob_cmd_append(&cmd, "./main", "foo", "bar", "baz");
-
-      // Running the command synchronously redirecting the standard streams
-      bool ok = nob_cmd_run_sync_redirect(cmd, (Nob_Cmd_Redirect) {
-          .fdin = fdin,
-          .fdout = fdout,
-          .fderr = fderr,
-      });
-      if (!ok) return 1;
-
-      // Closing all the files
-      nob_fd_close(fdin);
-      nob_fd_close(fdout);
-      nob_fd_close(fderr);
-
-      // Reseting the command
-      cmd.count = 0;
-      ```
-
-      And of course if you find closing the files and reseting the command annoying we have
-      `nob_cmd_run_sync_redirect_and_reset()` and `nob_cmd_run_async_redirect_and_reset()`
-      which do all of that for you automatically.
-
-      All the Zoo of `nob_cmd_run_*` functions follows the same pattern: sync/async,
-      redirect/no redirect, and_reset/no and_reset. They always come in that order.
-
    # Stripping off `nob_` Prefixes
 
       Since Pure C does not have any namespaces we prefix each name of the API with the `nob_` to avoid any
@@ -426,6 +329,20 @@ typedef struct {
     size_t count;
     size_t capacity;
 } Nob_Cmd;
+
+typedef struct {
+    union {
+        bool no_reset;
+        bool keep;
+    };
+    Nob_Procs *async;
+    Nob_Fd *stdin;
+    Nob_Fd *stdout;
+    Nob_Fd *stderr;
+} Nob_Cmd_Opt;
+
+NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt);
+#define nob_cmd_run(cmd, ...) nob_cmd_run_opt(cmd, (Nob_Cmd_Opt) { __VA_ARGS__ })
 
 // Example:
 // ```c
@@ -966,6 +883,41 @@ static void nob__win32_cmd_quote(Nob_Cmd cmd, Nob_String_Builder *quoted)
     }
 }
 #endif
+
+NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
+{
+    Nob_Cmd_Redirect redirect = {
+        .fdin  = opt.stdin,
+        .fdout = opt.stdout,
+        .fderr = opt.stderr,
+    };
+    Nob_Proc proc = nob_cmd_run_async_redirect(*cmd, redirect);
+
+    if (!opt.no_reset) {
+        cmd->count = 0;
+        if (redirect.fdin) {
+            nob_fd_close(*redirect.fdin);
+            *redirect.fdin = NOB_INVALID_FD;
+        }
+        if (redirect.fdout) {
+            nob_fd_close(*redirect.fdout);
+            *redirect.fdout = NOB_INVALID_FD;
+        }
+        if (redirect.fderr) {
+            nob_fd_close(*redirect.fderr);
+            *redirect.fderr = NOB_INVALID_FD;
+        }
+    }
+
+    if (opt.async) {
+        if (proc == NOB_INVALID_PROC) return false;
+        nob_da_append(opt.async, proc);
+    } else {
+        if (!nob_proc_wait(proc)) return false;
+    }
+
+    return true;
+}
 
 NOBDEF Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
 {
@@ -2033,6 +1985,9 @@ NOBDEF int closedir(DIR *dirp)
         #define procs_append_with_flush nob_procs_append_with_flush
         #define Cmd Nob_Cmd
         #define Cmd_Redirect Nob_Cmd_Redirect
+        #define Cmd_Opt Nob_Cmd_Opt
+        #define cmd_run_opt nob_cmd_run_opt
+        #define cmd_run nob_cmd_run
         #define cmd_render nob_cmd_render
         #define cmd_append nob_cmd_append
         #define cmd_extend nob_cmd_extend
@@ -2079,6 +2034,7 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.23.0 (2025-08-14) Add nob_cmd_run(), nob_cmd_run_opt(), Nob_Cmd_Opt (by @rexim)
      1.22.0 (2025-08-12) Add NOBDEF macro to the beginning of function declarations (by @minefreak19)
                          Add more flags to MSVC nob_cc_flags() (by @PieVieRo)
      1.21.0 (2025-08-11) Add NOB_NO_MINIRENT guard for "minirent.h" (by @fietec)
