@@ -8,6 +8,8 @@
 #define BUILD_FOLDER "build/"
 #define TESTS_FOLDER "tests/"
 
+// TODO: we should test on C++ compilers too
+
 #if defined(_MSC_VER)
 #  define nob_cc_flags(cmd) cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
 #elif defined(__APPLE__) || defined(__MACH__)

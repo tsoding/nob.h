@@ -3,6 +3,7 @@
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 #define NOB_EXPERIMENTAL_DELETE_OLD
+#define NOB_WARN_DEPRECATED
 #include "../nob.h"
 
 const char *examples[] = {
@@ -25,10 +26,10 @@ int main(int argc, char **argv)
                 nob_cc(&cmd);
                 nob_cc_output(&cmd, "./nob");
                 nob_cc_inputs(&cmd, "nob.c");
-                if (!cmd_run_sync_and_reset(&cmd)) return 1;
+                if (!cmd_run(&cmd)) return 1;
 
                 cmd_append(&cmd, "./nob");
-                if (!cmd_run_sync_and_reset(&cmd)) return 1;
+                if (!cmd_run(&cmd)) return 1;
             if (!set_current_dir("..")) return 1;
         temp_rewind(mark);
     }

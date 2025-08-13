@@ -9,6 +9,9 @@ int main(void)
     Cmd cmd = {0};
     Fd fdout = INVALID_FD;
     String_Builder sb = {0};
+    String_View actual_message = {0};
+    const char *message = NULL;
+    const char *message_file_path = NULL;
 
     const char *echo_src =
         "#include <assert.h>\n"
@@ -31,25 +34,20 @@ int main(void)
     nob_cc_flags(&cmd);
     nob_cc_output(&cmd, "./echo");
     nob_cc_inputs(&cmd, "./echo.c");
-    if (!cmd_run_sync_and_reset(&cmd)) return_defer(1);
+    if (!cmd_run(&cmd)) return_defer(1);
 
-    const char *message = "Hello, World";
-    const char *message_file_path = "./echo_message.txt";
-
-    fdout = fd_open_for_write(message_file_path);
-    if (fdout == INVALID_FD) return_defer(1);
+    message = "Hello, World";
+    message_file_path = "./echo_message.txt";
 
     cmd_append(&cmd, "./echo", message);
-    Proc p = cmd_run_async_redirect_and_reset(&cmd, (Cmd_Redirect) {.fdout = &fdout});
-    if (p == INVALID_PROC) return_defer(1);
-    if (!proc_wait(p)) return_defer(1);
+    if (!cmd_run(&cmd, .stdout_path = message_file_path)) return_defer(1);
 
     if (!read_entire_file(message_file_path, &sb)) return_defer(1);
-    String_View actual_message = sb_to_sv(sb);
+    actual_message = sb_to_sv(sb);
     if (!sv_eq(sv_trim(actual_message), sv_from_cstr(message))) {
         nob_log(ERROR, "Unexpected message");
         nob_log(ERROR, "Expected: %s", message);
-        nob_log(ERROR, "Actual:   "SV_Fmt, SV_Arg(actual_message));
+        nob_log(ERROR, "Actual:   " SV_Fmt, SV_Arg(actual_message));
         return_defer(1);
     }
 

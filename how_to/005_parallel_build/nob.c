@@ -1,5 +1,6 @@
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
+#define NOB_WARN_DEPRECATED
 #include "nob.h"
 
 #define BUILD_FOLDER "build/"
@@ -14,29 +15,28 @@ int main(int argc, char **argv)
 
     if (!mkdir_if_not_exists(BUILD_FOLDER)) return 1;
 
-    // Spawn three async processes collecting them to procs dynamic array
-    nob_cc(&cmd);
-    nob_cc_flags(&cmd);
-    nob_cc_output(&cmd, BUILD_FOLDER"foo");
-    nob_cc_inputs(&cmd, SRC_FOLDER"foo.c");
-    da_append(&procs, cmd_run_async_and_reset(&cmd));
+    static struct {
+        const char *bin_path;
+        const char *src_path;
+    } targets[] = {
+        { .bin_path = BUILD_FOLDER"foo", .src_path = SRC_FOLDER"foo.c" },
+        { .bin_path = BUILD_FOLDER"bar", .src_path = SRC_FOLDER"bar.c" },
+        { .bin_path = BUILD_FOLDER"baz", .src_path = SRC_FOLDER"baz.c" },
+    };
 
-    nob_cc(&cmd);
-    nob_cc_flags(&cmd);
-    nob_cc_output(&cmd, BUILD_FOLDER"bar");
-    nob_cc_inputs(&cmd, SRC_FOLDER"bar.c");
-    da_append(&procs, cmd_run_async_and_reset(&cmd));
+    // Spawn one async process per target collecting them to procs dynamic array
+    for (size_t i = 0; i < ARRAY_LEN(targets); ++i) {
+        nob_cc(&cmd);
+        nob_cc_flags(&cmd);
+        nob_cc_output(&cmd, targets[i].bin_path);
+        nob_cc_inputs(&cmd, targets[i].src_path);
+        if (!cmd_run(&cmd, .async = &procs)) return 1;
+    }
 
-    nob_cc(&cmd);
-    nob_cc_flags(&cmd);
-    nob_cc_output(&cmd, BUILD_FOLDER"baz");
-    nob_cc_inputs(&cmd, SRC_FOLDER"baz.c");
-    da_append(&procs, cmd_run_async_and_reset(&cmd));
+    // Wait on all the async processes to finish and reset procs dynamic array to 0
+    if (!procs_flush(&procs)) return 1;
 
-    // Wait on all the async processes to finish
-    if (!procs_wait_and_reset(&procs)) return 1;
-
-    // TODO: add some examples with nob_procs_append_with_flush()
+    // TODO: add some examples with .max_procs
 
     return 0;
 }
