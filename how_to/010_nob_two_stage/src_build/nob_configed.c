@@ -1,5 +1,6 @@
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
+#define NOB_WARN_DEPRECATED
 #include "nob.h"
 #include "config.h"
 #include "folders.h"
@@ -20,6 +21,6 @@ int main(void)
     nob_cmd_append(&cmd, "-I"BUILD_FOLDER, "-I.");
     nob_cc_output(&cmd, output_path);
     nob_cc_inputs(&cmd, input_path);
-    if (!cmd_run_sync_and_reset(&cmd)) return 1;
+    if (!cmd_run(&cmd)) return 1;
     return 0;
 }
