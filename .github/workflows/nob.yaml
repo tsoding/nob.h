@@ -4,22 +4,25 @@ on: [push, pull_request]
 jobs:
   macos:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        cc: [clang, clang++]
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
       - name: Run tests
         run: |
-          clang -o nob nob.c
+          ${{ matrix.cc }} -o nob nob.c
           ./nob
       - name: Build how_to-s
         run: |
           cd how_to/
-          clang -o nob nob.c
+          ${{ matrix.cc }} -o nob nob.c
           ./nob
   ubuntu:
     strategy:
       matrix:
-        cc: [gcc, clang]
+        cc: [gcc, clang, g++, clang++]
     runs-on: ubuntu-latest
     steps:
       - name: Clone GIT repo
@@ -35,6 +38,9 @@ jobs:
           ./nob
   windows:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        standard: [c++14, c11]
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
@@ -46,12 +52,12 @@ jobs:
         # https://learn.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-170#create-your-own-command-prompt-shortcut
         run: |
           call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
-          cl.exe ${{ matrix.hotreload }} /Fe:nob nob.c
+          cl.exe /std:${{ matrix.standard }} /Fe:nob nob.c
           nob.exe
       - name: Build how_to-s
         shell: cmd
         run: |
           call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
           cd how_to/
-          cl.exe ${{ matrix.hotreload }} /Fe:nob nob.c
+          cl.exe /std:${{ matrix.standard }} /Fe:nob nob.c
           nob.exe
