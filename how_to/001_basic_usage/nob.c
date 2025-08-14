@@ -53,10 +53,10 @@ int main(int argc, char **argv)
     nob_cmd_append(&cmd, "cl", "-I.", "-o", BUILD_FOLDER"hello", SRC_FOLDER"hello.c");
 #endif // _MSC_VER
 
-    // Let's execute the command synchronously, that is it will be blocked until it's finished.
-    if (!nob_cmd_run_sync(cmd)) return 1;
-    // Reset the cmd array so you can use it again for another command
-    cmd.count = 0;
+    // Let's execute the command.
+    if (!nob_cmd_run(&cmd)) return 1;
+    // nob_cmd_run() automatically resets the cmd array, so you can nob_cmd_append() more strings
+    // into it.
 
     // nob.h ships with a bunch of nob_cc_* macros that try abstract away the specific compiler.
     // They are verify basic and not particularly flexible, but you can redefine them if you need to
@@ -65,9 +65,7 @@ int main(int argc, char **argv)
     nob_cc_flags(&cmd);
     nob_cc_output(&cmd, BUILD_FOLDER "foo");
     nob_cc_inputs(&cmd, SRC_FOLDER "foo.c");
-
-    // nob_cmd_run_sync_and_reset() resets the cmd for you automatically
-    if (!nob_cmd_run_sync_and_reset(&cmd)) return 1;
+    if (!nob_cmd_run(&cmd)) return 1;
 
     return 0;
 }

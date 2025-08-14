@@ -25,10 +25,10 @@ int main(int argc, char **argv)
                 nob_cc(&cmd);
                 nob_cc_output(&cmd, "./nob");
                 nob_cc_inputs(&cmd, "nob.c");
-                if (!cmd_run_sync_and_reset(&cmd)) return 1;
+                if (!cmd_run(&cmd)) return 1;
 
                 cmd_append(&cmd, "./nob");
-                if (!cmd_run_sync_and_reset(&cmd)) return 1;
+                if (!cmd_run(&cmd)) return 1;
             if (!set_current_dir("..")) return 1;
         temp_rewind(mark);
     }
