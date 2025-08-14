@@ -6,10 +6,11 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        - compiler: clang
-          standard: c99
-        - compiler: clang++
-          standard: c++20
+        compiler:
+          - exec: clang
+            std: c99
+          - exec: clang++
+            std: c++20
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
@@ -25,14 +26,15 @@ jobs:
   ubuntu:
     strategy:
       matrix:
-        - compiler: clang
-          standard: c99
-        - compiler: clang++
-          standard: c++20
-        - compiler: gcc
-          standard: c99
-        - compiler: g++
-          standard: c++20
+        compiler:
+          - exec: clang
+            std: c99
+          - exec: clang++
+            std: c++20
+          - exec: gcc
+            std: c99
+          - exec: g++
+            std: c++20
     runs-on: ubuntu-latest
     steps:
       - name: Clone GIT repo
