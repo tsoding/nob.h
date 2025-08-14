@@ -331,7 +331,7 @@ typedef struct {
 } Nob_Cmd;
 
 typedef struct Nob_Cmd_Opt Nob_Cmd_Opt;
-typedef void (*Nob_Cmd_Run_Completion_Cb)(Nob_Cmd *cmd, Nob_Cmd_Opt *opt);
+typedef void (*Nob_Cmd_Run_Completion_Cb)(Nob_Proc *proc, Nob_Cmd *cmd, Nob_Cmd_Opt *opt);
 
 struct Nob_Cmd_Opt {
     Nob_Cmd_Run_Completion_Cb completion_cb; // Ran after the task is ran
@@ -339,13 +339,14 @@ struct Nob_Cmd_Opt {
     Nob_Fd *stdin;              // Redirect stdin
     Nob_Fd *stdout;             // Redirect stdout
     Nob_Fd *stderr;             // Redirect stderr
+    void *user_data;
 };
 
 // Do not reset the cmd array and do not close the stdin, stdout, stderr files
-NOBDEF void nob_no_reset(Nob_Cmd *cmd, Nob_Cmd_Opt *opt);
+NOBDEF void nob_no_reset(Nob_Proc *proc, Nob_Cmd *cmd, Nob_Cmd_Opt *opt);
 
 // Do reset the cmd array and do close the stdin, stdout, stderr files
-NOBDEF void nob_reset(Nob_Cmd *cmd, Nob_Cmd_Opt *opt);
+NOBDEF void nob_reset(Nob_Proc *proc, Nob_Cmd *cmd, Nob_Cmd_Opt *opt);
 
 NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt);
 #define nob_cmd_run(cmd, ...) nob_cmd_run_opt(cmd, (Nob_Cmd_Opt) { __VA_ARGS__ })
@@ -952,14 +953,16 @@ static void nob__win32_cmd_quote(Nob_Cmd cmd, Nob_String_Builder *quoted)
 }
 #endif
 
-NOBDEF void nob_no_reset(Nob_Cmd *cmd, Nob_Cmd_Opt *opt)
+NOBDEF void nob_no_reset(Nob_Proc *proc, Nob_Cmd *cmd, Nob_Cmd_Opt *opt)
 {
+    (void)proc;
     (void)cmd;
     (void)opt;
 }
 
-NOBDEF void nob_reset(Nob_Cmd *cmd, Nob_Cmd_Opt *opt)
+NOBDEF void nob_reset(Nob_Proc *proc, Nob_Cmd *cmd, Nob_Cmd_Opt *opt)
 {
+    (void)proc;
     cmd->count = 0;
     if (opt->stdin) {
         nob_fd_close(*opt->stdin);
@@ -986,7 +989,7 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
     Nob_Proc proc = nob_cmd_run_async_redirect(*cmd, redirect);
     Nob_Cmd_Run_Completion_Cb completion_cb =
         opt.completion_cb != NULL ? opt.completion_cb : nob_reset;
-    completion_cb(cmd, &opt);
+    completion_cb(&proc, cmd, &opt);
 
     if (opt.async) {
         if (proc == NOB_INVALID_PROC) return false;
