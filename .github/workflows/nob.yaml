@@ -6,35 +6,45 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        cc: [clang, clang++]
+        - compiler: clang
+          standard: c99
+        - compiler: clang++
+          standard: c++20
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
       - name: Run tests
         run: |
-          ${{ matrix.cc }} -o nob nob.c
+          ${{ matrix.compiler }} -o nob nob.c
           ./nob
       - name: Build how_to-s
         run: |
           cd how_to/
-          ${{ matrix.cc }} -o nob nob.c
+          ${{ matrix.compiler }} -o nob nob.c
           ./nob
   ubuntu:
     strategy:
       matrix:
-        cc: [gcc, clang, g++, clang++]
+        - compiler: clang
+          standard: c99
+        - compiler: clang++
+          standard: c++20
+        - compiler: gcc
+          standard: c99
+        - compiler: g++
+          standard: c++20
     runs-on: ubuntu-latest
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
       - name: Build tests
         run: |
-          ${{ matrix.cc }} -o nob nob.c
+          ${{ matrix.compiler }} -o nob nob.c
           ./nob
       - name: Build how_to-s
         run: |
           cd how_to/
-          ${{ matrix.cc }} -o nob nob.c
+          ${{ matrix.compiler }} -o nob nob.c
           ./nob
   windows:
     runs-on: windows-latest
