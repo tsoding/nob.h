@@ -330,13 +330,22 @@ typedef struct {
     size_t capacity;
 } Nob_Cmd;
 
-typedef struct {
-    bool no_reset;              // Do not reset the cmd array and do not close the stdin, stdout, stderr files
+typedef struct Nob_Cmd_Opt Nob_Cmd_Opt;
+typedef void (*Nob_Cmd_Run_Completion_Cb)(Nob_Cmd *cmd, Nob_Cmd_Opt *opt);
+
+struct Nob_Cmd_Opt {
+    Nob_Cmd_Run_Completion_Cb completion_cb; // Ran after the task is ran
     Nob_Procs *async;           // Run the command asynchronously appending its Nob_Proc to the provided Nob_Procs array
     Nob_Fd *stdin;              // Redirect stdin
     Nob_Fd *stdout;             // Redirect stdout
     Nob_Fd *stderr;             // Redirect stderr
-} Nob_Cmd_Opt;
+};
+
+// Do not reset the cmd array and do not close the stdin, stdout, stderr files
+NOBDEF void nob_no_reset(Nob_Cmd *cmd, Nob_Cmd_Opt *opt);
+
+// Do reset the cmd array and do close the stdin, stdout, stderr files
+NOBDEF void nob_reset(Nob_Cmd *cmd, Nob_Cmd_Opt *opt);
 
 NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt);
 #define nob_cmd_run(cmd, ...) nob_cmd_run_opt(cmd, (Nob_Cmd_Opt) { __VA_ARGS__ })
@@ -394,7 +403,7 @@ NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
 #define nob_cmd_free(cmd) NOB_FREE(cmd.items)
 
 // Run command asynchronously
-// DEPRECATED: Use `nob_cmd_run(&cmd, .async = &procs, .no_reset = true)` instead.
+// DEPRECATED: Use `nob_cmd_run(&cmd, .async = &procs, .completion_cb = nob_no_reset)` instead.
 #define nob_cmd_run_async(cmd) nob_cmd_run_async_redirect(cmd, (Nob_Cmd_Redirect) {0})
 
 // nob_cmd_run_async_and_reset() is just like nob_cmd_run_async() except it also resets cmd.count to 0
@@ -406,11 +415,11 @@ NOBDEF Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd);
 // DEPRECATED: Use
 // ```c
 // nob_cmd_run(&cmd,
-//     .async    = &procs,
-//     .stdin    = &fdin,
-//     .stdout   = &fdout,
-//     .stderr   = &fderr,
-//     .no_reset = true);
+//     .async         = &procs,
+//     .stdin         = &fdin,
+//     .stdout        = &fdout,
+//     .stderr        = &fderr,
+//     .completion_cb = nob_no_reset);
 // ```
 // instead.
 NOBDEF Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
@@ -428,7 +437,7 @@ NOBDEF Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirec
 NOBDEF Nob_Proc nob_cmd_run_async_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
 
 // Run command synchronously
-// DEPRECATED: Use `nob_cmd_run(&cmd, .no_reset = true)` instead.
+// DEPRECATED: Use `nob_cmd_run(&cmd, .completion_cb = nob_no_reset)` instead.
 NOBDEF bool nob_cmd_run_sync(Nob_Cmd cmd);
 
 // NOTE: nob_cmd_run_sync_and_reset() is just like nob_cmd_run_sync() except it also resets cmd.count to 0
@@ -440,10 +449,10 @@ NOBDEF bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd);
 // DEPRECATED: Use
 // ```c
 // nob_cmd_run(&cmd,
-//     .stdin    = &fdin,
-//     .stdout   = &fdout,
-//     .stderr   = &fderr,
-//     .no_reset = true);
+//     .stdin         = &fdin,
+//     .stdout        = &fdout,
+//     .stderr        = &fderr,
+//     .completion_cb = nob_no_reset);
 // ```
 // instead.
 NOBDEF bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
@@ -943,6 +952,30 @@ static void nob__win32_cmd_quote(Nob_Cmd cmd, Nob_String_Builder *quoted)
 }
 #endif
 
+NOBDEF void nob_no_reset(Nob_Cmd *cmd, Nob_Cmd_Opt *opt)
+{
+    (void)cmd;
+    (void)opt;
+}
+
+NOBDEF void nob_reset(Nob_Cmd *cmd, Nob_Cmd_Opt *opt)
+{
+    cmd->count = 0;
+    if (opt->stdin) {
+        nob_fd_close(*opt->stdin);
+        *opt->stdin = NOB_INVALID_FD;
+    }
+    if (opt->stdout) {
+        nob_fd_close(*opt->stdout);
+        *opt->stdout = NOB_INVALID_FD;
+    }
+    if (opt->stderr) {
+        nob_fd_close(*opt->stderr);
+        *opt->stderr = NOB_INVALID_FD;
+    }
+}
+
+
 NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
 {
     Nob_Cmd_Redirect redirect = {
@@ -951,22 +984,9 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         .fderr = opt.stderr,
     };
     Nob_Proc proc = nob_cmd_run_async_redirect(*cmd, redirect);
-
-    if (!opt.no_reset) {
-        cmd->count = 0;
-        if (redirect.fdin) {
-            nob_fd_close(*redirect.fdin);
-            *redirect.fdin = NOB_INVALID_FD;
-        }
-        if (redirect.fdout) {
-            nob_fd_close(*redirect.fdout);
-            *redirect.fdout = NOB_INVALID_FD;
-        }
-        if (redirect.fderr) {
-            nob_fd_close(*redirect.fderr);
-            *redirect.fderr = NOB_INVALID_FD;
-        }
-    }
+    Nob_Cmd_Run_Completion_Cb completion_cb =
+        opt.completion_cb != NULL ? opt.completion_cb : nob_reset;
+    completion_cb(cmd, &opt);
 
     if (opt.async) {
         if (proc == NOB_INVALID_PROC) return false;
@@ -2045,6 +2065,8 @@ NOBDEF int closedir(DIR *dirp)
         #define Cmd Nob_Cmd
         #define Cmd_Redirect Nob_Cmd_Redirect
         #define Cmd_Opt Nob_Cmd_Opt
+        #define no_reset nob_no_reset
+        #define reset nob_reset
         #define cmd_run_opt nob_cmd_run_opt
         #define cmd_run nob_cmd_run
         #define cmd_render nob_cmd_render
