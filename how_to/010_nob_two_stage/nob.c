@@ -33,7 +33,7 @@ int main(int argc, char **argv)
     const char *input_path = SRC_BUILD_FOLDER"nob_configed.c";
     nob_cc(&cmd);
     nob_cc_flags(&cmd);
-    nob_cmd_append(&cmd, "-I.", "-I"BUILD_FOLDER, "-I"SRC_BUILD_FOLDER); // -I is usually the same across all compilers
+    nob_cmd_append(&cmd, "-I.", "-I" BUILD_FOLDER, "-I" SRC_BUILD_FOLDER); // -I is usually the same across all compilers
     nob_cc_output(&cmd, output_path);
     nob_cc_inputs(&cmd, input_path);
     if (!cmd_run_sync_and_reset(&cmd)) return 1;
