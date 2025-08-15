@@ -746,7 +746,7 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 #ifdef NOB_IMPLEMENTATION
 
 /*NOTE: there is no order( at least not documented, that I've seen) 
-		where to new code about related to nob_cc. */
+		where to put new code about nob_cc_* */
 
 char* nob_cc_join_inputs_(char* inputs[]) {
     size_t total_len = 0;
