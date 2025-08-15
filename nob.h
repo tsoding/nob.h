@@ -532,11 +532,13 @@ typedef struct Nob_CC {
 */ 
   char       **argv	 ;
 } Nob_CC;
-char* nob_cc_join_inputs_(char* inputs[]);
+
+NOBDEF char* nob_cc_join_inputs_(char* inputs[]);
 //NOTE: helps adding spaces,
 //      for Nob_CC.inpaths when CC_INPUTS is set on nob_cc_setup_
 #define NOB_CC_JOIN_INPUTS(...) (nob_cc_join_inputs_((char*[]){__VA_ARGS__, NULL}))
-void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc);
+
+NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc);
 #define nob_cc_setup(cmd, ...) nob_cc_setup_((cmd), (Nob_CC){__VA_ARGS__})
 
 
@@ -748,7 +750,7 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 /*NOTE: there is no order( at least not documented, that I've seen) 
 		where to put new code about nob_cc_* */
 
-char* nob_cc_join_inputs_(char* inputs[]) {
+NOBDEF char* nob_cc_join_inputs_(char* inputs[]) {
     size_t total_len = 0;
     int count = 0;
     for (int i = 0; inputs[i] != NULL; i++) {
@@ -769,7 +771,8 @@ char* nob_cc_join_inputs_(char* inputs[]) {
     *ptr = '\0';
     return result;
 }
-void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc) {
+
+NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc) {
   if(!cc.inpaths&&!cc.argv){
      cc.inpaths=NOB_REALLOC((char*)cc.inpaths,256);//leak?
 	 snprintf((char*)cc.inpaths,256,"%s.c",cc.argv[0]);
