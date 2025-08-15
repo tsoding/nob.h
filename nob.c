@@ -7,6 +7,7 @@
 #undef rename                   // Testing for backward compatibility after v1.20.6
 
 const char *test_names[] = {
+    "automatic_prefix",
     "minimal_log_level",
     "nob_sv_end_with",
     "set_get_current_dir",
