@@ -162,6 +162,44 @@
       `#include <nob.h>` since they are macros anyway.
 */
 
+#ifndef NOB_STUFF_STRIP_PREFIX_GUARD_
+#define NOB_STUFF_STRIP_PREFIX_GUARD_
+// MORE STRIPPING
+//
+// with this, it is possible to prefix a symbol without manually adding it to the prefix list.
+//
+// Added to start of file as this stripping does not conflict
+// with the current stripping technique.
+//  
+// you can declare a symbol with automatic stripping with nob(symbol)
+//
+// you can reference symbols agnostically by going nob(symbol)
+//
+// one downside if this is that it cannot be done on macro name
+
+    #ifndef NOB_STRIP_PREFIX
+    // #define NOB_STRIP_PREFIX   // NOT DOING AS IT IS USED LATER ON
+    
+        #define nob_PREF
+        #define Nob_PREF
+        #define NOB_PREF
+
+    #else
+
+        #define nob_PREF nob_
+        #define Nob_PREF Nob_
+        #define NOB_PREF NOB_
+
+    #endif // NOB_STRIP_PREFIX
+
+    #define nob(fname) nob__concat_(nob_PREF, fname)
+    #define Nob(fname) nob__concat_(Nob_PREF, fname)
+    #define NOB(fname) nob__concat_(NOB_PREF, fname)
+    #define nob__concat_(x, a) nob__concat_impl_(x, a)
+    #define nob__concat_impl_(x, b) x##b    
+
+#endif // NOB_STUFF_STRIP_PREFIX_GUARD_
+
 #ifndef NOB_H_
 #define NOB_H_
 #ifdef _WIN32
@@ -254,7 +292,7 @@ typedef enum {
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 extern Nob_Log_Level nob_minimal_log_level;
 
-NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
+NOBDEF void nob_log (Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
 
 // It is an equivalent of shift command from bash. It basically pops an element from
 // the beginning of a sized array.
@@ -1973,6 +2011,7 @@ NOBDEF int closedir(DIR *dirp)
     // of the file because NOB_IMPLEMENTATION needs the forward declarations from there. So the
     // solution is to split the header into two parts where the name stripping part is at the
     // end of the file after the NOB_IMPLEMENTATION.
+    
     #ifdef NOB_STRIP_PREFIX
         #define TODO NOB_TODO
         #define UNREACHABLE NOB_UNREACHABLE
