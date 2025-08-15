@@ -1,4 +1,4 @@
-/* nob - v1.23.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.24.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -508,6 +508,41 @@ NOBDEF bool nob_set_current_dir(const char *path);
 
 // TODO: we should probably document somewhere all the compiler we support
 
+typedef struct Nob_CC {
+  /*TODO: add CC_REBUILD_URSELF
+  		  add CC_CUSTOM(examples: .std,.warnings,.ldflags) 
+  */
+  enum Nob_CC_Flags {
+  CC_NONE     = 0,
+  CC_FLAGS,
+  CC_COMPILER,
+  CC_OUTPUT,
+  CC_INPUTS,
+  CC_ALL,
+  }Nob_CC_Flags;
+  int        flags   ;
+  const char *cc	 ;//Custom variable for CC_COMPILER
+  const char *outpath;//Custom Variable for CC_OUTPUT
+  char       *inpaths;
+  int        argc	 ;
+ /* NOTE:When inpaths and outpath are missing,
+         or '-' symbol is set   on inpaths or outpath;
+		 it will use cc.argv[0] as output  or input.
+		 see nob_cc_setup_ func for more info.
+*/ 
+  char       **argv	 ;
+} Nob_CC;
+char* nob_cc_join_inputs_(char* inputs[]);
+//NOTE: helps adding spaces,
+//      for Nob_CC.inpaths when CC_INPUTS is set on nob_cc_setup_
+#define NOB_CC_JOIN_INPUTS(...) (nob_cc_join_inputs_((char*[]){__VA_ARGS__, NULL}))
+void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc);
+#define nob_cc_setup(cmd, ...) nob_cc_setup_((cmd), (Nob_CC){__VA_ARGS__})
+
+
+
+
+
 // The nob_cc_* macros try to abstract away the specific compiler.
 // They are verify basic and not particularly flexible, but you can redefine them if you need to
 // or not use them at all and create your own abstraction on top of Nob_Cmd.
@@ -709,6 +744,97 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 #endif // NOB_H_
 
 #ifdef NOB_IMPLEMENTATION
+
+/*NOTE: there is no order( at least not documented, that I've seen) 
+		where to new code about related to nob_cc. */
+
+char* nob_cc_join_inputs_(char* inputs[]) {
+    size_t total_len = 0;
+    int count = 0;
+    for (int i = 0; inputs[i] != NULL; i++) {
+        total_len += strlen(inputs[i]);
+        count++;
+    }
+    total_len += (count > 0) ? count - 1 : 0;
+    char* result = NULL;
+    result = NOB_REALLOC(result,total_len + 1);
+    if (!result) return NULL;
+    char* ptr = result;
+    for (int i = 0; inputs[i] != NULL; i++) {
+        if (i > 0) *ptr++ = ' ';
+        size_t len = strlen(inputs[i]);
+        strncpy(ptr, inputs[i], len);
+        ptr += len;
+    }
+    *ptr = '\0';
+    return result;
+}
+void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc) {
+  if(!cc.inpaths&&!cc.argv){
+     cc.inpaths=NOB_REALLOC((char*)cc.inpaths,256);//leak?
+	 snprintf((char*)cc.inpaths,256,"%s.c",cc.argv[0]);
+  }
+  if ((cc.flags & CC_COMPILER) || (cc.flags & CC_ALL)) {
+  	if(!cc.cc){
+	#if _WIN32
+	#if defined(__GNUC__)
+    nob_cmd_append(cmd, "cc");
+	#elif defined(__clang__)
+    nob_cmd_append(cmd, "clang");
+	#elif defined(_MSC_VER)
+    nob_cmd_append(cmd, "cl.exe");
+	#endif
+	#else
+    nob_cmd_append(cmd, "cc");
+	#endif
+	}else{
+    nob_cmd_append(cmd,cc.cc);
+	}
+  }
+
+  if ((cc.flags & CC_FLAGS) || (cc.flags & CC_ALL)) {
+	#if defined(_MSC_VER) && !defined(__clang__)
+    nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS");
+	#else
+    nob_cmd_append(cmd, "-Wall", "-Wextra");
+	#endif
+  }
+  if ((cc.flags & CC_OUTPUT) || (cc.flags & CC_ALL)) {
+    if (cc.outpath) {
+	if(cc.outpath[0]=='-'&&cc.argv){
+		cc.outpath=cc.argv[0];
+	 }else{
+		nob_log(NOB_WARNING,"no cc.argv given! for '-' symbol on CC_OUTPUT");
+	}
+    #if defined(_MSC_VER) && !defined(__clang__)
+       nob_cmd_append(cmd, nob_temp_sprintf("/Fe:%s", (cc.outpath)));
+    #else
+       nob_cmd_append(cmd, "-o", (cc.outpath));
+    #endif
+    }
+  }
+  if ((cc.flags & CC_INPUTS) || (cc.flags & CC_ALL)) {
+  		if(cc.inpaths){
+		  if(cc.inpaths[0]=='-'&&cc.argv){
+		    ++cc.inpaths;
+			char *buffer=NOB_REALLOC(NULL,256);//leak?
+			snprintf(buffer,256,"%s.c",cc.argv[0]);
+            nob_cmd_append(cmd,buffer);
+		  }else{
+		    nob_log(NOB_WARNING,"no cc.argv given! for '-' symbol on CC_INPUTS");
+		  }
+		  char *start = cc.inpaths;
+		  while (isspace((unsigned char)*start)) start++;
+		  char *end = cc.inpaths + strlen(cc.inpaths) - 1;
+		  while (end > start && isspace((unsigned char)*end)) end--;
+		  end[1] = '\0';
+		  if (start != cc.inpaths) {
+		  	memmove(cc.inpaths, start, end - start + 2);
+		  }
+          nob_cmd_append(cmd,cc.inpaths);
+		}
+    }
+}
 
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
@@ -2101,13 +2227,15 @@ NOBDEF int closedir(DIR *dirp)
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
         #define sb_to_sv nob_sb_to_sv
+		#define cc_setup nob_cc_setup
+		#define cc_join_inputs nob_cc_join_inputs
         #define win32_error_message nob_win32_error_message
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
 
 /*
    Revision history:
-
+     1.24.0 (2025-08-15) Add nob_cc_setup(),nob_cc_join_inputs() (by @yuI4140)
      1.23.0 (2025-08-15) Add nob_cmd_run(), nob_cmd_run_opt(), nob_cmd_start_process(), Nob_Cmd_Opt and deprecate all other nob_cmd_run_* functions (by @rexim)
                          Add NOB_DECLTYPE_CAST() for C++-compatible casting of allocation results (by @rexim)
                          Add NOB_DEPRECATED() (by @yuI4140)
