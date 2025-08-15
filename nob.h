@@ -1,3 +1,6 @@
+// TEMP
+#define NOB_IMPLEMENTATION
+
 /* nob - v1.22.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
@@ -62,11 +65,11 @@
 
       nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", "main", "main.c");
       if (!nob_cmd_run_sync(cmd)) return 1;
-      cmd.count = 0;
+      nob_cmd_reset(&cmd);
 
       nob_cmd_append(&cmd, "./main", "foo", "bar", "baz");
       if (!nob_cmd_run_sync(cmd)) return 1;
-      cmd.count = 0;
+      nob_cmd_reset(&cmd);
       ```
 
       Which is a bit error prone. To make it a bit easier we have `nob_cmd_run_sync_and_reset()` which
@@ -114,7 +117,7 @@
       nob_fd_close(fderr);
 
       // Reseting the command
-      cmd.count = 0;
+      nob_cmd_reset(&cmd);
       ```
 
       And of course if you find closing the files and reseting the command annoying we have
@@ -425,6 +428,11 @@ typedef struct {
     const char **items;
     size_t count;
     size_t capacity;
+	struct {
+		char** items;
+		size_t count;
+		size_t capacity;
+	} item_buffers;
 } Nob_Cmd;
 
 // Example:
@@ -450,6 +458,12 @@ typedef struct {
 // string builder is not NULL-terminated by default. Use nob_sb_append_null if you plan to
 // use it as a C string.
 NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
+// Reset a command to size 0 and free buffer memory if it exists
+NOBDEF void nob_cmd_reset(Nob_Cmd* cmd);
+// Builds a command using a format string and va arguments. Splits the command by spaces.
+// If a command pointer is supplied, the parsed command is appended to the end of the input 
+// command; this value can be left NULL to create a new command.
+NOBDEF Nob_Cmd nob_cmdf(Nob_Cmd* cmd, const char* fmt, ...);
 
 // TODO: implement C++ support for nob.h
 #define nob_cmd_append(cmd, ...) \
@@ -544,14 +558,36 @@ NOBDEF bool nob_set_current_dir(const char *path);
 #  endif
 #endif // nob_cc
 
+#ifndef nob_cc_str
+#  if _WIN32
+#    if defined(__GNUC__)
+#       define nob_cc_str() "cc"
+#    elif defined(__clang__)
+#       define nob_cc_str() "clang"
+#    elif defined(_MSC_VER)
+#       define nob_cc_str() "cl.exe"
+#    endif
+#  else
+#    define nob_cc_str() "cc"
+#  endif
+#endif // nob_cc_str
+
 #ifndef nob_cc_flags
 #  if defined(_MSC_VER) && !defined(__clang__)
 #    define nob_cc_flags(cmd) nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS")
 #  else
 #    define nob_cc_flags(cmd) nob_cmd_append(cmd, "-Wall", "-Wextra")
 #  endif
-#endif // nob_cc_output
+#endif // nob_cc_flags
 
+#ifndef nob_cc_flags_str
+#  if defined(_MSC_VER) && !defined(__clang__)
+#    define nob_cc_flags_str() "/W4 /nologo /D_CRT_SECURE_NO_WARNINGS"
+#  else
+#    define nob_cc_flags_str() "-Wall -Wextra"
+#  endif
+#endif // nob_cc_flags_str
+	
 #ifndef nob_cc_output
 #  if defined(_MSC_VER) && !defined(__clang__)
 #    define nob_cc_output(cmd, output_path) nob_cmd_append(cmd, nob_temp_sprintf("/Fe:%s", (output_path)))
@@ -560,9 +596,22 @@ NOBDEF bool nob_set_current_dir(const char *path);
 #  endif
 #endif // nob_cc_output
 
+#ifndef nob_cc_output_str
+#  if defined(_MSC_VER) && !defined(__clang__)
+#    define nob_cc_output_str(output_path) nob_temp_sprintf("/Fe:%s", (output_path)))
+#  else
+#    define nob_cc_output_str(output_path) nob_temp_sprintf("-o %s", (output_path))
+#  endif
+#endif // nob_cc_output_str
+
 #ifndef nob_cc_inputs
 #  define nob_cc_inputs(cmd, ...) nob_cmd_append(cmd, __VA_ARGS__)
 #endif // nob_cc_inputs
+
+#ifndef nob_cc_inputs_str
+// DO NOT USE, definition is only here for symmetry
+#  define nob_cc_inputs_str(...) __VA_ARGS__
+#endif // nob_cc_inputs_str
 
 // TODO: add MinGW support for Go Rebuild Urself™ Technology and all the nob_cc_* macros above
 //   Musializer contributors came up with a pretty interesting idea of an optional prefix macro which could be useful for
@@ -924,6 +973,30 @@ NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render)
     }
 }
 
+NOBDEF void nob_cmd_reset(Nob_Cmd* cmd) {
+	cmd->count = 0;
+	for(size_t i = 0; i < cmd->item_buffers.count; i++) {
+		free(cmd->item_buffers.items[i]);
+	}
+}
+
+char nob_cmdf_sizeof_buffer[65536];
+NOBDEF Nob_Cmd nob_cmdf(Nob_Cmd* cmd, const char* fmt, ...) {
+	Nob_Cmd built = cmd ? *cmd : (Nob_Cmd) { 0 };
+	va_list va_args;
+	va_start(va_args, fmt);
+	size_t size = vsnprintf(nob_cmdf_sizeof_buffer, sizeof(nob_cmdf_sizeof_buffer), fmt, va_args);
+	char* memory = NOB_REALLOC(NULL, size);
+	memcpy(memory, nob_cmdf_sizeof_buffer, size);
+	nob_da_append(&built.item_buffers, memory);
+
+	nob_da_append(&built, strtok(memory, " "));
+	char* token;
+	while((token = strtok(NULL, " "))) nob_da_append(&built, token);
+	if(cmd) *cmd = built;
+	return built;
+}
+
 #ifdef _WIN32
 // https://learn.microsoft.com/en-gb/archive/blogs/twistylittlepassagesallalike/everyone-quotes-command-line-arguments-the-wrong-way
 static void nob__win32_cmd_quote(Nob_Cmd cmd, Nob_String_Builder *quoted)
@@ -1060,14 +1133,14 @@ NOBDEF Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirec
 NOBDEF Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd)
 {
     Nob_Proc proc = nob_cmd_run_async(*cmd);
-    cmd->count = 0;
+    nob_cmd_reset(cmd);
     return proc;
 }
 
 NOBDEF Nob_Proc nob_cmd_run_async_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect)
 {
     Nob_Proc proc = nob_cmd_run_async_redirect(*cmd, redirect);
-    cmd->count = 0;
+    nob_cmd_reset(cmd);
     if (redirect.fdin) {
         nob_fd_close(*redirect.fdin);
         *redirect.fdin = NOB_INVALID_FD;
@@ -1261,14 +1334,14 @@ NOBDEF bool nob_cmd_run_sync(Nob_Cmd cmd)
 NOBDEF bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd)
 {
     bool p = nob_cmd_run_sync(*cmd);
-    cmd->count = 0;
+    nob_cmd_reset(cmd);
     return p;
 }
 
 NOBDEF bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect)
 {
     bool p = nob_cmd_run_sync_redirect(*cmd, redirect);
-    cmd->count = 0;
+    nob_cmd_reset(cmd);
     if (redirect.fdin) {
         nob_fd_close(*redirect.fdin);
         *redirect.fdin = NOB_INVALID_FD;
@@ -2034,6 +2107,8 @@ NOBDEF int closedir(DIR *dirp)
         #define Cmd Nob_Cmd
         #define Cmd_Redirect Nob_Cmd_Redirect
         #define cmd_render nob_cmd_render
+		#define cmd_reset nob_cmd_reset
+		#define cmdf nob_cmdf
         #define cmd_append nob_cmd_append
         #define cmd_extend nob_cmd_extend
         #define cmd_free nob_cmd_free
