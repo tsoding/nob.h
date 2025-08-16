@@ -199,6 +199,7 @@
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
+#include <time.h>
 #include <limits.h>
 
 #ifdef _WIN32
@@ -417,8 +418,20 @@ NOBDEF bool nob_proc_wait(Nob_Proc proc);
 NOBDEF bool nob_procs_wait(Nob_Procs procs);
 // Wait until all the processes have finished and empty the procs array
 NOBDEF bool nob_procs_wait_and_reset(Nob_Procs *procs);
+// Wait until any of the processes has finished
+// if (failed) return false
+// else if (finished_proc != NULL) {
+//     if procs is empty, *finished_proc = NULL
+//     otherwise, a pointer to that process will be stored in finished_proc.
+//     NOB_ASSERT(*finished_proc == NULL || (procs.items <= *finished_proc && *finished_proc < procs.items + procs.count))
+// }
+NOBDEF bool nob_procs_wait_any(Nob_Procs procs, Nob_Proc **finished_proc);
+// Wait until any of the processes has finished and nob_da_remove_unordered() the finished process
+NOBDEF bool nob_procs_wait_any_and_remove(Nob_Procs *procs);
 // Append a new process to procs array and if procs.count reaches max_procs_count call nob_procs_wait_and_reset() on it
 NOBDEF bool nob_procs_append_with_flush(Nob_Procs *procs, Nob_Proc proc, size_t max_procs_count);
+// Append a new process to procs array and if procs.count reaches max_procs_count call nob_procs_wait_any_and_remove()
+NOBDEF bool nob_procs_append_with_wait_any(Nob_Procs *procs, Nob_Proc proc, size_t max_procs_count);
 
 // A command - the main workhorse of Nob. Nob is all about building commands and running them
 typedef struct {
@@ -1176,6 +1189,104 @@ NOBDEF bool nob_procs_wait_and_reset(Nob_Procs *procs)
     return success;
 }
 
+NOBDEF bool nob_procs_wait_any(Nob_Procs procs, Nob_Proc **finished_proc)
+{
+    if (procs.count == 0) {
+        *finished_proc = NULL;
+        return true;
+    }
+
+    nob_da_foreach(Nob_Proc, proc, &procs) {
+        if (*proc == NOB_INVALID_PROC) return false;
+    }
+
+#ifdef _WIN32
+    size_t count = procs.count;
+    if (count > MAXIMUM_WAIT_OBJECTS) {
+        nob_log(NOB_Warn, "Windows can only wait for the first %d process", MAXIMUM_WAIT_OBJECTS);
+        count = MAXIMUM_WAIT_OBJECTS;
+    }
+
+    DWORD result = WaitForMultipleObjects(
+                       (DWORD) count, // DWORD nCount
+                       procs.items,   // const HANDLE *lpHandles
+                       false,         // BOOL bWaitAll,
+                       INFINITE       // DWORD  dwMilliseconds
+                   );
+
+    if (result == WAIT_FAILED) {
+        nob_log(NOB_ERROR, "could not wait on child process: %s", nob_win32_error_message(GetLastError()));
+        return false;
+    }
+
+    NOB_ASSERT(WAIT_OBJECT_0 <= result && result < WAIT_OBJECT_0 + procs.count);
+    Nob_Proc *finished = &procs.items[result - WAIT_OBJECT_0];
+    if (finished_proc != NULL) *finished_proc = finished;
+
+    DWORD exit_status;
+    if (!GetExitCodeProcess(*finished, &exit_status)) {
+        nob_log(NOB_ERROR, "could not get process exit code: %s", nob_win32_error_message(GetLastError()));
+        return false;
+    }
+
+    if (exit_status != 0) {
+        nob_log(NOB_ERROR, "command exited with exit code %lu", exit_status);
+        return false;
+    }
+
+    CloseHandle(*finished);
+
+    return true;
+#else
+    for (;;) {
+        int wstatus = 0;
+        for (Nob_Proc *proc = procs.items, *tail = procs.items + procs.count - 1; ; ++proc) {
+            pid_t pid = waitpid(*proc, &wstatus, WNOHANG);
+            if (pid < 0) {
+                nob_log(NOB_ERROR, "could not wait on command (pid %d): %s", *proc, strerror(errno));
+                return false;
+            } else {
+                if (pid > 0) {
+                    if (finished_proc != NULL) *finished_proc = proc;
+                    break;
+                } else {
+                    if (proc == tail) proc = procs.items;
+                    struct timespec ts;
+                    ts.tv_sec  = 0;
+                    ts.tv_nsec = 1000 * 1000; // 1ms
+                    nanosleep(&ts, NULL);
+                }
+            }
+        }
+
+        if (WIFEXITED(wstatus)) {
+            int exit_status = WEXITSTATUS(wstatus);
+            if (exit_status != 0) {
+                nob_log(NOB_ERROR, "command exited with exit code %d", exit_status);
+                return false;
+            }
+
+            break;
+        }
+
+        if (WIFSIGNALED(wstatus)) {
+            nob_log(NOB_ERROR, "command process was terminated by signal %d", WTERMSIG(wstatus));
+            return false;
+        }
+    }
+
+    return true;
+#endif
+}
+
+NOBDEF bool nob_procs_wait_any_and_remove(Nob_Procs *procs)
+{
+    Nob_Proc *finished_proc = NULL;
+    if (!nob_procs_wait_any(*procs, &finished_proc)) return false;
+    if (finished_proc != NULL) nob_da_remove_unordered(procs, (finished_proc - (procs->items)));
+    return true;
+}
+
 NOBDEF bool nob_proc_wait(Nob_Proc proc)
 {
     if (proc == NOB_INVALID_PROC) return false;
@@ -1239,6 +1350,17 @@ NOBDEF bool nob_procs_append_with_flush(Nob_Procs *procs, Nob_Proc proc, size_t 
 
     if (procs->count >= max_procs_count) {
         if (!nob_procs_wait_and_reset(procs)) return false;
+    }
+
+    return true;
+}
+
+NOBDEF bool nob_procs_append_with_wait_any(Nob_Procs *procs, Nob_Proc proc, size_t max_procs_count)
+{
+    nob_da_append(procs, proc);
+
+    if (procs->count >= max_procs_count) {
+        if (!nob_procs_wait_any_and_remove(procs)) return false;
     }
 
     return true;
@@ -2028,9 +2150,12 @@ NOBDEF int closedir(DIR *dirp)
         #define fd_close nob_fd_close
         #define Procs Nob_Procs
         #define proc_wait nob_proc_wait
+        #define proc_wait_any nob_proc_wait_any
+        #define procs_wait_any_and_remove nob_procs_wait_any_and_remove
         #define procs_wait nob_procs_wait
         #define procs_wait_and_reset nob_procs_wait_and_reset
         #define procs_append_with_flush nob_procs_append_with_flush
+        #define procs_append_with_wait_any nob_procs_append_with_wait_any
         #define Cmd Nob_Cmd
         #define Cmd_Redirect Nob_Cmd_Redirect
         #define cmd_render nob_cmd_render
