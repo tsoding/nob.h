@@ -793,7 +793,6 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
     const char *old_binary_path = nob_temp_sprintf("%s.old", binary_path);
     if (!nob_rename(binary_path, old_binary_path)) exit(1);
 
-    // TODO: Perhaps replace NOB_REBUILD_URSELF completely in the next major release
 #ifndef NOB_REBUILD_URSELF
     nob_cc(&cmd);
     nob_cc_output(&cmd, binary_path);
