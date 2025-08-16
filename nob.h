@@ -570,19 +570,6 @@ NOBDEF bool nob_set_current_dir(const char *path);
 //   https://github.com/tsoding/musializer/blob/b7578cc76b9ecb573d239acc9ccf5a04d3aba2c9/src_build/nob_win64_mingw.c#L3-L9
 // TODO: Maybe instead NOB_REBUILD_URSELF macro, the Go Rebuild Urself™ Technology should use the
 //   user defined nob_cc_* macros instead?
-#ifndef NOB_REBUILD_URSELF
-#  if defined(_WIN32)
-#    if defined(__GNUC__)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-o", binary_path, source_path
-#    elif defined(__clang__)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-o", binary_path, source_path
-#    elif defined(_MSC_VER)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", nob_temp_sprintf("/Fe:%s", (binary_path)), source_path
-#    endif
-#  else
-#    define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
-#  endif
-#endif
 
 // Go Rebuild Urself™ Technology
 //
@@ -601,10 +588,11 @@ NOBDEF bool nob_set_current_dir(const char *path);
 //   The modification is detected by comparing the last modified times of the executable
 //   and its source code. The same way the make utility usually does it.
 //
-//   The rebuilding is done by using the NOB_REBUILD_URSELF macro which you can redefine
-//   if you need a special way of bootstraping your build system. (which I personally
+//   If you need a special way of bootstraping your build system, (which I personally
 //   do not recommend since the whole idea of NoBuild is to keep the process of bootstrapping
 //   as simple as possible and doing all of the actual work inside of ./nob)
+//   you can define the NOB_REBUILD_URSELF(binary_path, source_path) macro before you include nob.h
+//   with NOB_IMPLEMENTATION to set your own command for Go Rebuild Urself™ Technology to use.
 //
 NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...);
 #define NOB_GO_REBUILD_URSELF(argc, argv) nob__go_rebuild_urself(argc, argv, __FILE__, NULL)
@@ -803,9 +791,18 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
     Nob_Cmd cmd = {0};
 
     const char *old_binary_path = nob_temp_sprintf("%s.old", binary_path);
-
     if (!nob_rename(binary_path, old_binary_path)) exit(1);
+
+    // TODO: Perhaps replace NOB_REBUILD_URSELF completely in the next major release
+#ifndef NOB_REBUILD_URSELF
+    nob_cc(&cmd);
+    nob_cc_output(&cmd, binary_path);
+    nob_cc_inputs(&cmd, source_path);
+#else
+    // maintain api compatibility
     nob_cmd_append(&cmd, NOB_REBUILD_URSELF(binary_path, source_path));
+#endif
+
     if (!nob_cmd_run_sync_and_reset(&cmd)) {
         nob_rename(old_binary_path, binary_path);
         exit(1);
