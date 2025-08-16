@@ -1881,6 +1881,7 @@ NOBDEF bool nob_set_current_dir(const char *path)
 #define NOB_MAIN_ARGS_3 argc, argv, &cmd
 #define NOB_MAIN_ARGS_4 argc, argv, &cmd, &procs
 #define SELECT_NOB_MAIN_ARGS(_1, _2, _3, _4, NAME, ...) NAME
+#define NOB_VA_EXPAND(x) x
 
 #define nob_main(...)                                                       \
     NOBDEF bool nob_main_implementation(__VA_ARGS__);                       \
@@ -1892,14 +1893,14 @@ NOBDEF bool nob_set_current_dir(const char *path)
         NOB_UNUSED(cmd);                                                    \
         Nob_Procs procs = {0};                                              \
         NOB_UNUSED(procs);                                                  \
-        if (!nob_main_implementation(                                       \
+        if (!nob_main_implementation(NOB_VA_EXPAND(                         \
             SELECT_NOB_MAIN_ARGS(__VA_ARGS__,                               \
                 NOB_MAIN_ARGS_4,                                            \
                 NOB_MAIN_ARGS_3,                                            \
                 NOB_MAIN_ARGS_2,                                            \
                 NOB_MAIN_ARGS_1,                                            \
             )                                                               \
-        )) return 1;                                                        \
+        ))) return 1;                                                       \
         return 0;                                                           \
     }                                                                       \
     NOBDEF bool nob_main_implementation(__VA_ARGS__)
