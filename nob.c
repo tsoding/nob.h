@@ -51,32 +51,30 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
     return true;
 }
 
-int main(int argc, char **argv)
+nob_main(int argc, char **argv, Cmd *cmd)
 {
     NOB_GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
-
-    Cmd cmd = {0};
 
     const char *program_name = shift(argv, argc);
     const char *command_name = "test";
     if (argc > 0) command_name = shift(argv, argc);
 
-    if (!mkdir_if_not_exists(BUILD_FOLDER)) return 1;
-    if (!mkdir_if_not_exists(BUILD_FOLDER TESTS_FOLDER)) return 1;
+    if (!mkdir_if_not_exists(BUILD_FOLDER)) return false;
+    if (!mkdir_if_not_exists(BUILD_FOLDER TESTS_FOLDER)) return false;
 
     if (strcmp(command_name, "test") == 0) {
         if (argc <= 0) {
             for (size_t i = 0; i < test_names_count; ++i) {
-                if (!build_and_run_test(&cmd, test_names[i])) return 1;
+                if (!build_and_run_test(cmd, test_names[i])) return false;
             }
-            return 0;
+            return true;
         }
 
         while (argc > 0) {
             const char *test_name = shift(argv, argc);
-            if (!build_and_run_test(&cmd, test_name)) return 1;
+            if (!build_and_run_test(cmd, test_name)) return false;
         }
-        return 0;
+        return true;
     }
 
     if (strcmp(command_name, "list") == 0) {
@@ -85,9 +83,9 @@ int main(int argc, char **argv)
             nob_log(INFO, "    %s", test_names[i]);
         }
         nob_log(INFO, "Use %s test <names...> to run individual tests", program_name);
-        return 0;
+        return true;
     }
 
     nob_log(ERROR, "Unknown command %s", command_name);
-    return 1;
+    return false;
 }

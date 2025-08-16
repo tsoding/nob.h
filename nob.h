@@ -1876,6 +1876,34 @@ NOBDEF bool nob_set_current_dir(const char *path)
 #endif // _WIN32
 }
 
+#define NOB_MAIN_ARGS_1
+#define NOB_MAIN_ARGS_2 argc, argv
+#define NOB_MAIN_ARGS_3 argc, argv, &cmd
+#define NOB_MAIN_ARGS_4 argc, argv, &cmd, &procs
+#define SELECT_NOB_MAIN_ARGS(_1, _2, _3, _4, NAME, ...) NAME
+
+#define nob_main(...)                                                       \
+    NOBDEF bool nob_main_implementation(__VA_ARGS__);                       \
+    int main(int argc, char **argv)                                         \
+    {                                                                       \
+        NOB_UNUSED(argc);                                                   \
+        NOB_UNUSED(argv);                                                   \
+        Nob_Cmd cmd = {0};                                                  \
+        NOB_UNUSED(cmd);                                                    \
+        Nob_Procs procs = {0};                                              \
+        NOB_UNUSED(procs);                                                  \
+        if (!nob_main_implementation(                                       \
+            SELECT_NOB_MAIN_ARGS(__VA_ARGS__,                               \
+                NOB_MAIN_ARGS_4,                                            \
+                NOB_MAIN_ARGS_3,                                            \
+                NOB_MAIN_ARGS_2,                                            \
+                NOB_MAIN_ARGS_1,                                            \
+            )                                                               \
+        )) return 1;                                                        \
+        return 0;                                                           \
+    }                                                                       \
+    NOBDEF bool nob_main_implementation(__VA_ARGS__)
+
 // minirent.h SOURCE BEGIN ////////////////////////////////////////
 #if defined(_WIN32) && !defined(NOB_NO_MINIRENT)
 struct DIR
