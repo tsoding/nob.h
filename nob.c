@@ -23,6 +23,7 @@ const char *test_names[] = {
     "sb_appendf",
     "da_foreach",
     "temp_aligned_alloc",
+    "nob_cc_setup",
 };
 #define test_names_count ARRAY_LEN(test_names)
 

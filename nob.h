@@ -1,4 +1,4 @@
-/* nob - v1.23.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.24.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -497,7 +497,7 @@ NOBDEF size_t nob_temp_save(void);
 NOBDEF void nob_temp_rewind(size_t checkpoint);
 
 // Given any path returns the last part of that path.
-// "/path/to/a/file.c" -> "file.c"; "/path/to/a/directory" -> "directory"
+// "/path/to/a/file.c" -> " and CC_FLAGS_EXTfile.c"; "/path/to/a/directory" -> "directory"
 NOBDEF const char *nob_path_name(const char *path);
 NOBDEF bool nob_rename(const char *old_path, const char *new_path);
 NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count);
@@ -507,6 +507,41 @@ NOBDEF const char *nob_get_current_dir_temp(void);
 NOBDEF bool nob_set_current_dir(const char *path);
 
 // TODO: we should probably document somewhere all the compiler we support
+
+/*TODO: add CC_REBUILD_URSELF, add CC_CUSTOM(for create your own flags) */
+typedef enum {
+  CC_NONE         = 0,
+  CC_FLAGS    	  = 1<<0,
+  CC_FLAGS_EXT    = 1<<1,// append cc.cflags(!=NULL) and flags of CC_FLAGS
+  CC_COMPILER     = 1<<2,
+  CC_OUTPUT       = 1<<3,
+  CC_INPUTS       = 1<<4,
+  CC_ALL          = 1<<5,
+}Nob_CC_Flags;
+typedef struct Nob_CC {
+  int        flags   ;
+  const char *cc	 ;//Custom variable for CC_COMPILER
+  const char *outpath;//Custom Variable for CC_OUTPUT
+  char       **cflags;//Custom Variable for CC_FLAGS and CC_FLAGS_EXT
+  char      **inpaths;
+  int        argc	 ;
+ /* NOTE:When inpaths and outpath are missing,
+         or '-' symbol is set   on inpaths or outpath;
+		 it will use cc.argv[0] as output  or input.
+		 see nob_cc_setup_ func for more info.
+*/
+  char       **argv	 ;
+} Nob_CC;
+
+#define nob_cc_setarray(...) ((char*[]){__VA_ARGS__, NULL})
+
+NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc);
+
+//description: new way to do nob_cc_*()
+//similar to nob_cc_*() and nob_cmd_run()
+//but with flags and custom variables.
+#define nob_cc_setup(cmd, ...) nob_cc_setup_((cmd), (Nob_CC){__VA_ARGS__})
+
 
 // The nob_cc_* macros try to abstract away the specific compiler.
 // They are verify basic and not particularly flexible, but you can redefine them if you need to
@@ -709,6 +744,82 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 #endif // NOB_H_
 
 #ifdef NOB_IMPLEMENTATION
+
+NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc) {
+  if(!cc.inpaths&&!cc.argv){
+     cc.inpaths=NOB_REALLOC((char*)cc.inpaths,256);//leak?
+	 snprintf((char*)cc.inpaths,256,"%s.c",cc.argv[0]);
+  }
+  if ((cc.flags & CC_COMPILER) || (cc.flags & CC_ALL)) {
+  	if(!cc.cc){
+	#if _WIN32
+	#if defined(__GNUC__)
+    nob_cmd_append(cmd, "cc");
+	#elif defined(__clang__)
+    nob_cmd_append(cmd, "clang");
+	#elif defined(_MSC_VER)
+    nob_cmd_append(cmd, "cl.exe");
+	#endif
+	#else
+    nob_cmd_append(cmd, "cc");
+	#endif
+	}else{
+    nob_cmd_append(cmd,cc.cc);
+	}
+  }
+  if ((cc.flags & CC_FLAGS_EXT)) {
+    if(cc.cflags){
+	  for(size_t i=0;cc.cflags[i]!=NULL;++i){
+        nob_cmd_append(cmd,cc.cflags[i]);
+	  }
+	}
+	#if defined(_MSC_VER) && !defined(__clang__)
+     nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS");
+	#else
+     nob_cmd_append(cmd, "-Wall", "-Wextra");
+	#endif
+  }
+  if ((cc.flags & CC_FLAGS) || (cc.flags & CC_ALL)) {
+    if(!cc.cflags){
+	 #if defined(_MSC_VER) && !defined(__clang__)
+     nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS");
+	 #else
+     nob_cmd_append(cmd, "-Wall", "-Wextra");
+	 #endif
+	}else{
+	  for(size_t i=0;cc.cflags[i]!=NULL;++i){
+        nob_cmd_append(cmd,cc.cflags[i]);
+	  }
+	}
+  }
+  if ((cc.flags & CC_OUTPUT) || (cc.flags & CC_ALL)) {
+    if (cc.outpath) {
+	if(cc.outpath[0]=='-'&&cc.argv){
+		cc.outpath=cc.argv[0];
+	}
+    #if defined(_MSC_VER) && !defined(__clang__)
+       nob_cmd_append(cmd, nob_temp_sprintf("/Fe:%s", (cc.outpath)));
+    #else
+       nob_cmd_append(cmd, "-o", (cc.outpath));
+    #endif
+    }
+  }
+  if ((cc.flags & CC_INPUTS) || (cc.flags & CC_ALL)) {
+  		if(cc.inpaths){
+		  bool skipone=false;
+		  if(*cc.inpaths[0]=='-'&&cc.argv){
+		    skipone=true;
+			char *buffer=NOB_REALLOC(NULL,256);//leak?
+			snprintf(buffer,256,"%s.c",cc.argv[0]);
+            nob_cmd_append(cmd,buffer);
+		  }
+	      for(size_t i=0;cc.inpaths[i]!=NULL;++i){
+		    if(skipone) { skipone=false; continue; }
+          	nob_cmd_append(cmd,cc.inpaths[i]);
+	      }
+		}
+    }
+}
 
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
@@ -2101,13 +2212,14 @@ NOBDEF int closedir(DIR *dirp)
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
         #define sb_to_sv nob_sb_to_sv
+		#define cc_setup nob_cc_setup
         #define win32_error_message nob_win32_error_message
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
 
 /*
    Revision history:
-
+     1.24.0 (2025-08-15) Add nob_cc_setup(),nob_cc_join_inputs() (by @yuI4140)
      1.23.0 (2025-08-15) Add nob_cmd_run(), nob_cmd_run_opt(), nob_cmd_start_process(), Nob_Cmd_Opt and deprecate all other nob_cmd_run_* functions (by @rexim)
                          Add NOB_DECLTYPE_CAST() for C++-compatible casting of allocation results (by @rexim)
                          Add NOB_DEPRECATED() (by @yuI4140)
