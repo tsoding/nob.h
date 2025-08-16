@@ -497,7 +497,7 @@ NOBDEF size_t nob_temp_save(void);
 NOBDEF void nob_temp_rewind(size_t checkpoint);
 
 // Given any path returns the last part of that path.
-// "/path/to/a/file.c" -> "file.c"; "/path/to/a/directory" -> "directory"
+// "/path/to/a/file.c" -> " and CC_FLAGS_EXTfile.c"; "/path/to/a/directory" -> "directory"
 NOBDEF const char *nob_path_name(const char *path);
 NOBDEF bool nob_rename(const char *old_path, const char *new_path);
 NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count);
@@ -508,41 +508,39 @@ NOBDEF bool nob_set_current_dir(const char *path);
 
 // TODO: we should probably document somewhere all the compiler we support
 
+/*TODO: add CC_REBUILD_URSELF, add CC_CUSTOM(for create your own flags) */
+typedef enum {
+  CC_NONE         = 0,
+  CC_FLAGS    	  = 1<<0,
+  CC_FLAGS_EXT    = 1<<1,// append cc.cflags(!=NULL) and flags of CC_FLAGS
+  CC_COMPILER     = 1<<2,
+  CC_OUTPUT       = 1<<3,
+  CC_INPUTS       = 1<<4,
+  CC_ALL          = 1<<5,
+}Nob_CC_Flags;
 typedef struct Nob_CC {
-  /*TODO: add CC_REBUILD_URSELF
-  		  add CC_CUSTOM(examples: .std,.warnings,.ldflags) 
-  */
-  enum Nob_CC_Flags {
-  CC_NONE     = 0,
-  CC_FLAGS,
-  CC_COMPILER,
-  CC_OUTPUT,
-  CC_INPUTS,
-  CC_ALL,
-  }Nob_CC_Flags;
   int        flags   ;
   const char *cc	 ;//Custom variable for CC_COMPILER
   const char *outpath;//Custom Variable for CC_OUTPUT
-  char       *inpaths;
+  char       **cflags;//Custom Variable for CC_FLAGS and CC_FLAGS_EXT
+  char      **inpaths;
   int        argc	 ;
  /* NOTE:When inpaths and outpath are missing,
          or '-' symbol is set   on inpaths or outpath;
 		 it will use cc.argv[0] as output  or input.
 		 see nob_cc_setup_ func for more info.
-*/ 
+*/
   char       **argv	 ;
 } Nob_CC;
 
-NOBDEF char* nob_cc_join_inputs_(char* inputs[]);
-//NOTE: helps adding spaces,
-//      for Nob_CC.inpaths when CC_INPUTS is set on nob_cc_setup_
-#define NOB_CC_JOIN_INPUTS(...) (nob_cc_join_inputs_((char*[]){__VA_ARGS__, NULL}))
+#define nob_cc_setarray(...) ((char*[]){__VA_ARGS__, NULL})
 
 NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc);
+
+//description: new way to do nob_cc_*()
+//similar to nob_cc_*() and nob_cmd_run()
+//but with flags and custom variables.
 #define nob_cc_setup(cmd, ...) nob_cc_setup_((cmd), (Nob_CC){__VA_ARGS__})
-
-
-
 
 
 // The nob_cc_* macros try to abstract away the specific compiler.
@@ -747,31 +745,6 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 
 #ifdef NOB_IMPLEMENTATION
 
-/*NOTE: there is no order( at least not documented, that I've seen) 
-		where to put new code about nob_cc_* */
-
-NOBDEF char* nob_cc_join_inputs_(char* inputs[]) {
-    size_t total_len = 0;
-    int count = 0;
-    for (int i = 0; inputs[i] != NULL; i++) {
-        total_len += strlen(inputs[i]);
-        count++;
-    }
-    total_len += (count > 0) ? count - 1 : 0;
-    char* result = NULL;
-    result = NOB_REALLOC(result,total_len + 1);
-    if (!result) return NULL;
-    char* ptr = result;
-    for (int i = 0; inputs[i] != NULL; i++) {
-        if (i > 0) *ptr++ = ' ';
-        size_t len = strlen(inputs[i]);
-        strncpy(ptr, inputs[i], len);
-        ptr += len;
-    }
-    *ptr = '\0';
-    return result;
-}
-
 NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc) {
   if(!cc.inpaths&&!cc.argv){
      cc.inpaths=NOB_REALLOC((char*)cc.inpaths,256);//leak?
@@ -794,20 +767,35 @@ NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc) {
     nob_cmd_append(cmd,cc.cc);
 	}
   }
-
-  if ((cc.flags & CC_FLAGS) || (cc.flags & CC_ALL)) {
+  if ((cc.flags & CC_FLAGS_EXT)) {
+    if(cc.cflags){
+	  for(size_t i=0;cc.cflags[i]!=NULL;++i){
+        nob_cmd_append(cmd,cc.cflags[i]);
+	  }
+	}
 	#if defined(_MSC_VER) && !defined(__clang__)
-    nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS");
+     nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS");
 	#else
-    nob_cmd_append(cmd, "-Wall", "-Wextra");
+     nob_cmd_append(cmd, "-Wall", "-Wextra");
 	#endif
+  }
+  if ((cc.flags & CC_FLAGS) || (cc.flags & CC_ALL)) {
+    if(!cc.cflags){
+	 #if defined(_MSC_VER) && !defined(__clang__)
+     nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS");
+	 #else
+     nob_cmd_append(cmd, "-Wall", "-Wextra");
+	 #endif
+	}else{
+	  for(size_t i=0;cc.cflags[i]!=NULL;++i){
+        nob_cmd_append(cmd,cc.cflags[i]);
+	  }
+	}
   }
   if ((cc.flags & CC_OUTPUT) || (cc.flags & CC_ALL)) {
     if (cc.outpath) {
 	if(cc.outpath[0]=='-'&&cc.argv){
 		cc.outpath=cc.argv[0];
-	 }else{
-		nob_log(NOB_WARNING,"no cc.argv given! for '-' symbol on CC_OUTPUT");
 	}
     #if defined(_MSC_VER) && !defined(__clang__)
        nob_cmd_append(cmd, nob_temp_sprintf("/Fe:%s", (cc.outpath)));
@@ -818,23 +806,17 @@ NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc) {
   }
   if ((cc.flags & CC_INPUTS) || (cc.flags & CC_ALL)) {
   		if(cc.inpaths){
-		  if(cc.inpaths[0]=='-'&&cc.argv){
-		    ++cc.inpaths;
+		  bool skipone=false;
+		  if(*cc.inpaths[0]=='-'&&cc.argv){
+		    skipone=true;
 			char *buffer=NOB_REALLOC(NULL,256);//leak?
 			snprintf(buffer,256,"%s.c",cc.argv[0]);
             nob_cmd_append(cmd,buffer);
-		  }else{
-		    nob_log(NOB_WARNING,"no cc.argv given! for '-' symbol on CC_INPUTS");
 		  }
-		  char *start = cc.inpaths;
-		  while (isspace((unsigned char)*start)) start++;
-		  char *end = cc.inpaths + strlen(cc.inpaths) - 1;
-		  while (end > start && isspace((unsigned char)*end)) end--;
-		  end[1] = '\0';
-		  if (start != cc.inpaths) {
-		  	memmove(cc.inpaths, start, end - start + 2);
-		  }
-          nob_cmd_append(cmd,cc.inpaths);
+	      for(size_t i=0;cc.inpaths[i]!=NULL;++i){
+		    if(skipone) { skipone=false; continue; }
+          	nob_cmd_append(cmd,cc.inpaths[i]);
+	      }
 		}
     }
 }
@@ -2231,7 +2213,6 @@ NOBDEF int closedir(DIR *dirp)
         #define sv_from_parts nob_sv_from_parts
         #define sb_to_sv nob_sb_to_sv
 		#define cc_setup nob_cc_setup
-		#define cc_join_inputs nob_cc_join_inputs
         #define win32_error_message nob_win32_error_message
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_

@@ -7,8 +7,9 @@ int main(int argc, char **argv) {
   cc_setup(&cmd, 
     .flags        = CC_COMPILER|CC_INPUTS|CC_OUTPUT,
     .outpath      = "-",
+	.cflags       = nob_cc_setarray("-O2","-std=c99"),
 //  .optional:.cc = "clang",
-	.inpaths      = NOB_CC_JOIN_INPUTS("-"),
+	.inpaths      = nob_cc_setarray("-"),
     .argc         = argc, 
     .argv         = argv);
   String_Builder sb={0};
