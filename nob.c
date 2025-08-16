@@ -12,6 +12,7 @@ const char *test_names[] = {
     "set_get_current_dir",
     "cmd_redirect",
     "cmd_args_passing",
+    "cmd_append_wait_any",
 #ifdef _WIN32
     "win32_error",
 #endif //_WIN32
