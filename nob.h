@@ -1203,7 +1203,7 @@ NOBDEF bool nob_procs_wait_any(Nob_Procs procs, Nob_Proc **finished_proc)
 #ifdef _WIN32
     size_t count = procs.count;
     if (count > MAXIMUM_WAIT_OBJECTS) {
-        nob_log(NOB_Warn, "Windows can only wait for the first %d process", MAXIMUM_WAIT_OBJECTS);
+        nob_log(NOB_WARNING, "Windows can only wait for the first %lu process", MAXIMUM_WAIT_OBJECTS);
         count = MAXIMUM_WAIT_OBJECTS;
     }
 
