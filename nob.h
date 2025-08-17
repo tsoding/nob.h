@@ -745,7 +745,8 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 
 #ifdef NOB_IMPLEMENTATION
 
-NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc) {
+NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc) 
+{
   if(!cc.inpaths&&!cc.argv){
      cc.inpaths=NOB_REALLOC((char*)cc.inpaths,256);//leak?
 	 snprintf((char*)cc.inpaths,256,"%s.c",cc.argv[0]);
