@@ -45,7 +45,7 @@
           NOB_GO_REBUILD_URSELF(argc, argv);
           Cmd cmd = {0};
           cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", "main", "main.c");
-          if (!cmd_run_sync(cmd)) return 1;
+          if (!cmd_run(&cmd)) return 1;
           return 0;
       }
       ```
@@ -63,6 +63,37 @@
 
       If only few specific names create conflicts for you, you can just #undef those names after the
       `#include <nob.h>` since they are macros anyway.
+
+   # Macro Interface
+
+      All these macros are `#define`d by the user before including nob.h
+
+   ## Flags
+
+      Enable or disable certain aspects of nob.h
+
+      - NOB_IMPLEMENTATION - Enable definitions of the functions. By default only declarations are included.
+        See https://github.com/nothings/stb/blob/f58f558c120e9b32c217290b80bad1a0729fbb2c/docs/stb_howto.txt
+        for more info.
+      - NOB_WARN_DEPRECATED - Warn about the usage of deprecated function. We rarely actually remove deprecated functions,
+        but if you want to know what is discourage you may want to enable this flag.
+      - NOB_EXPERIMENTAL_DELETE_OLD - Experimental feature that automatically removes `nob.old` files. It's unclear how well
+        it works on Windows, so it's experimental for now.
+      - NOB_STRIP_PREFIX - string the `nob_` prefixes from non-redefinable names.
+
+   ## Redefinable Macros
+
+      Redefine default behaviors of nob.h.
+
+      - NOBDEF - Appends additional things to function declarations. You can do something like `#define NOBDEF static inline`.
+      - NOB_ASSERT(condition) - Redefine which assert() nob.h shall use.
+      - NOB_REALLOC(oldptr, size) - Redefine which realloc() nob.h shall use.
+      - NOB_FREE(ptr) - Redefine which free() nob.h shall use.
+      - NOB_DEPRECATED(message) - Redefine how nob.h shall mark functions as deprecated.
+      - NOB_DA_INIT_CAP - Redefine initial capacity of Dynamic Arrays.
+      - NOB_TEMP_CAPACITY - Redefine the capacity of the temporary storate.
+      - NOB_REBUILD_URSELF(binary_path, source_path) - redefine how nob.h shall rebuild itself.
+      - NOB_WIN32_ERR_MSG_SIZE - Redefine the capacity of the buffer for error message on Windows.
 */
 
 #ifndef NOB_H_
@@ -94,16 +125,19 @@
 #define NOB_FREE free
 #endif /* NOB_FREE */
 
-// To suppress all the deprecation warnings do `#define NOB_DEPRECATED(...)` before including nob.h
-#ifndef NOB_DEPRECATED
-#    if defined(__GNUC__) || defined(__clang__)
-#        define NOB_DEPRECATED(message) __attribute__((deprecated(message)))
-#    elif defined(_MSC_VER)
-#        define NOB_DEPRECATED(message) __declspec(deprecated(message))
-#    else
-#        define NOB_DEPRECATED(...)
-#    endif
-#endif /* NOB_DEPRECATED */
+#ifdef NOB_WARN_DEPRECATED
+#    ifndef NOB_DEPRECATED
+#        if defined(__GNUC__) || defined(__clang__)
+#            define NOB_DEPRECATED(message) __attribute__((deprecated(message)))
+#        elif defined(_MSC_VER)
+#            define NOB_DEPRECATED(message) __declspec(deprecated(message))
+#        else
+#            define NOB_DEPRECATED(...)
+#        endif
+#    endif /* NOB_DEPRECATED */
+#else
+#    define NOB_DEPRECATED(...)
+#endif /* NOB_WARN_DEPRECATED */
 
 #include <stdbool.h>
 #include <stdint.h>
