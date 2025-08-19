@@ -780,7 +780,7 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 
 NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc) 
 {
-  if ((cc.flags & cc_compiler) || (cc.flags & cc_all)) {
+  if ((cc.flags & CC_COMPILER) || (cc.flags & CC_ALL)) {
     if(!cc.cc){
 	#if _win32
 	#if defined(__GNUC__)
@@ -797,9 +797,9 @@ NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc)
     nob_cmd_append(cmd,cc.cc);
 	}
   }
-  if ((cc.flags & cc_flags_ext)) {
+  if ((cc.flags & CC_FLAGS_EXT)) {
     if(cc.cflags){
-	  for(size_t i=0;cc.cflags[i]!=null;++i){
+	  for(size_t i=0;cc.cflags[i]!=NULL;++i){
         nob_cmd_append(cmd,cc.cflags[i]);
 	  }
 	}
@@ -809,7 +809,7 @@ NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc)
      nob_cmd_append(cmd, "-wall", "-wextra");
 	#endif
   }
-  if ((cc.flags & cc_flags) || (cc.flags & cc_all)) {
+  if ((cc.flags & CC_FLAGS) || (cc.flags & CC_ALL)) {
     if(!cc.cflags){
 	 #if defined(_MSC_VER) && !defined(__clang__)
      nob_cmd_append(cmd, "/w4", "/nologo", "/d_crt_secure_no_warnings");
@@ -817,12 +817,12 @@ NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc)
      nob_cmd_append(cmd, "-wall", "-wextra");
 	 #endif
 	}else{
-	  for(size_t i=0;cc.cflags[i]!=null;++i){
+	  for(size_t i=0;cc.cflags[i]!=NULL;++i){
         nob_cmd_append(cmd,cc.cflags[i]);
 	  }
 	}
   }
-  if ((cc.flags & cc_output) || (cc.flags & cc_all)) {
+  if ((cc.flags & CC_OUTPUT) || (cc.flags & CC_ALL)) {
     if (cc.outpath) {
     #if defined(_MSC_VER) && !defined(__clang__)
        nob_cmd_append(cmd, nob_temp_sprintf("/fe:%s", (cc.outpath)));
@@ -831,9 +831,9 @@ NOBDEF void nob_cc_setup_(Nob_Cmd *cmd, Nob_CC cc)
     #endif
     }
   }
-  if ((cc.flags & cc_inputs) || (cc.flags & cc_all)) {
+  if ((cc.flags & CC_INPUTS) || (cc.flags & CC_ALL)) {
         if(cc.inpaths){
-	      for(size_t i=0;cc.inpaths[i]!=null;++i){
+	      for(size_t i=0;cc.inpaths[i]!=NULL;++i){
             nob_cmd_append(cmd,cc.inpaths[i]);
 	      }
 		}
