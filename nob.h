@@ -2155,6 +2155,8 @@ NOBDEF int closedir(DIR *dirp)
         and let them co-exist for a while.
       - MAJOR update should be just a periodic cleanup of the deprecated functions and types
         without really modifying any existing functionality.
+      - Breaking backward compatibility in a MINOR release should be considered a bug and
+        should be promptly fixed in the next PATCH release.
 
    Naming Conventions:
 
