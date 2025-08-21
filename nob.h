@@ -193,8 +193,8 @@
         : (void)0)
 #else
 #define NOB_ASSERT(expr) ((void)0)
-#endif /* NOB_ASSERT */
 #endif /* NDEBUG */
+#endif /* NOB_ASSERT */
 
 #ifndef NOB_REALLOC
 #include <stdlib.h>
