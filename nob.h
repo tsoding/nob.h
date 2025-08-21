@@ -1441,6 +1441,11 @@ NOBDEF bool nob_delete_dir(const char *path)
         nob_sb_append_cstr(&child_path, child);
         nob_sb_append_null(&child_path);
         Nob_File_Type type = nob_get_file_type(child_path.items);
+        if (type < 0) {
+            nob_minimal_log_level = old_log_level;
+            nob_sb_free(child_path);
+            return false;
+        }
         if (type == NOB_FILE_DIRECTORY) {
             if (strcmp(child, ".") != 0 && strcmp(child, "..") != 0) {
                 if (!nob_delete_dir(child_path.items)) {
@@ -1458,8 +1463,7 @@ NOBDEF bool nob_delete_dir(const char *path)
         }
         nob_sb_free(child_path);
     }
-    if (rmdir(path) != 0) {
-        nob_log(NOB_ERROR, "Could not delete directory %s: %s", path, strerror(errno));
+    if (!nob_delete_file(path)) {
         nob_minimal_log_level = old_log_level;
         return false;
     }
