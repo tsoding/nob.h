@@ -184,16 +184,16 @@
     #define NOB_CRASH() (*(volatile int *)0 = 0)
 #endif
 
-#ifndef NDEBUG
 #ifndef NOB_ASSERT
+#ifndef NDEBUG
 #define NOB_ASSERT(expr)                                                                \
     (!(expr)                                                                            \
         ? fprintf(stderr, "%s:%d: assertion `%s` failed\n", __FILE__, __LINE__, #expr), \
           NOB_CRASH()                                                                   \
         : (void)0)
-#endif /* NOB_ASSERT */
 #else
 #define NOB_ASSERT(expr) ((void)0)
+#endif /* NOB_ASSERT */
 #endif /* NDEBUG */
 
 #ifndef NOB_REALLOC
