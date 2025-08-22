@@ -19,6 +19,7 @@ const char *test_names[] = {
     "read_entire_dir",
     "da_resize",
     "da_last",
+    "da_swap",
     "da_remove_unordered",
     "da_append",
     "sb_appendf",
