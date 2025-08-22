@@ -415,6 +415,10 @@ NOBDEF int nob_nprocs(void);
 // The maximum time span representable is 584 years.
 NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void);
 
+// Passing 0 yields the current time slice in the OS scheduler.
+// Windows resolution is in ms, not ns, but is rounded up. 
+NOBDEF void nob_sleep_nanos(uint64_t);
+
 // Same as nob_cmd_run_opt but using cool variadic macro to set the default options.
 // See https://x.com/vkrajacic/status/1749816169736073295 for more info on how to use such macros.
 #define nob_cmd_run(cmd, ...) nob_cmd_run_opt((cmd), (Nob_Cmd_Opt){__VA_ARGS__})
@@ -762,10 +766,9 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 
 #ifdef NOB_IMPLEMENTATION
 
-// This is like nob_proc_wait() but waits asynchronously. Depending on the platform ms means different thing.
-// On Windows it means timeout. On POSIX it means for how long to sleep after checking if the process exited,
-// so to not peg the core too much. Since this API is kinda of weird, the function is private for now.
-static int nob__proc_wait_async(Nob_Proc proc, int ms);
+// This is like nob_proc_wait() but just checks if the process has completed. If it has, it returns 1. If the
+// process is still running, it returns 0. If there was an error, it returns -1.
+static int nob__proc_wait_async(Nob_Proc proc);
 
 // Starts the process for the command. Its main purpose is to be the base for nob_cmd_run() and nob_cmd_run_opt().
 static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout, Nob_Fd *fderr);
@@ -1037,13 +1040,12 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
     if (opt.async && max_procs > 0) {
         while (opt.async->count >= max_procs) {
             for (size_t i = 0; i < opt.async->count; ++i) {
-                int ret = nob__proc_wait_async(opt.async->items[i], 1);
+                int ret = nob__proc_wait_async(opt.async->items[i]);
                 if (ret < 0) nob_return_defer(false);
-                if (ret) {
-                    nob_da_remove_unordered(opt.async, i);
-                    break;
-                }
+                if (ret) nob_da_remove_unordered(opt.async, i);
             }
+            if (opt.async->count < max_procs) break;
+            nob_sleep_nanos(1000*1000); // 1ms
         }
     }
 
@@ -1100,6 +1102,23 @@ NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void)
 
     return NOB_NANOS_PER_SEC * ts.tv_sec + ts.tv_nsec;
 #endif // _WIN32
+}
+
+NOBDEF void nob_sleep_nanos(uint64_t ns) {
+#ifdef _WIN32
+	// Not tested on windows, but it should work if it compiles
+	// round up by one if not an exact number of ms
+	size_t ms = ns / (1000*1000) + (ns % (1000*1000) > 0);
+	Sleep(ms);
+	return;
+#else
+	struct timespec ts = {};
+	ts.tv_sec  = ns / NOB_NANOS_PER_SEC;
+	ts.tv_nsec = ns % NOB_NANOS_PER_SEC;
+	
+	nanosleep(&ts, NULL);
+	return;
+#endif
 }
 
 NOBDEF Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
@@ -1383,14 +1402,14 @@ NOBDEF bool nob_proc_wait(Nob_Proc proc)
 #endif
 }
 
-static int nob__proc_wait_async(Nob_Proc proc, int ms)
+static int nob__proc_wait_async(Nob_Proc proc)
 {
     if (proc == NOB_INVALID_PROC) return false;
 
 #ifdef _WIN32
     DWORD result = WaitForSingleObject(
                        proc,    // HANDLE hHandle,
-                       ms       // DWORD  dwMilliseconds
+                       0        // DWORD  dwMilliseconds
                    );
 
     if (result == WAIT_TIMEOUT) {
@@ -1417,12 +1436,6 @@ static int nob__proc_wait_async(Nob_Proc proc, int ms)
 
     return 1;
 #else
-    long ns = ms*1000*1000;
-    struct timespec duration = {
-        .tv_sec = ns/(1000*1000*1000),
-        .tv_nsec = ns%(1000*1000*1000),
-    };
-
     int wstatus = 0;
     pid_t pid = waitpid(proc, &wstatus, WNOHANG);
     if (pid < 0) {
@@ -1430,10 +1443,7 @@ static int nob__proc_wait_async(Nob_Proc proc, int ms)
         return -1;
     }
 
-    if (pid == 0) {
-        nanosleep(&duration, NULL);
-        return 0;
-    }
+    if (pid == 0) return 0;
 
     if (WIFEXITED(wstatus)) {
         int exit_status = WEXITSTATUS(wstatus);
@@ -1450,8 +1460,7 @@ static int nob__proc_wait_async(Nob_Proc proc, int ms)
         return -1;
     }
 
-    nanosleep(&duration, NULL);
-    return 0;
+    NOB_UNREACHABLE("nob__proc_wait_async did not return before the end of the function!");
 #endif
 }
 
@@ -2304,6 +2313,7 @@ NOBDEF int closedir(DIR *dirp)
         #define nprocs nob_nprocs
         #define nanos_since_unspecified_epoch nob_nanos_since_unspecified_epoch
         #define NANOS_PER_SEC NOB_NANOS_PER_SEC
+        #define sleep_nanos nob_sleep_nanos
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
 
