@@ -416,7 +416,7 @@ NOBDEF int nob_nprocs(void);
 NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void);
 
 // Passing 0 yields the current time slice in the OS scheduler.
-// Windows resolution is in ms, not ns, but is rounded up. 
+// Windows resolution is in ms, not ns, but is rounded up.
 NOBDEF void nob_sleep_nanos(uint64_t);
 
 // Same as nob_cmd_run_opt but using cool variadic macro to set the default options.
@@ -1106,18 +1106,18 @@ NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void)
 
 NOBDEF void nob_sleep_nanos(uint64_t ns) {
 #ifdef _WIN32
-	// Not tested on windows, but it should work if it compiles
-	// round up by one if not an exact number of ms
-	size_t ms = ns / (1000*1000) + (ns % (1000*1000) > 0);
-	Sleep(ms);
-	return;
+    // Not tested on windows, but it should work if it compiles
+    // round up by one if not an exact number of ms
+    size_t ms = ns / (1000*1000) + (ns % (1000*1000) > 0);
+    Sleep(ms);
+    return;
 #else
-	struct timespec ts = {};
-	ts.tv_sec  = ns / NOB_NANOS_PER_SEC;
-	ts.tv_nsec = ns % NOB_NANOS_PER_SEC;
-	
-	nanosleep(&ts, NULL);
-	return;
+    struct timespec ts = {};
+    ts.tv_sec  = ns / NOB_NANOS_PER_SEC;
+    ts.tv_nsec = ns % NOB_NANOS_PER_SEC;
+
+    nanosleep(&ts, NULL);
+    return;
 #endif
 }
 
