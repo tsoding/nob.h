@@ -598,6 +598,12 @@ NOBDEF bool nob_set_current_dir(const char *path);
 #  define nob_cc_inputs(cmd, ...) nob_cmd_append(cmd, __VA_ARGS__)
 #endif // nob_cc_inputs
 
+#ifndef nob_cc_includes
+#  define nob_cc_includes(cmd, ...) nob__cc_includes(cmd, __VA_ARGS__, NULL)
+#endif // nob_cc_includes
+
+void nob__cc_includes(Nob_Cmd *, ...);
+
 // TODO: add MinGW support for Go Rebuild Urself™ Technology and all the nob_cc_* macros above
 //   Musializer contributors came up with a pretty interesting idea of an optional prefix macro which could be useful for
 //   MinGW support:
@@ -865,6 +871,22 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
     nob_da_append_many(&cmd, argv, argc);
     if (!nob_cmd_run_opt(&cmd, opt)) exit(1);
     exit(0);
+}
+
+void nob__cc_includes(Nob_Cmd *cmd, ...) {
+    va_list args;
+
+    va_start(args, cmd);
+    while (1) {
+        const char *header = va_arg(args, const char *);
+        if (!header) break;
+#if defined(_MSC_VER) && !defined(__clang__)
+        nob_cmd_append(cmd, "/I", header);
+#else
+        nob_cmd_append(cmd, "-I", header);
+#endif
+    }
+    va_end(args);
 }
 
 static size_t nob_temp_size = 0;
