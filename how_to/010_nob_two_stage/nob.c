@@ -1,5 +1,6 @@
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
+#define NOB_WARN_DEPRECATED
 #include "nob.h"
 #include "src_build/folders.h"
 
@@ -36,10 +37,10 @@ int main(int argc, char **argv)
     nob_cmd_append(&cmd, "-I.", "-I"BUILD_FOLDER, "-I"SRC_BUILD_FOLDER); // -I is usually the same across all compilers
     nob_cc_output(&cmd, output_path);
     nob_cc_inputs(&cmd, input_path);
-    if (!cmd_run_sync_and_reset(&cmd)) return 1;
+    if (!cmd_run(&cmd)) return 1;
 
     cmd_append(&cmd, output_path);
-    if (!cmd_run_sync_and_reset(&cmd)) return 1;
+    if (!cmd_run(&cmd)) return 1;
 
     return 0;
 }
