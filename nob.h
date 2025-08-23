@@ -159,12 +159,14 @@
 #    include <windows.h>
 #    include <direct.h>
 #    include <shellapi.h>
+#    include <shlwapi.h>
 #else
 #    include <sys/types.h>
 #    include <sys/wait.h>
 #    include <sys/stat.h>
 #    include <unistd.h>
 #    include <fcntl.h>
+#    include <fnmatch.h>
 #endif
 
 #ifdef _WIN32
@@ -231,6 +233,8 @@ NOBDEF bool nob_mkdir_if_not_exists(const char *path);
 NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path);
 NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
 NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
+NOBDEF bool nob_read_entire_dir_recursively(const char *parent, Nob_File_Paths *children);
+NOBDEF bool nob_read_entire_dir_recursively_wildcard(const char *parent, const char *pattern, Nob_File_Paths *children);
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
@@ -1567,6 +1571,111 @@ defer:
     return result;
 }
 
+NOBDEF bool nob_read_entire_dir_recursively(const char *parent, Nob_File_Paths *children)
+{
+    bool result = true;
+    DIR *dir = NULL;
+
+    dir = opendir(parent);
+    if (dir == NULL) {
+        #ifdef _WIN32
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, nob_win32_error_message(GetLastError()));
+        #else
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, strerror(errno));
+        #endif // _WIN32
+        nob_return_defer(false);
+    }
+
+    errno = 0;
+    struct dirent *ent = readdir(dir);
+    char *path = NULL;
+    while (ent != NULL) {
+        if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, "..")) {
+            goto next_entry;
+        }
+        #ifdef _WIN32
+        if (!strcmp(parent, ".") || !strcmp(parent, ".\\")) {
+            path = nob_temp_strdup(ent->d_name);
+        } else {
+            path = nob_temp_sprintf("%s\\%s", parent, ent->d_name);
+        }
+        #else
+        if (!strcmp(parent, ".") || !strcmp(parent, "./")) {
+            path = nob_temp_strdup(ent->d_name);
+        } else {
+            path = nob_temp_sprintf("%s/%s", parent, ent->d_name);
+        }
+        #endif
+        switch(nob_get_file_type(path)) {
+            case NOB_FILE_REGULAR:
+                nob_da_append(children, path);
+                break;
+            case NOB_FILE_DIRECTORY:
+                result = nob_read_entire_dir_recursively(path, children);
+                break;
+            case NOB_FILE_SYMLINK:
+            case NOB_FILE_OTHER:
+                break;
+            default:
+                NOB_UNREACHABLE("nob_read_entire_dir_recursively");
+        }
+    next_entry:
+        ent = readdir(dir);
+    }
+
+    if (errno != 0) {
+        #ifdef _WIN32
+        nob_log(NOB_ERROR, "Could not read directory %s: %s", parent, nob_win32_error_message(GetLastError()));
+        #else
+        nob_log(NOB_ERROR, "Could not read directory %s: %s", parent, strerror(errno));
+        #endif // _WIN32
+        nob_return_defer(false);
+    }
+
+defer:
+    if (dir) closedir(dir);
+    return result;
+}
+
+NOBDEF bool nob_read_entire_dir_recursively_wildcard(const char *parent, const char *pattern, Nob_File_Paths *children)
+{
+    Nob_File_Paths paths = {0};
+    bool result = true;
+
+    if (!nob_read_entire_dir_recursively(parent, &paths)) {
+        nob_return_defer(false);
+    }
+    #ifdef _WIN32
+    // https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-pathmatchspecw
+    // https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/mbstowcs-s-mbstowcs-s-l
+    wchar_t pszFile[MAX_PATH], pszSpec[MAX_PATH];
+    size_t pszFileSize, pszSpecSize;
+    if (mbstowcs_s(&pszSpecSize, pszSpec, MAX_PATH, pattern, strlen(pattern) + 1)) {
+        nob_log(NOB_ERROR, "Could not converts multibyte characters to wide characters", parent, nob_win32_error_message(GetLastError()));
+        nob_return_defer(false);
+    }
+    nob_da_foreach(const char *, path, &paths) {
+        if (mbstowcs_s(&pszFileSize, pszFile, MAX_PATH, *path, strlen(*path) + 1)) {
+            nob_log(NOB_ERROR, "Could not converts multibyte characters to wide characters", parent, nob_win32_error_message(GetLastError()));
+            continue;
+        }
+        if (PathMatchSpecW((LPCWSTR)pszFile, (LPCWSTR)pszSpec) {
+            nob_da_append(children, *path);
+        }
+    }
+    #else
+    nob_da_foreach(const char *, path, &paths) {
+        if(!fnmatch(pattern, *path, FNM_PATHNAME)) {
+            nob_da_append(children, *path);
+        }
+    }
+    #endif
+
+defer:
+    nob_da_free(paths);
+    return result;
+}
+
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size)
 {
     bool result = true;
@@ -2224,6 +2333,8 @@ NOBDEF int closedir(DIR *dirp)
         #define copy_file nob_copy_file
         #define copy_directory_recursively nob_copy_directory_recursively
         #define read_entire_dir nob_read_entire_dir
+        #define read_entire_dir_recursively nob_read_entire_dir_recursively
+        #define read_entire_dir_recursively_wildcard nob_read_entire_dir_recursively_wildcard
         #define write_entire_file nob_write_entire_file
         #define get_file_type nob_get_file_type
         #define delete_file nob_delete_file
