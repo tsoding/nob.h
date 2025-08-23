@@ -164,6 +164,7 @@
 #    include <sys/wait.h>
 #    include <sys/stat.h>
 #    include <unistd.h>
+#    include <utime.h>
 #    include <fcntl.h>
 #endif
 
@@ -1672,7 +1673,7 @@ NOBDEF bool nob_touch_file(const char *path)
             nob_log(NOB_ERROR, "Could not touch file %s: %s", path, strerror(errno));
             return false;
         } else {
-            int fd = creat(path);
+            int fd = creat(path, 0644);
             if (fd == -1) {
                 nob_log(NOB_ERROR, "Could not touch file %s: %s", path, strerror(errno));
                 return false;
