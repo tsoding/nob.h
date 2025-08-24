@@ -854,7 +854,7 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
         nob_rename(old_binary_path, binary_path);
         exit(1);
     }
-#ifdef NOB_EXPERIMENTAL_DELETE_OLD
+#if defined(NOB_EXPERIMENTAL_DELETE_OLD) && !defined(_WIN32)
     // TODO: this is an experimental behavior behind a compilation flag.
     // Once it is confirmed that it does not cause much problems on both POSIX and Windows
     // we may turn it on by default.
@@ -864,6 +864,19 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
     nob_cmd_append(&cmd, binary_path);
     nob_da_append_many(&cmd, argv, argc);
     if (!nob_cmd_run_opt(&cmd, opt)) exit(1);
+
+#if defined(NOB_EXPERIMENTAL_DELETE_OLD) && defined(_WIN32)
+    // See https://github.com/tsoding/nob.h/issues/111
+    // On Windows we can't delete the currently running executable, so we instead
+    // launch an async process to do the deletion and exit to get out of the way.
+    // TODO: There's a race condition here, sleeping any positive amount of time
+    // before exiting seems enough to often trigger an "Access is denied" error.
+    Nob_Procs procs = {0};
+    opt.async = &procs;
+    nob_cmd_append(&cmd, "cmd.exe", "/c", "del", old_binary_path);
+    if (!nob_cmd_run_opt(&cmd, opt)) exit(1);
+#endif // NOB_EXPERIMENTAL_DELETE_OLD
+
     exit(0);
 }
 
