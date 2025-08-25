@@ -229,16 +229,24 @@ typedef enum {
     NOB_FILE_OTHER,
 } Nob_File_Type;
 
+// Options for nob_read_entire_dir_opt() function.
+typedef struct {
+    // Read dir recursively
+    bool recursively;
+    // Match recursively retrieved results by belowed wildcard string
+    const char *wildcard;
+} Nob_Read_Entire_Dir_Opt;
+
 NOBDEF bool nob_mkdir_if_not_exists(const char *path);
 NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path);
 NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
-NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
-NOBDEF bool nob_read_entire_dir_recursively(const char *parent, Nob_File_Paths *children);
-NOBDEF bool nob_read_entire_dir_recursively_wildcard(const char *parent, const char *pattern, Nob_File_Paths *children);
+NOBDEF bool nob_read_entire_dir_opt(const char *parent, Nob_File_Paths *children, Nob_Read_Entire_Dir_Opt opt);
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
 
+// Same as nob_read_entire_dir_opt but using cool variadic macro to set the default options.
+#define nob_read_entire_dir(parent, children, ...) nob_read_entire_dir_opt((parent), (children), (Nob_Read_Entire_Dir_Opt){__VA_ARGS__})
 #define nob_return_defer(value) do { result = (value); goto defer; } while(0)
 
 // Initial capacity of a dynamic array
@@ -1534,7 +1542,7 @@ NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
     fprintf(stderr, "\n");
 }
 
-NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
+NOBDEF bool nob__read_entire_dir(const char *parent, Nob_File_Paths *children)
 {
     bool result = true;
     DIR *dir = NULL;
@@ -1571,7 +1579,7 @@ defer:
     return result;
 }
 
-NOBDEF bool nob_read_entire_dir_recursively(const char *parent, Nob_File_Paths *children)
+NOBDEF bool nob__read_entire_dir_recursively(const char *parent, Nob_File_Paths *children)
 {
     bool result = true;
     DIR *dir = NULL;
@@ -1611,7 +1619,7 @@ NOBDEF bool nob_read_entire_dir_recursively(const char *parent, Nob_File_Paths *
                 nob_da_append(children, path);
                 break;
             case NOB_FILE_DIRECTORY:
-                result = nob_read_entire_dir_recursively(path, children);
+                result = result && nob__read_entire_dir_recursively(path, children);
                 break;
             case NOB_FILE_SYMLINK:
             case NOB_FILE_OTHER:
@@ -1637,12 +1645,12 @@ defer:
     return result;
 }
 
-NOBDEF bool nob_read_entire_dir_recursively_wildcard(const char *parent, const char *pattern, Nob_File_Paths *children)
+NOBDEF bool nob__read_entire_dir_wildcard(const char *parent, Nob_File_Paths *children, const char *pattern)
 {
     Nob_File_Paths paths = {0};
     bool result = true;
 
-    if (!nob_read_entire_dir_recursively(parent, &paths)) {
+    if (!nob__read_entire_dir_recursively(parent, &paths)) {
         nob_return_defer(false);
     }
     #ifdef _WIN32
@@ -1659,7 +1667,7 @@ NOBDEF bool nob_read_entire_dir_recursively_wildcard(const char *parent, const c
             nob_log(NOB_ERROR, "Could not converts multibyte characters to wide characters", parent, nob_win32_error_message(GetLastError()));
             continue;
         }
-        if (PathMatchSpecW((LPCWSTR)pszFile, (LPCWSTR)pszSpec) {
+        if (PathMatchSpecW((LPCWSTR)pszFile, (LPCWSTR)pszSpec)) {
             nob_da_append(children, *path);
         }
     }
@@ -1674,6 +1682,17 @@ NOBDEF bool nob_read_entire_dir_recursively_wildcard(const char *parent, const c
 defer:
     nob_da_free(paths);
     return result;
+}
+
+NOBDEF bool nob_read_entire_dir_opt(const char *parent, Nob_File_Paths *children, Nob_Read_Entire_Dir_Opt opt)
+{
+    if (opt.wildcard) {
+        return nob__read_entire_dir_wildcard(parent, children, opt.wildcard);
+    }
+    if (opt.recursively) {
+        return nob__read_entire_dir_recursively(parent, children);
+    }
+    return nob__read_entire_dir(parent, children);
 }
 
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size)
@@ -2332,9 +2351,9 @@ NOBDEF int closedir(DIR *dirp)
         #define mkdir_if_not_exists nob_mkdir_if_not_exists
         #define copy_file nob_copy_file
         #define copy_directory_recursively nob_copy_directory_recursively
+        #define Read_Entire_Dir_Opt Nob_Read_Entire_Dir_Opt
+        #define read_entire_dir_opt nob_read_entire_dir_opt
         #define read_entire_dir nob_read_entire_dir
-        #define read_entire_dir_recursively nob_read_entire_dir_recursively
-        #define read_entire_dir_recursively_wildcard nob_read_entire_dir_recursively_wildcard
         #define write_entire_file nob_write_entire_file
         #define get_file_type nob_get_file_type
         #define delete_file nob_delete_file
