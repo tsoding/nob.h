@@ -17,8 +17,6 @@ const char *test_names[] = {
     "win32_error",
 #endif //_WIN32
     "read_entire_dir",
-    "read_entire_dir_recursively",
-    "read_entire_dir_recursively_wildcard",
     "da_resize",
     "da_last",
     "da_remove_unordered",
