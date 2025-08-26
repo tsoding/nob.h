@@ -1,4 +1,8 @@
 nob
 nob.old
 nob.exe
+dpkg
+dpkg.old
+nob.h.deb
 build/
+debuild/

@@ -1,0 +1,9 @@
+Package: nob.h
+Version: 1.0
+Maintainer: tsoding
+Description: Next Generation of the NoBuild
+ nob.h is a single-header library which allows
+ you to build your project using nothing but a C
+ compiler (and the single-header library)
+Architecture: all
+Depends: libc6
