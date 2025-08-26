@@ -234,6 +234,7 @@ NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
+NOBDEF bool nob_delete_dir(const char *path);
 
 #define nob_return_defer(value) do { result = (value); goto defer; } while(0)
 
@@ -1644,6 +1645,47 @@ NOBDEF bool nob_delete_file(const char *path)
 #endif // _WIN32
 }
 
+NOBDEF bool nob_delete_dir(const char *path)
+{
+    bool result = true;
+    nob_log(NOB_INFO, "deleting %s", path);
+    Nob_File_Paths children = {0};
+    if (!nob_read_entire_dir(path, &children)) return false;
+    for (size_t i = 0; i < children.count; ++i) {
+        const char *child = children.items[i];
+        Nob_String_Builder child_path = {0};
+        nob_sb_append_cstr(&child_path, path);
+        nob_sb_append_cstr(&child_path, "/");
+        nob_sb_append_cstr(&child_path, child);
+        nob_sb_append_null(&child_path);
+        Nob_File_Type type = nob_get_file_type(child_path.items);
+        if (type < 0) {
+            nob_return_defer(false);
+        }
+        if (type == NOB_FILE_DIRECTORY) {
+            if (strcmp(child, ".") != 0 && strcmp(child, "..") != 0) {
+                if (!nob_delete_dir(child_path.items)) {
+                    nob_return_defer(false);
+                }
+            }
+        } else {
+            if (!nob_delete_file(child_path.items)) {
+                nob_return_defer(false);
+            }
+        }
+        nob_sb_free(child_path);
+        continue;
+
+        defer:
+            nob_sb_free(child_path);
+            return result;
+    }
+    if (!nob_delete_file(path)) {
+        result = false;
+    }
+    return result;
+}
+
 NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
 {
     bool result = true;
@@ -2227,6 +2269,7 @@ NOBDEF int closedir(DIR *dirp)
         #define write_entire_file nob_write_entire_file
         #define get_file_type nob_get_file_type
         #define delete_file nob_delete_file
+        #define delete_dir nob_delete_dir
         #define return_defer nob_return_defer
         #define da_append nob_da_append
         #define da_free nob_da_free
