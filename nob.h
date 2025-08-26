@@ -2256,6 +2256,10 @@ NOBDEF int closedir(DIR *dirp)
         #define procs_wait_and_reset nob_procs_wait_and_reset
         #define procs_append_with_flush nob_procs_append_with_flush
         #define procs_flush nob_procs_flush
+        #define cc nob_cc
+        #define cc_flags nob_cc_flags
+        #define cc_inputs nob_cc_inputs
+        #define cc_output nob_cc_output
         #define Cmd Nob_Cmd
         #define Cmd_Redirect Nob_Cmd_Redirect
         #define Cmd_Opt Nob_Cmd_Opt
