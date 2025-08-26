@@ -2129,7 +2129,6 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
-     1.23.0 (2025-08-20) Add nob_delete_dir() (by @jamesaorson)
      1.22.0 (2025-08-12) Add NOBDEF macro to the beginning of function declarations (by @minefreak19)
                          Add more flags to MSVC nob_cc_flags() (by @PieVieRo)
      1.21.0 (2025-08-11) Add NOB_NO_MINIRENT guard for "minirent.h" (by @fietec)
