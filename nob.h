@@ -1425,14 +1425,10 @@ NOBDEF bool nob_delete_file(const char *path)
 
 NOBDEF bool nob_delete_dir(const char *path)
 {
+    bool result = true;
     nob_log(NOB_INFO, "deleting %s", path);
     Nob_File_Paths children = {0};
     if (!nob_read_entire_dir(path, &children)) return false;
-
-    Nob_Log_Level old_log_level = nob_minimal_log_level;
-    if (nob_minimal_log_level < NOB_NO_LOGS) {
-        nob_minimal_log_level = NOB_ERROR;
-    }
     for (size_t i = 0; i < children.count; ++i) {
         const char *child = children.items[i];
         Nob_String_Builder child_path = {0};
@@ -1442,33 +1438,30 @@ NOBDEF bool nob_delete_dir(const char *path)
         nob_sb_append_null(&child_path);
         Nob_File_Type type = nob_get_file_type(child_path.items);
         if (type < 0) {
-            nob_minimal_log_level = old_log_level;
-            nob_sb_free(child_path);
-            return false;
+            nob_return_defer(false);
         }
         if (type == NOB_FILE_DIRECTORY) {
             if (strcmp(child, ".") != 0 && strcmp(child, "..") != 0) {
                 if (!nob_delete_dir(child_path.items)) {
-                    nob_minimal_log_level = old_log_level;
-                    nob_sb_free(child_path);
-                    return false;
+                    nob_return_defer(false);
                 }
             }
         } else {
             if (!nob_delete_file(child_path.items)) {
-                nob_minimal_log_level = old_log_level;
-                nob_sb_free(child_path);
-                return false;
+                nob_return_defer(false);
             }
         }
         nob_sb_free(child_path);
+        continue;
+
+        defer:
+            nob_sb_free(child_path);
+            return result;
     }
     if (!nob_delete_file(path)) {
-        nob_minimal_log_level = old_log_level;
-        return false;
+        result = false;
     }
-    nob_minimal_log_level = old_log_level;
-    return true;
+    return result;
 }
 
 NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
