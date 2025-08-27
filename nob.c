@@ -90,14 +90,14 @@ int main(int argc, char **argv)
     }
 
     if (strcmp(command_name, "dpkg") == 0) {
-        mkdir_if_not_exists(BUILD_FOLDER);
-        mkdir_if_not_exists(BUILD_FOLDER "dpkg");
-        mkdir_if_not_exists(BUILD_FOLDER "dpkg/DEBIAN");
-        mkdir_if_not_exists(BUILD_FOLDER "dpkg/usr");
-        mkdir_if_not_exists(BUILD_FOLDER "dpkg/usr/lib");
-        mkdir_if_not_exists(BUILD_FOLDER "dpkg/usr/include");
-        copy_file("debian.control", BUILD_FOLDER "dpkg/DEBIAN/control");
-        copy_file("nob.h", BUILD_FOLDER "dpkg/usr/include/nob.h");
+        if(!mkdir_if_not_exists(BUILD_FOLDER)) return 1;
+        if(!mkdir_if_not_exists(BUILD_FOLDER "dpkg")) return 1;
+        if(!mkdir_if_not_exists(BUILD_FOLDER "dpkg/DEBIAN")) return 1;
+        if(!mkdir_if_not_exists(BUILD_FOLDER "dpkg/usr")) return 1;
+        if(!mkdir_if_not_exists(BUILD_FOLDER "dpkg/usr/lib")) return 1;
+        if(!mkdir_if_not_exists(BUILD_FOLDER "dpkg/usr/include")) return 1;
+        if(!copy_file("debian.control", BUILD_FOLDER "dpkg/DEBIAN/control")) return 1;
+        if(!copy_file("nob.h", BUILD_FOLDER "dpkg/usr/include/nob.h")) return 1;
 
         Cmd c = {0};
         nob_cc(&c);
