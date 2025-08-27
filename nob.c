@@ -99,16 +99,15 @@ int main(int argc, char **argv)
         if(!copy_file("debian.control", BUILD_FOLDER "dpkg/DEBIAN/control")) return 1;
         if(!copy_file("nob.h", BUILD_FOLDER "dpkg/usr/include/nob.h")) return 1;
 
-        Cmd c = {0};
-        nob_cc(&c);
-        nob_cc_flags(&c); //TODO maybe use different flags here
-        cmd_append(&c, "-fpic", "-shared", "-DNOB_IMPLEMENTATION", "-DNOB_LINK_URSELF");
-        nob_cc_output(&c, BUILD_FOLDER "dpkg/usr/lib/libnob.so");
-        cmd_append(&c, "-x", "c", "nob.h");
-        if(!cmd_run(&c)) return 1;
+        nob_cc(&cmd);
+        nob_cc_flags(&cmd); //TODO maybe use different flags here
+        cmd_append(&cmd, "-fpic", "-shared", "-DNOB_IMPLEMENTATION", "-DNOB_LINK_URSELF");
+        nob_cc_output(&cmd, BUILD_FOLDER "dpkg/usr/lib/libnob.so");
+        cmd_append(&cmd, "-x", "c", "nob.h");
+        if(!cmd_run(&cmd)) return 1;
 
-        cmd_append(&c, "dpkg-deb", "-b", BUILD_FOLDER "dpkg", BUILD_FOLDER "nob.h.deb");
-        if(!cmd_run(&c)) return 1;
+        cmd_append(&cmd, "dpkg-deb", "-b", BUILD_FOLDER "dpkg", BUILD_FOLDER "nob.h.deb");
+        if(!cmd_run(&cmd)) return 1;
         return 0;
     }
 
