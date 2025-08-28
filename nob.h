@@ -390,12 +390,15 @@ typedef struct {
     size_t capacity;
 } Nob_Cmd;
 
+typedef struct Nob_Strace_Cache Nob_Strace_Cache;
 // Options for nob_cmd_run_opt() function.
 typedef struct {
     // Run the command asynchronously appending its Nob_Proc to the provided Nob_Procs array
     Nob_Procs *async;
     // Maximum processes allowed in the .async list. Zero implies nob_nprocs().
     size_t max_procs;
+    // Caching system that uses strace to determin what files are input and outputs to the command (Only on linux.)
+    Nob_Strace_Cache *strace_cache;
     // Redirect stdin to file
     const char *stdin_path;
     // Redirect stdout to file
@@ -667,6 +670,7 @@ typedef struct {
 NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv);
 
 NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim);
+NOBDEF Nob_String_View nob_sv_chop_by_delim_sv(Nob_String_View *sv, Nob_String_View delim);
 NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n);
 NOBDEF Nob_String_View nob_sv_trim(Nob_String_View sv);
 NOBDEF Nob_String_View nob_sv_trim_left(Nob_String_View sv);
@@ -674,6 +678,7 @@ NOBDEF Nob_String_View nob_sv_trim_right(Nob_String_View sv);
 NOBDEF bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
 NOBDEF bool nob_sv_end_with(Nob_String_View sv, const char *cstr);
 NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_prefix);
+NOBDEF bool nob_sv_contains(Nob_String_View sv, Nob_String_View value);
 NOBDEF Nob_String_View nob_sv_from_cstr(const char *cstr);
 NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
@@ -689,6 +694,57 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // USAGE:
 //   String_View name = ...;
 //   printf("Name: "SV_Fmt"\n", SV_Arg(name));
+
+typedef struct Nob_String_Builders {
+  Nob_String_Builder *items;
+  size_t count;
+  size_t capacity;
+
+  size_t alloc_count;
+} Nob_String_Builders;
+
+NOBDEF void nob_string_builders_push(Nob_String_Builders *sbs, Nob_String_View sv);
+
+typedef struct Nob_Strace_Cache_Indexies {
+  int *items;
+  size_t count;
+  size_t capacity;
+} Nob_Strace_Cache_Indexies;
+
+typedef struct Nob_Strace_Cache_Node {
+  char *argv;
+  Nob_Strace_Cache_Indexies children;
+  Nob_String_Builders input_files;
+  Nob_String_Builders output_files;
+} Nob_Strace_Cache_Node;
+
+typedef struct Nob_Strace_Cache_Nodes {
+  Nob_Strace_Cache_Node *items;
+  size_t count;
+  size_t capacity;
+} Nob_Strace_Cache_Nodes;
+
+struct Nob_Strace_Cache {
+  Nob_Strace_Cache_Nodes nodes;
+  Nob_Strace_Cache_Indexies roots;
+  Nob_Cmd temp_cmd; // Don't worry about it...
+  Nob_String_Builder temp_sb; // Don't worry about it...
+
+  const char *file_path; // File that will be used to read and write collected information for caching
+  bool is_loaded;
+};
+
+static bool nob_cmd_strace_is_cached(Nob_Strace_Cache cache, Nob_Cmd cmd);
+static Nob_Strace_Cache_Node *nob_cmd_strace_cache_node(Nob_Strace_Cache *cache, Nob_Cmd cmd, Nob_Strace_Cache_Indexies *indexies, bool dup);
+static bool nob_strace_cache_parse_output(const char *strace_output_path, Nob_String_Builders *input_files, Nob_String_Builders *output_files, Nob_String_Builder *strace_output);
+static bool nob_strace_cache_parse_cmd(Nob_String_View sv, Nob_Cmd *cmd);
+static bool nob_strace_cache_parse_file_list(Nob_String_View sv, Nob_String_Builders *files);
+static bool nob_strace_cache_read(Nob_Strace_Cache *cache);
+static bool nob_strace_cache_write_rec(Nob_Strace_Cache cache, Nob_String_Builder *out, Nob_Strace_Cache_Indexies roots);
+static bool nob_strace_cache_write(Nob_Strace_Cache cache);
+
+bool nob_cmd_cache_run(Nob_Cmd *cmd, Nob_Strace_Cache *cache);
+void nob_strace_cache_free(Nob_Strace_Cache cache);
 
 // DEPRECATED: Usage of the bundled minirent.h below is deprecated, because it introduces more
 // problems than it solves. It will be removed in the next major release of nob.h. In the meantime,
@@ -1034,6 +1090,48 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
 
     size_t max_procs = opt.max_procs > 0 ? opt.max_procs : (size_t) nob_nprocs() + 1;
 
+#if defined(_WIN32)
+    // TODO: strace cache Windows
+    opt.strace_cache = NULL;
+#endif
+
+    if (opt.strace_cache) {
+        Nob_Strace_Cache *cache = opt.strace_cache;
+        if (opt.async) NOB_TODO("Strace cache and async is not implemented.");
+        if (opt.stdin_path) NOB_TODO("Strace cache and stdin_path is not implemented.");
+        if (opt.stdout_path) NOB_TODO("Strace cache and stdout_path is not implemented.");
+        if (opt.stderr_path) NOB_TODO("Strace cache and stderr_path is not implemented.");
+
+        if (false == cache->is_loaded) {
+            if (false == nob_strace_cache_read(cache)) nob_return_defer(false);
+        }
+        cache->temp_cmd.count = 0;
+        if (true == nob_cmd_strace_is_cached(*cache, *cmd)) {
+            cache->temp_sb.count = 0;
+            nob_cmd_render(*cmd, &cache->temp_sb);
+            nob_log(NOB_INFO, "CACHED: %.*s", (int)cache->temp_sb.count, cache->temp_sb.items);
+            nob_return_defer(true);
+        }
+        cache->temp_cmd.count = 0;
+        // TODO: Add -o [Output trace into a file] flag. It's not that easy becase it will create out-file.<pid> foreach pid that is created by the command.
+        //       So that would imply that we need to read multiple files in a directory...
+        //                                    Folow forks       Only trace openat syscalls  Don't trace failed syscalls
+        nob_cmd_append(&cache->temp_cmd, "strace", "-ff"     , "-e", "trace=openat"            , "-z"                       );
+        for (size_t i = 0; i < cmd->count; ++i) {
+            nob_cmd_append(&cache->temp_cmd, cmd->items[i]);
+        }
+
+        const char *strace_path = "strace_err";
+        if (false == nob_cmd_run(&cache->temp_cmd, .stderr_path = strace_path)) {
+            nob_log(NOB_ERROR, "Failed to run strace: %s", strerror(errno));
+            nob_return_defer(false);
+        }
+
+        Nob_Strace_Cache_Node *node = nob_cmd_strace_cache_node(cache, *cmd, &cache->roots, true);
+        nob_strace_cache_parse_output(strace_path, &node->input_files, &node->output_files, &cache->temp_sb);
+        nob_return_defer(true);
+    }
+
     if (opt.async && max_procs > 0) {
         while (opt.async->count >= max_procs) {
             for (size_t i = 0; i < opt.async->count; ++i) {
@@ -1175,7 +1273,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 
         if (fderr) {
             if (dup2(*fderr, STDERR_FILENO) < 0) {
-                nob_log(NOB_ERROR, "Could not setup stderr for child process: %s", strerror(errno));
+                nob_log(NOB_ERROR, "Dick Could not setup stderr %d for child process: %s", *fderr, strerror(errno));
                 exit(1);
             }
         }
@@ -1932,6 +2030,22 @@ NOBDEF int nob_sb_appendf(Nob_String_Builder *sb, const char *fmt, ...)
     return n;
 }
 
+void nob_string_builders_push(Nob_String_Builders *sbs, Nob_String_View sv)
+{
+  // TODO: Handle situations where sv is already in sbs...
+  if (sbs->count == sbs->alloc_count++) {
+      Nob_String_Builder new_sb = { 0 };
+      nob_sb_appendf(&new_sb, "%.*s", (int)sv.count, sv.data);
+      nob_sb_append_null(&new_sb);
+      nob_da_append(sbs, new_sb);
+  } else {
+      Nob_String_Builder *old_sb = &sbs->items[sbs->count++];
+      old_sb->count = 0;
+      nob_sb_appendf(old_sb, "%.*s", (int)sv.count, sv.data);
+      nob_sb_append_null(old_sb);
+  }
+}
+
 NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim)
 {
     size_t i = 0;
@@ -1940,6 +2054,40 @@ NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim)
     }
 
     Nob_String_View result = nob_sv_from_parts(sv->data, i);
+
+    if (i < sv->count) {
+        sv->count -= i + 1;
+        sv->data  += i + 1;
+    } else {
+        sv->count -= i;
+        sv->data  += i;
+    }
+
+    return result;
+}
+
+NOBDEF Nob_String_View nob_sv_chop_by_delim_sv(Nob_String_View *sv, Nob_String_View delim)
+{
+    if (delim.count == 0) return nob_sv_from_parts(sv->data, 0);
+
+    size_t i = 0;
+
+    if (sv->count >= delim.count) {
+      for (; i < sv->count + 1 - delim.count; ++i) {
+        bool is_match = true;
+        for (size_t j = 0; j < delim.count; ++j) {
+          if (sv->data[i + j] != delim.data[j]) {
+            is_match = false;
+            break;
+          }
+        }
+
+        if (is_match) break;
+      }
+    }
+    Nob_String_View result = nob_sv_from_parts(sv->data, i);
+
+    i += delim.count - 1;
 
     if (i < sv->count) {
         sv->count -= i + 1;
@@ -2034,6 +2182,286 @@ NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_pref
 
     return false;
 }
+
+NOBDEF bool nob_sv_contains(Nob_String_View sv, Nob_String_View value)
+{
+    for (size_t i = 0; i < sv.count + 1 - value.count; ++i) {
+        bool is_match = true;
+        for (size_t j = 0; j < value.count; ++j) {
+            if (sv.data[i + j] != value.data[j]) {
+                is_match = false;
+                break;
+            }
+        }
+
+        if (is_match) return true;
+    }
+    return false;
+}
+
+NOBDEF void nob_strace_cache_finish(Nob_Strace_Cache cache)
+{
+    nob_strace_cache_write(cache);
+    nob_da_free(cache.roots);
+    nob_cmd_free(cache.temp_cmd);
+    nob_sb_free(cache.temp_sb);
+    for (size_t i = 0; i < cache.nodes.count; ++i) {
+        Nob_Strace_Cache_Node node = cache.nodes.items[i];
+        nob_da_free(node.children);
+        for (size_t j = 0; j < node.input_files.count; ++j)  nob_sb_free(node.input_files.items[j]);
+        for (size_t j = 0; j < node.output_files.count; ++j) nob_sb_free(node.output_files.items[j]);
+        free(node.argv);
+        nob_da_free(node.input_files);
+        nob_da_free(node.output_files);
+    }
+    nob_da_free(cache.nodes);
+}
+
+static bool nob_cmd_strace_is_cached(Nob_Strace_Cache cache, Nob_Cmd cmd)
+{
+  int cmd_index = 0;
+  int node_index = -1;
+
+  for (size_t i = 0; i < cache.roots.count; ++i) {
+      int cur_node_index = cache.roots.items[i];
+      Nob_Strace_Cache_Node node = cache.nodes.items[cur_node_index];
+      if (strcmp(cmd.items[0], node.argv) == 0) {
+          node_index = cur_node_index;
+      }
+  }
+  ++cmd_index;
+
+  if (node_index < 0) return false;
+  Nob_Strace_Cache_Node node = cache.nodes.items[node_index];
+  while (cmd_index < (int)cmd.count) {
+      Nob_Strace_Cache_Node child_node;
+      int child_index;
+      for (size_t i = 0; i < node.children.count; ++i) {
+          child_index = node.children.items[i];
+          child_node = cache.nodes.items[child_index];
+          if (strcmp(cmd.items[cmd_index], child_node.argv) == 0) goto found;
+      }
+      return false;
+
+found:
+      node = child_node;
+      node_index = child_index;
+      ++cmd_index;
+  }
+
+  cache.temp_cmd.count = 0;
+  for (size_t i = 0; i < node.input_files.count; ++i) {
+      nob_cmd_append(&cache.temp_cmd, node.input_files.items[i].items);
+  }
+
+  for (size_t i = 0; i < node.output_files.count; ++i) {
+      if (nob_needs_rebuild(node.output_files.items[i].items, cache.temp_cmd.items, cache.temp_cmd.count)) return false;
+  }
+
+  return true;
+}
+
+static Nob_Strace_Cache_Node *nob_cmd_strace_cache_node(Nob_Strace_Cache *cache, Nob_Cmd cmd, Nob_Strace_Cache_Indexies *indexies, bool dup)
+{
+    assert(cmd.count != 0);
+
+    int node_index = -1;
+
+    for (size_t i = 0; i < indexies->count; ++i) {
+        int cur_node_index = indexies->items[i];
+        Nob_Strace_Cache_Node node = cache->nodes.items[cur_node_index];
+        if (strcmp(cmd.items[0], node.argv) == 0) {
+            node_index = cur_node_index;
+        }
+    }
+
+    Nob_Strace_Cache_Node *next = NULL;
+    if (node_index == -1) {
+        Nob_Strace_Cache_Node new_node = {
+            .argv = dup ? strdup(cmd.items[0]) : (char*)cmd.items[0],
+        };
+        nob_da_append(&cache->nodes, new_node);
+        nob_da_append(indexies, cache->nodes.count - 1);
+        next = &nob_da_last(&cache->nodes);
+    } else {
+        next = &cache->nodes.items[node_index];
+    }
+
+    if (cmd.count == 1) return next;
+
+    ++cmd.items;
+    --cmd.count;
+
+    return nob_cmd_strace_cache_node(cache, cmd, &next->children, dup);
+}
+
+static bool nob_strace_cache_parse_output(const char *strace_output_path, Nob_String_Builders *input_files, Nob_String_Builders *output_files, Nob_String_Builder *strace_output)
+{
+    if (!nob_read_entire_file(strace_output_path, strace_output)) return false;
+
+    Nob_String_View iter = nob_sb_to_sv(*strace_output);
+    Nob_String_View openat_delim = nob_sv_from_cstr("openat(");
+    Nob_String_View _ = { 0 };
+    (void)_;
+
+    while (iter.count > 0) {
+        _ = nob_sv_chop_by_delim_sv(&iter, openat_delim);
+        _ = nob_sv_chop_by_delim(&iter, '"');
+        Nob_String_View path = nob_sv_chop_by_delim(&iter, '"');
+        if (path.count == 0) break;
+
+        if (nob_sv_starts_with(path, nob_sv_from_cstr("/usr/"))) continue; // SKIP system files...
+        if (nob_sv_starts_with(path, nob_sv_from_cstr("/etc/"))) continue; // SKIP etc files...
+        if (nob_sv_starts_with(path, nob_sv_from_cstr("/tmp/"))) continue; // SKIP tmp files...
+                                                                           // TODO: Think about adding a flag to enable system/etc/tmp files
+
+        Nob_String_View rw_args = nob_sv_chop_by_delim(&iter, ')');
+        if (rw_args.count == 0) break;
+
+        bool is_read  = nob_sv_contains(rw_args, nob_sv_from_cstr("O_RDONLY"));
+        bool is_write = nob_sv_contains(rw_args, nob_sv_from_cstr("O_RDWR")) ||
+                        nob_sv_contains(rw_args, nob_sv_from_cstr("O_WRONLY"));
+
+        if (is_write) {
+            nob_string_builders_push(output_files, path);
+        } else if (is_read) {
+            nob_string_builders_push(input_files, path);
+        } else {
+            nob_log(NOB_WARNING, "Unknown rw_args(%zu): `%.*s`", rw_args.count, (int)rw_args.count, rw_args.data);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool nob_strace_cache_parse_cmd(Nob_String_View sv, Nob_Cmd *cmd)
+{
+    // TODO: Handle spaces..
+    sv = nob_sv_trim_left(sv);
+    while (sv.count > 0)
+    {
+        Nob_String_View arg = nob_sv_chop_by_delim(&sv, ' ');
+        char *arg_dup = strdup(nob_temp_sprintf("%.*s", (int)arg.count, arg.data));
+        nob_cmd_append(cmd, arg_dup);
+        sv = nob_sv_trim_left(sv);
+    }
+    return true;
+}
+
+static bool nob_strace_cache_parse_file_list(Nob_String_View sv, Nob_String_Builders *files)
+{
+    // TODO: Handle spaces..
+    sv = nob_sv_trim_left(sv);
+    while (sv.count > 0)
+    {
+        Nob_String_View file_view = nob_sv_chop_by_delim(&sv, ' ');
+        Nob_String_View arg = nob_sv_from_cstr(nob_temp_sprintf("%.*s", (int)file_view.count, file_view.data));
+        nob_string_builders_push(files, arg);
+        sv = nob_sv_trim_left(sv);
+    }
+    return true;
+}
+
+static bool nob_strace_cache_read(Nob_Strace_Cache *cache)
+{
+    NOB_ASSERT(cache->is_loaded == false);
+    cache->is_loaded = true;
+
+    if (NULL == cache->file_path) return true;
+
+    int exists = nob_file_exists(cache->file_path);
+    if (exists == -1) return false;
+
+    // File doesn't exist but that is ok because, maybe, it's the first time building.
+    // And we don't need to do anything else.
+    if (exists == 0) {
+      nob_log(NOB_INFO, "Cache Cold");
+      return true;
+    }
+
+    if (false == nob_read_entire_file(cache->file_path, &cache->temp_sb)) return false;
+
+    Nob_String_View iter = nob_sb_to_sv(cache->temp_sb);
+    iter = nob_sv_trim_left(iter);
+    while (iter.count > 0) {
+        Nob_String_View outputs = nob_sv_chop_by_delim(&iter, ':');
+        if (outputs.count == 0) {
+            nob_log(NOB_ERROR, "Failed to read outputs, expected:\n<outputs>: <inputs>\n\t<cmd>\n");
+            return false;
+        }
+        if (iter.count == 0) {
+            nob_log(NOB_ERROR, "Expected inputs after outputs:\n<outputs>: <inputs>\n\t<cmd>\n");
+            return false;
+        }
+
+        Nob_String_View inputs = nob_sv_chop_by_delim(&iter, '\n');
+        if (inputs.count == 0) {
+            nob_log(NOB_ERROR, "Failed to read inputs, expected:\n<outputs>: <inputs>\n\t<cmd>\n");
+            return false;
+        }
+        if (iter.count == 0) {
+            nob_log(NOB_ERROR, "Expected command after inputs:\n<outputs>: <inputs>\n\t<cmd>\n");
+            return false;
+        }
+
+        Nob_String_View command = iter;
+        Nob_String_View command2 = nob_sv_chop_by_delim(&iter, '\n');
+        // Handle the case where file ends without new line
+        if (command2.count > 0) command = command2;
+
+        if (false == nob_strace_cache_parse_cmd(command, &cache->temp_cmd)) return false;
+        Nob_Strace_Cache_Node *node = nob_cmd_strace_cache_node(cache, cache->temp_cmd, &cache->roots, false);
+        if (false == nob_strace_cache_parse_file_list(inputs, &node->input_files)) {
+            nob_log(NOB_ERROR, "Failed to parse input file list: `%.*s`", (int)inputs.count, inputs.data);
+            return false;
+        }
+        if (false == nob_strace_cache_parse_file_list(outputs, &node->output_files)) {
+            nob_log(NOB_ERROR, "Failed to parse output file list: `%.*s`", (int)outputs.count, outputs.data);
+            return false;
+        }
+        iter = nob_sv_trim_left(iter);
+    }
+    return true;
+}
+
+static bool nob_strace_cache_write_rec(Nob_Strace_Cache cache, Nob_String_Builder *out, Nob_Strace_Cache_Indexies roots)
+{
+    size_t old_count = cache.temp_sb.count;
+    for (size_t i = 0; i < roots.count; ++i) {
+        Nob_Strace_Cache_Node node = cache.nodes.items[roots.items[i]];
+        nob_sb_append_cstr(&cache.temp_sb, node.argv);
+        if (node.input_files.count > 0 || node.output_files.count > 0) {
+            for (size_t j = 0; j < node.output_files.count; ++j) {
+                if (j + 1 < node.output_files.count) nob_sb_appendf(out, "%.*s ",  (int)node.output_files.items[j].count, node.output_files.items[j].items);
+                else                                 nob_sb_appendf(out, "%.*s: ", (int)node.output_files.items[j].count, node.output_files.items[j].items);
+            }
+            for (size_t j = 0; j < node.input_files.count; ++j) {
+                if (j + 1 < node.input_files.count) nob_sb_appendf(out, "%.*s ",    (int)node.input_files.items[j].count, node.input_files.items[j].items);
+                else                                nob_sb_appendf(out, "%.*s\n\t", (int)node.input_files.items[j].count, node.input_files.items[j].items);
+            }
+            nob_sb_appendf(out, "%.*s\n\n", (int)cache.temp_sb.count, cache.temp_sb.items);
+        } else {
+            // TODO: if an arg contains space or other whitespaces, escape them..
+            nob_sb_append_cstr(&cache.temp_sb, " ");
+            nob_strace_cache_write_rec(cache, out, node.children);
+        }
+
+        cache.temp_sb.count = old_count;
+    }
+    return true;
+}
+
+static bool nob_strace_cache_write(Nob_Strace_Cache cache)
+{
+    Nob_String_Builder out = { 0 };
+    cache.temp_sb.count = 0;
+    if (false == nob_strace_cache_write_rec(cache, &out, cache.roots)) return false;
+    if (false == nob_write_entire_file(cache.file_path, out.items, out.count)) return false;
+    nob_sb_free(out);
+    return true;
+}
+
 
 // RETURNS:
 //  0 - file does not exists
