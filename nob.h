@@ -732,6 +732,7 @@ struct Nob_Strace_Cache {
 
   const char *file_path; // File that will be used to read and write collected information for caching
   bool is_loaded;
+  bool is_disabled;
 
   bool was_last_cached;
 };
@@ -773,14 +774,15 @@ static bool nob_strace_cache_write(Nob_Strace_Cache *cache);
 //     * Do we wanna even support those commands?
 //     * Maybe store hashes of each files in 
 //   * Make the output format such that the first line of command is cd command to the pwd of command. [how_to/nob.c not cachable because of this]
-//   * Check if strace exists on Macs, and BSDs
+//   * How to do this on BSDs?
+//   * How to do this on Mac?
 //   * How to do this on Windows?
 //   * Check how stable strace output is.
 //   * realpath expands symlinks and that means that if the symlink changes, cache will not be invalidated. Do something about this..
 //   * Use <sys/ptrace.h> insted of strace utility. Check how to use <sys/ptrace.h> at https://github.com/strace/strace
 //     strace is just a program that is not on all distributions. <sys/ptrace.h> is part of glibc and should be more cross platform.
-//   * Run ``strace -v`` to check if strace binary is on the system, if not, disable strace caching.
 //   * Do something about programs that don't read or write anything..
+//   * Flag to disable absolute paths. It is more correct to have absolute path, but it looks ugly.
 
 // DEPRECATED: Usage of the bundled minirent.h below is deprecated, because it introduces more
 // problems than it solves. It will be removed in the next major release of nob.h. In the meantime,
@@ -1131,16 +1133,20 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
     opt.strace_cache = NULL;
 #endif
 
-    if (opt.strace_cache) {
+    if (opt.strace_cache && false == opt.strace_cache->is_disabled) {
         Nob_Strace_Cache *cache = opt.strace_cache;
+        if (false == cache->is_loaded) {
+            if (false == nob_strace_cache_read(cache)) {
+                cache->is_disabled = true;
+                goto disabled_strace_cache;
+            }
+        }
+
         if (opt.async) NOB_TODO("Strace cache and async is not implemented.");
         if (opt.stdin_path) NOB_TODO("Strace cache and stdin_path is not implemented.");
         if (opt.stdout_path) NOB_TODO("Strace cache and stdout_path is not implemented.");
         if (opt.stderr_path) NOB_TODO("Strace cache and stderr_path is not implemented.");
 
-        if (false == cache->is_loaded) {
-            if (false == nob_strace_cache_read(cache)) nob_return_defer(false);
-        }
         cache->temp_cmd.count = 0;
         if (true == nob_cmd_strace_is_cached(cache, *cmd)) {
             cache->temp_sb.count = 0;
@@ -1170,6 +1176,7 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         nob_return_defer(true);
     }
 
+disabled_strace_cache:
     if (opt.async && max_procs > 0) {
         while (opt.async->count >= max_procs) {
             for (size_t i = 0; i < opt.async->count; ++i) {
@@ -2446,6 +2453,16 @@ static bool nob_strace_cache_read(Nob_Strace_Cache *cache)
 {
     NOB_ASSERT(cache->is_loaded == false);
     cache->is_loaded = true;
+
+    // Check if strace exists on the system
+    Nob_Cmd cmd = { 0 };
+    nob_cmd_append(&cmd, "strace", "-V");
+    bool test_strace_result = nob_cmd_run(&cmd);
+    nob_cmd_free(cmd);
+    if (false == test_strace_result) {
+      nob_log(NOB_WARNING, "Failed to run `strace -V` Continuing without caching.");
+      return false;
+    }
 
     if (NULL == cache->file_path) return true;
 
