@@ -758,6 +758,7 @@ void nob_strace_cache_finish(Nob_Strace_Cache cache);
 
 static bool nob_cmd_strace_is_cached(Nob_Strace_Cache *cache, Nob_Cmd cmd);
 static Nob_Strace_Cache_Node *nob_cmd_strace_cache_node(Nob_Strace_Cache *cache, Nob_Cmd cmd, Nob_Strace_Cache_Indexies *indexies, bool dup);
+static Nob_String_View nob_strace_cache_relative_to_absolute(Nob_String_View sv);
 static bool nob_strace_cache_parse_output(const char *strace_output_path, Nob_String_Builders *input_files, Nob_String_Builders *output_files, Nob_String_Builder *strace_output);
 static bool nob_strace_cache_parse_cmd(Nob_String_View sv, Nob_Cmd *cmd);
 static bool nob_strace_cache_parse_file_list(Nob_String_View sv, Nob_String_Builders *files);
@@ -1177,7 +1178,11 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         Nob_Strace_Cache_Node *node = nob_cmd_strace_cache_node(cache, *cmd, &cache->roots, true);
         nob_strace_cache_parse_output(strace_path, &node->input_files, &node->output_files, &cache->temp_sb);
         // Add a file that was executed because it's not picked up by strace..
-        nob_string_builders_push_unique(&node->input_files, nob_sv_from_cstr(cmd->items[0]));
+        if (nob_file_exists(cmd->items[0]) > 0) {
+          // But only if it exists, if it doesn't it means that the binary was picked up from the path and that means it's no relevant.
+          // (maybe...)
+          nob_string_builders_push_unique(&node->input_files, nob_strace_cache_relative_to_absolute(nob_sv_from_cstr(cmd->items[0])));
+        }
         nob_return_defer(true);
     }
 
