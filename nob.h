@@ -733,6 +733,7 @@ struct Nob_Strace_Cache {
   const char *file_path; // File that will be used to read and write collected information for caching
   bool is_loaded;
   bool is_disabled;
+  bool no_absolute;
 
   bool was_last_cached;
 };
@@ -758,10 +759,10 @@ void nob_strace_cache_finish(Nob_Strace_Cache cache);
 
 static bool nob_cmd_strace_is_cached(Nob_Strace_Cache *cache, Nob_Cmd cmd);
 static Nob_Strace_Cache_Node *nob_cmd_strace_cache_node(Nob_Strace_Cache *cache, Nob_Cmd cmd, Nob_Strace_Cache_Indexies *indexies, bool dup);
-static Nob_String_View nob_strace_cache_relative_to_absolute(Nob_String_View sv);
-static bool nob_strace_cache_parse_output(const char *strace_output_path, Nob_String_Builders *input_files, Nob_String_Builders *output_files, Nob_String_Builder *strace_output);
+static Nob_String_View nob_strace_cache_relative_to_absolute_maybe(Nob_String_View sv, bool for_real);
+static bool nob_strace_cache_parse_output(const char *strace_output_path, Nob_String_Builders *input_files, Nob_String_Builders *output_files, Nob_String_Builder *strace_output, bool absolute_paths);
 static bool nob_strace_cache_parse_cmd(Nob_String_View sv, Nob_Cmd *cmd);
-static bool nob_strace_cache_parse_file_list(Nob_String_View sv, Nob_String_Builders *files);
+static bool nob_strace_cache_parse_file_list(Nob_String_View sv, Nob_String_Builders *files, bool absolute_paths);
 static bool nob_strace_cache_read(Nob_Strace_Cache *cache);
 static bool nob_strace_cache_write_rec(Nob_Strace_Cache *cache, Nob_String_Builder *out, Nob_Strace_Cache_Indexies roots);
 static bool nob_strace_cache_write(Nob_Strace_Cache *cache);
@@ -783,7 +784,6 @@ static bool nob_strace_cache_write(Nob_Strace_Cache *cache);
 //   * Use <sys/ptrace.h> insted of strace utility. Check how to use <sys/ptrace.h> at https://github.com/strace/strace
 //     strace is just a program that is not on all distributions. <sys/ptrace.h> is part of glibc and should be more cross platform.
 //   * Do something about programs that don't read or write anything..
-//   * Flag to disable absolute paths. It is more correct to have absolute path, but it looks ugly.
 
 // DEPRECATED: Usage of the bundled minirent.h below is deprecated, because it introduces more
 // problems than it solves. It will be removed in the next major release of nob.h. In the meantime,
@@ -1176,12 +1176,12 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         }
 
         Nob_Strace_Cache_Node *node = nob_cmd_strace_cache_node(cache, *cmd, &cache->roots, true);
-        nob_strace_cache_parse_output(strace_path, &node->input_files, &node->output_files, &cache->temp_sb);
+        nob_strace_cache_parse_output(strace_path, &node->input_files, &node->output_files, &cache->temp_sb, !cache->no_absolute);
         // Add a file that was executed because it's not picked up by strace..
         if (nob_file_exists(cmd->items[0]) > 0) {
           // But only if it exists, if it doesn't it means that the binary was picked up from the path and that means it's no relevant.
           // (maybe...)
-          nob_string_builders_push_unique(&node->input_files, nob_strace_cache_relative_to_absolute(nob_sv_from_cstr(cmd->items[0])));
+          nob_string_builders_push_unique(&node->input_files, nob_strace_cache_relative_to_absolute_maybe(nob_sv_from_cstr(cmd->items[0]), !cache->no_absolute));
         }
         nob_return_defer(true);
     }
@@ -2366,8 +2366,10 @@ static Nob_Strace_Cache_Node *nob_cmd_strace_cache_node(Nob_Strace_Cache *cache,
     return nob_cmd_strace_cache_node(cache, cmd, &next->children, dup);
 }
 
-static Nob_String_View nob_strace_cache_relative_to_absolute(Nob_String_View sv)
+static Nob_String_View nob_strace_cache_relative_to_absolute_maybe(Nob_String_View sv, bool for_real)
 {
+    if (!for_real) return sv;
+
     // TODO: Windows support
 #if _WIN32
     nob_log(NOB_WARNING, "relative_to_absolute not implemented on windows. Returning relative path...");
@@ -2376,14 +2378,14 @@ static Nob_String_View nob_strace_cache_relative_to_absolute(Nob_String_View sv)
     static char temp_buffer[PATH_MAX];
     const char* temp_input = nob_temp_sv_to_cstr(sv);
     if (NULL == realpath(temp_input, temp_buffer)) {
-      nob_log(NOB_WARNING, "Failed to get an absolute path for %s. Using relative", temp_input);
+      nob_log(NOB_WARNING, "Failed to get an absolute path for %s: %s. Using relative", temp_input, strerror(errno));
       return sv;
     }
     return nob_sv_from_cstr(temp_buffer);
 #endif
 }
 
-static bool nob_strace_cache_parse_output(const char *strace_output_path, Nob_String_Builders *input_files, Nob_String_Builders *output_files, Nob_String_Builder *strace_output)
+static bool nob_strace_cache_parse_output(const char *strace_output_path, Nob_String_Builders *input_files, Nob_String_Builders *output_files, Nob_String_Builder *strace_output, bool absolute_paths)
 {
     strace_output->count = 0;
     if (!nob_read_entire_file(strace_output_path, strace_output)) return false;
@@ -2419,9 +2421,9 @@ static bool nob_strace_cache_parse_output(const char *strace_output_path, Nob_St
                         nob_sv_contains(rw_args, nob_sv_from_cstr("O_WRONLY"));
 
         if (is_write) {
-            nob_string_builders_push_unique(output_files, nob_strace_cache_relative_to_absolute(path));
+            nob_string_builders_push_unique(output_files, nob_strace_cache_relative_to_absolute_maybe(path, absolute_paths));
         } else if (is_read) {
-            nob_string_builders_push_unique(input_files, nob_strace_cache_relative_to_absolute(path));
+            nob_string_builders_push_unique(input_files, nob_strace_cache_relative_to_absolute_maybe(path, absolute_paths));
         } else {
             nob_log(NOB_WARNING, "Unknown rw_args(%zu): `%.*s`", rw_args.count, (int)rw_args.count, rw_args.data);
             return false;
@@ -2445,7 +2447,7 @@ static bool nob_strace_cache_parse_cmd(Nob_String_View sv, Nob_Cmd *cmd)
     return true;
 }
 
-static bool nob_strace_cache_parse_file_list(Nob_String_View sv, Nob_String_Builders *files)
+static bool nob_strace_cache_parse_file_list(Nob_String_View sv, Nob_String_Builders *files, bool absolute_paths)
 {
     // TODO: Handle spaces..
     sv = nob_sv_trim_left(sv);
@@ -2453,7 +2455,7 @@ static bool nob_strace_cache_parse_file_list(Nob_String_View sv, Nob_String_Buil
     {
         Nob_String_View file_view = nob_sv_chop_by_delim(&sv, ' ');
         Nob_String_View arg = nob_sv_from_cstr(nob_temp_sprintf("%.*s", (int)file_view.count, file_view.data));
-        nob_string_builders_push_unique(files, nob_strace_cache_relative_to_absolute(arg));
+        nob_string_builders_push_unique(files, nob_strace_cache_relative_to_absolute_maybe(arg, absolute_paths));
         sv = nob_sv_trim_left(sv);
     }
     return true;
@@ -2518,11 +2520,11 @@ static bool nob_strace_cache_read(Nob_Strace_Cache *cache)
 
         if (false == nob_strace_cache_parse_cmd(command, &cache->temp_cmd)) return false;
         Nob_Strace_Cache_Node *node = nob_cmd_strace_cache_node(cache, cache->temp_cmd, &cache->roots, false);
-        if (false == nob_strace_cache_parse_file_list(inputs, &node->input_files)) {
+        if (false == nob_strace_cache_parse_file_list(inputs, &node->input_files, !cache->no_absolute)) {
             nob_log(NOB_ERROR, "Failed to parse input file list: `%.*s`", (int)inputs.count, inputs.data);
             return false;
         }
-        if (false == nob_strace_cache_parse_file_list(outputs, &node->output_files)) {
+        if (false == nob_strace_cache_parse_file_list(outputs, &node->output_files, !cache->no_absolute)) {
             nob_log(NOB_ERROR, "Failed to parse output file list: `%.*s`", (int)outputs.count, outputs.data);
             return false;
         }
