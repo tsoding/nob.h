@@ -957,6 +957,7 @@ NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render)
     for (size_t i = 0; i < cmd.count; ++i) {
         const char *arg = cmd.items[i];
         if (arg == NULL) break;
+        if( arg[0] == '\0' ) continue;
         if (i > 0) nob_sb_append_cstr(render, " ");
         if (!strchr(arg, ' ')) {
             nob_sb_append_cstr(render, arg);
@@ -1183,10 +1184,21 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
         // NOTE: This leaks a bit of memory in the child process.
         // But do we actually care? It's a one off leak anyway...
         Nob_Cmd cmd_null = {0};
-        nob_da_append_many(&cmd_null, cmd.items, cmd.count);
+        // nob_da_append_many(&cmd_null, cmd.items, cmd.count);
+        nob_da_reserve(&cmd_null, cmd_null.count + (cmd.count));        
+        size_t iw = 0;
+        for (size_t i = 0; i < cmd.count; ++i) {
+            if (cmd.items[i] == NULL)       continue;
+            if (cmd.items[i][0] == '\0')    continue; 
+            cmd_null.items[iw] = cmd.items[i];
+            iw++;
+        }        
+        cmd_null.count += (iw);
+
         nob_cmd_append(&cmd_null, NULL);
 
-        if (execvp(cmd.items[0], (char * const*) cmd_null.items) < 0) {
+        if ( execvp(cmd_null.items[0], (char *const *)cmd_null.items) < 0 )
+        {
             nob_log(NOB_ERROR, "Could not exec child process for %s: %s", cmd.items[0], strerror(errno));
             exit(1);
         }
