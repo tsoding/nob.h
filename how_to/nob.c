@@ -10,6 +10,7 @@ const char *examples[] = {
     "001_basic_usage",
     "005_parallel_build",
     "010_nob_two_stage",
+    "strace_cache",
 };
 
 int main(int argc, char **argv)
