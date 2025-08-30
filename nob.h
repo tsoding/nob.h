@@ -1167,12 +1167,17 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
 
         const char *strace_path = nob_temp_sprintf("%s.temp", cache->file_path);
         if (false == nob_cmd_run(&cache->temp_cmd, .stderr_path = strace_path)) {
+            if (true == nob_read_entire_file(strace_path, &cache->temp_sb)) {
+                nob_log(NOB_ERROR, "%.*s", cache->temp_sb.count, cache->temp_sb.items);
+            }
             nob_log(NOB_ERROR, "Failed to run strace: %s", strerror(errno));
             nob_return_defer(false);
         }
 
         Nob_Strace_Cache_Node *node = nob_cmd_strace_cache_node(cache, *cmd, &cache->roots, true);
         nob_strace_cache_parse_output(strace_path, &node->input_files, &node->output_files, &cache->temp_sb);
+        // Add a file that was executed because it's not picked up by strace..
+        nob_string_builders_push_unique(&node->input_files, nob_sv_from_cstr(cmd->items[0]));
         nob_return_defer(true);
     }
 
