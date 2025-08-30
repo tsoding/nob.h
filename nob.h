@@ -2189,15 +2189,16 @@ NOBDEF int closedir(DIR *dirp)
 
 #endif // NOB_IMPLEMENTATION
 
-#ifndef NOB_STRIP_PREFIX_GUARD_
-#define NOB_STRIP_PREFIX_GUARD_
+#ifdef NOB_STRIP_PREFIX
     // NOTE: The name stripping should be part of the header so it's not accidentally included
     // several times. At the same time, it should be at the end of the file so to not create any
     // potential conflicts in the NOB_IMPLEMENTATION. The header obviously cannot be at the end
     // of the file because NOB_IMPLEMENTATION needs the forward declarations from there. So the
     // solution is to split the header into two parts where the name stripping part is at the
     // end of the file after the NOB_IMPLEMENTATION.
-    #ifdef NOB_STRIP_PREFIX
+    #ifndef NOB_STRIP_PREFIX_GUARD_
+        #define NOB_STRIP_PREFIX_GUARD_
+
         #define TODO NOB_TODO
         #define UNREACHABLE NOB_UNREACHABLE
         #define UNUSED NOB_UNUSED
@@ -2304,8 +2305,8 @@ NOBDEF int closedir(DIR *dirp)
         #define nprocs nob_nprocs
         #define nanos_since_unspecified_epoch nob_nanos_since_unspecified_epoch
         #define NANOS_PER_SEC NOB_NANOS_PER_SEC
-    #endif // NOB_STRIP_PREFIX
-#endif // NOB_STRIP_PREFIX_GUARD_
+    #endif // NOB_STRIP_PREFIX_GUARD_
+#endif // NOB_STRIP_PREFIX
 
 /*
    Revision history:
