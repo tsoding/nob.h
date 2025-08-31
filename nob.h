@@ -1137,10 +1137,7 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
     if (opt.strace_cache && false == opt.strace_cache->is_disabled) {
         Nob_Strace_Cache *cache = opt.strace_cache;
         if (false == cache->is_loaded) {
-            if (false == nob_strace_cache_read(cache)) {
-                cache->is_disabled = true;
-                goto disabled_strace_cache;
-            }
+            if (false == nob_strace_cache_read(cache)) goto disabled_strace_cache;
         }
 
         if (opt.async) NOB_TODO("Strace cache and async is not implemented.");
@@ -2276,7 +2273,7 @@ NOBDEF void nob_strace_cache_finish(Nob_Strace_Cache cache)
     for (size_t i = 0; i < cache.nodes.count; ++i) {
         Nob_Strace_Cache_Node node = cache.nodes.items[i];
         nob_da_free(node.children);
-        for (size_t j = 0; j < node.input_files.alloc_count; ++j)  nob_sb_free(node.input_files.items[j]);
+        for (size_t j = 0; j < node.input_files.alloc_count;  ++j) nob_sb_free(node.input_files.items[j]);
         for (size_t j = 0; j < node.output_files.alloc_count; ++j) nob_sb_free(node.output_files.items[j]);
         free(node.argv);
         nob_da_free(node.input_files);
@@ -2473,6 +2470,7 @@ static bool nob_strace_cache_read(Nob_Strace_Cache *cache)
     nob_cmd_free(cmd);
     if (false == test_strace_result) {
       nob_log(NOB_WARNING, "Failed to run `strace -V` Continuing without caching.");
+      cache->is_disabled = true;
       return false;
     }
 
