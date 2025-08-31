@@ -1325,7 +1325,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 
         if (fderr) {
             if (dup2(*fderr, STDERR_FILENO) < 0) {
-                nob_log(NOB_ERROR, "Dick Could not setup stderr %d for child process: %s", *fderr, strerror(errno));
+                nob_log(NOB_ERROR, "Could not setup stderr for child process: %s", strerror(errno));
                 exit(1);
             }
         }
