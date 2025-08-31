@@ -705,15 +705,15 @@ typedef struct Nob_String_Builders {
 
 NOBDEF void nob_string_builders_push_unique(Nob_String_Builders *sbs, Nob_String_View sv);
 
-typedef struct Nob_Strace_Cache_Indexies {
+typedef struct Nob_Strace_Cache_Indexes {
   int *items;
   size_t count;
   size_t capacity;
-} Nob_Strace_Cache_Indexies;
+} Nob_Strace_Cache_Indexes;
 
 typedef struct Nob_Strace_Cache_Node {
   char *argv;
-  Nob_Strace_Cache_Indexies children;
+  Nob_Strace_Cache_Indexes children;
   Nob_String_Builders input_files;
   Nob_String_Builders output_files;
 } Nob_Strace_Cache_Node;
@@ -726,7 +726,7 @@ typedef struct Nob_Strace_Cache_Nodes {
 
 struct Nob_Strace_Cache {
   Nob_Strace_Cache_Nodes nodes;
-  Nob_Strace_Cache_Indexies roots;
+  Nob_Strace_Cache_Indexes roots;
   Nob_Cmd temp_cmd; // Don't worry about it...
   Nob_String_Builder temp_sb; // Don't worry about it...
 
@@ -758,13 +758,13 @@ int main(void)
 void nob_strace_cache_finish(Nob_Strace_Cache cache);
 
 static bool nob_cmd_strace_is_cached(Nob_Strace_Cache *cache, Nob_Cmd cmd);
-static Nob_Strace_Cache_Node *nob_cmd_strace_cache_node(Nob_Strace_Cache *cache, Nob_Cmd cmd, Nob_Strace_Cache_Indexies *indexies, bool dup);
+static Nob_Strace_Cache_Node *nob_cmd_strace_cache_node(Nob_Strace_Cache *cache, Nob_Cmd cmd, Nob_Strace_Cache_Indexes *indexes, bool dup);
 static Nob_String_View nob_strace_cache_relative_to_absolute_maybe(Nob_String_View sv, bool for_real);
 static bool nob_strace_cache_parse_output(const char *strace_output_path, Nob_String_Builders *input_files, Nob_String_Builders *output_files, Nob_String_Builder *strace_output, bool absolute_paths);
 static bool nob_strace_cache_parse_cmd(Nob_String_View sv, Nob_Cmd *cmd);
 static bool nob_strace_cache_parse_file_list(Nob_String_View sv, Nob_String_Builders *files, bool absolute_paths);
 static bool nob_strace_cache_read(Nob_Strace_Cache *cache);
-static bool nob_strace_cache_write_rec(Nob_Strace_Cache *cache, Nob_String_Builder *out, Nob_Strace_Cache_Indexies roots);
+static bool nob_strace_cache_write_rec(Nob_Strace_Cache *cache, Nob_String_Builder *out, Nob_Strace_Cache_Indexes roots);
 static bool nob_strace_cache_write(Nob_Strace_Cache *cache);
 // Strace Cache TODOS:
 //   * Use in combination with stdin/out - easy
@@ -784,6 +784,7 @@ static bool nob_strace_cache_write(Nob_Strace_Cache *cache);
 //   * Use <sys/ptrace.h> insted of strace utility. Check how to use <sys/ptrace.h> at https://github.com/strace/strace
 //     strace is just a program that is not on all distributions. <sys/ptrace.h> is part of glibc and should be more cross platform.
 //   * Do something about programs that don't read or write anything..
+//   * Handle spaces in command arguments and file paths..
 
 // DEPRECATED: Usage of the bundled minirent.h below is deprecated, because it introduces more
 // problems than it solves. It will be removed in the next major release of nob.h. In the meantime,
@@ -2326,14 +2327,14 @@ found:
   return true;
 }
 
-static Nob_Strace_Cache_Node *nob_cmd_strace_cache_node(Nob_Strace_Cache *cache, Nob_Cmd cmd, Nob_Strace_Cache_Indexies *indexies, bool dup)
+static Nob_Strace_Cache_Node *nob_cmd_strace_cache_node(Nob_Strace_Cache *cache, Nob_Cmd cmd, Nob_Strace_Cache_Indexes *indexes, bool dup)
 {
-    assert(cmd.count != 0);
+    NOB_ASSERT(cmd.count != 0);
 
     int node_index = -1;
 
-    for (size_t i = 0; i < indexies->count; ++i) {
-        int cur_node_index = indexies->items[i];
+    for (size_t i = 0; i < indexes->count; ++i) {
+        int cur_node_index = indexes->items[i];
         Nob_Strace_Cache_Node node = cache->nodes.items[cur_node_index];
         if (strcmp(cmd.items[0], node.argv) == 0) {
             node_index = cur_node_index;
@@ -2346,7 +2347,7 @@ static Nob_Strace_Cache_Node *nob_cmd_strace_cache_node(Nob_Strace_Cache *cache,
         Nob_Strace_Cache_Node new_node = {
             .argv = dup ? strdup(cmd.items[0]) : (char*)cmd.items[0],
         };
-        nob_da_append(indexies, cache->nodes.count);
+        nob_da_append(indexes, cache->nodes.count);
         nob_da_append(&cache->nodes, new_node);
         next = &nob_da_last(&cache->nodes);
     } else {
@@ -2532,7 +2533,7 @@ static bool nob_strace_cache_read(Nob_Strace_Cache *cache)
     return true;
 }
 
-static bool nob_strace_cache_write_rec(Nob_Strace_Cache *cache, Nob_String_Builder *out, Nob_Strace_Cache_Indexies roots)
+static bool nob_strace_cache_write_rec(Nob_Strace_Cache *cache, Nob_String_Builder *out, Nob_Strace_Cache_Indexes roots)
 {
     size_t old_count = cache->temp_sb.count;
     for (size_t i = 0; i < roots.count; ++i) {
