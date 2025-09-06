@@ -759,7 +759,7 @@ struct Nob_Ptrace_Cache {
   bool was_last_cached;
 };
 
-static void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* node, Nob_String_View file_path, int mode, bool absolute_paths);
+static void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* node, Nob_String_View file_path, int mode, bool exists, bool absolute_paths);
 static void nob__ptrace_read_cstr_from_inferior(Nob_String_Builder* out, Nob_Fd inferior, long* addr);
 static bool nob__ptrace_cache_is_cached(Nob_Ptrace_Cache *cache, Nob__Ptrace_Cache_Node node);
 static Nob__Ptrace_Cache_Node *nob__ptrace_cache_node(Nob_Ptrace_Cache *cache, Nob_Cmd cmd, const char* stdin_path, const char* stdout_path, const char* stderr_path);
@@ -1167,7 +1167,7 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         case Nob__Ptrace_Cache_Run_True:         nob_return_defer(true);
         case Nob__Ptrace_Cache_Run_False:        nob_return_defer(false);
         case Nob__Ptrace_Cache_Run_Ptrace_Error: break; // Ptrace failed so we try running the command without ptrace.
-        default: NOB_UNREACHABLE("cache_status");
+        default: NOB_UNREACHABLE("Nob__Ptrace_Cache_Run_Status");
     }
 
     if (opt.async && max_procs > 0) {
@@ -2248,7 +2248,7 @@ static void nob__ptrace_cache_node_push_file(Nob_Ptrace_Cache* cache, Nob__Ints*
     nob_sb_append_null(&cache->arena);
 }
 
-void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* node, Nob_String_View file_path, int mode, bool absolute_paths)
+void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* node, Nob_String_View file_path, int mode, bool exists, bool absolute_paths)
 {
     if (nob_sv_starts_with(file_path, nob_sv_from_cstr("/usr/")))  return;
     if (nob_sv_starts_with(file_path, nob_sv_from_cstr("/etc/")))  return;
@@ -2263,7 +2263,7 @@ void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* no
 
     int output_mask = O_APPEND | O_CREAT | O_WRONLY;
     if (output_mask & mode) nob__ptrace_cache_node_push_file(cache, &node->output_paths, file_path.data);
-    else                    nob__ptrace_cache_node_push_file(cache, &node->input_paths,  file_path.data);
+    else if (exists)        nob__ptrace_cache_node_push_file(cache, &node->input_paths,  file_path.data);
 }
 
 void nob__ptrace_read_cstr_from_inferior(Nob_String_Builder* out, Nob_Fd inferior, long* addr)
@@ -2424,20 +2424,24 @@ static bool nob__ptrace_cache_read(Nob_Ptrace_Cache *cache)
             node->kind != Nob__Ptrace_Cache_Node_Stderr) nob__return_defer_msg(false, "Ptrace cache invalid: %d node kind", node->kind);
 
         NOB__FD_READ(node->input_paths.count);
-        if (node->input_paths.count > cache->arena.count) {
-               nob__return_defer_msg(false, "Ptrace cache invalid: %zu input files, %zu arena size", node->input_paths.count, cache->arena.count);
+        if (node->input_paths.count > 0) {
+            if (node->input_paths.count > cache->arena.count) {
+                   nob__return_defer_msg(false, "Ptrace cache invalid: %zu input files, %zu arena size", node->input_paths.count, cache->arena.count);
+            }
+            nob_da_reserve(&node->input_paths, node->input_paths.count);
+            NOB__FD_READ_N(node->input_paths.items[0], node->input_paths.count);
+            // TODO(ptrace): validate all input_paths
         }
-        nob_da_reserve(&node->input_paths, node->input_paths.count);
-        NOB__FD_READ_N(node->input_paths.items[0], node->input_paths.count);
-        // TODO(ptrace): validate all input_paths
 
         NOB__FD_READ(node->output_paths.count);
-        if (node->output_paths.count > cache->arena.count) {
-            nob__return_defer_msg(false, "Ptrace cache invalid: %zu output files, %zu arena size", node->output_paths.count, cache->arena.count);
+        if (node->output_paths.count > 0) {
+            if (node->output_paths.count > cache->arena.count) {
+                nob__return_defer_msg(false, "Ptrace cache invalid: %zu output files, %zu arena size", node->output_paths.count, cache->arena.count);
+            }
+            nob_da_reserve(&node->output_paths, node->output_paths.count);
+            NOB__FD_READ_N(node->output_paths.items[0], node->output_paths.count);
+            // TODO(ptrace): validate all output_paths
         }
-        nob_da_reserve(&node->output_paths, node->input_paths.count);
-        NOB__FD_READ_N(node->output_paths.items[0], node->output_paths.count);
-        // TODO(ptrace): validate all output_paths
     }
 
 defer:
@@ -2464,7 +2468,7 @@ Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         if (false == nob__ptrace_cache_read(cache)) return Nob__Ptrace_Cache_Run_Ptrace_Error;
     }
 
-    if (opt.async)       NOB_TODO("Ptrace cache and async is not implemented.");
+    if (opt.async) NOB_TODO("Ptrace cache and async is not implemented.");
 
     Nob__Ptrace_Cache_Node *node = nob__ptrace_cache_node(cache, *cmd, opt.stdin_path, opt.stdout_path, opt.stderr_path);
 
@@ -2484,9 +2488,12 @@ Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
     node->input_paths.count = 0;
     node->output_paths.count = 0;
 
+    nob_cmd_append(cmd, NULL);
+
     pid_t cpid = fork();
     if (cpid < 0) {
         nob_log(NOB_ERROR, "Could not fork child process: %s", strerror(errno));
+        cmd->count -= 1;
         return Nob__Ptrace_Cache_Run_Ptrace_Error;
     }
 
@@ -2518,8 +2525,6 @@ Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
                 exit(1);
             }
         }
-        // TODO(ptrace): Leak
-        nob_cmd_append(cmd, NULL);
 
         if (execvp(cmd->items[0], (char * const*) cmd->items) < 0) {
             nob_log(NOB_ERROR, "Could not exec child process for %s: %s", cmd->items[0], strerror(errno));
@@ -2527,11 +2532,14 @@ Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         }
         NOB_UNREACHABLE("nob_cmd_run_async_redirect");
     } else {
+        cmd->count -= 1;
+
         void* addr = 0;
         int ret, child_count = 1, status = 0;
         long ptrace_data;
         Nob_Fd cur_child = waitpid(-1, &status, 0);
         Nob_String_Builder file_path = { 0 };
+
 
         ret = ptrace(PTRACE_SETOPTIONS, cur_child, 1, PTRACE_O_TRACEVFORK | PTRACE_O_TRACEFORK | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACECLONE);
         if (ret < 0) {
@@ -2583,18 +2591,25 @@ Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
                 return Nob__Ptrace_Cache_Run_Ptrace_Error;
             }
 
+            bool should_add = false;
+            unsigned long long mode;
             if (sc.op == PTRACE_SYSCALL_INFO_ENTRY) {
                 if (sc.entry.nr == /* sys_openat */257) {
                     long* file_path_in_inferior = (long*)sc.entry.args[1];
                     nob__ptrace_read_cstr_from_inferior(&file_path, cur_child, file_path_in_inferior);
-                    unsigned long long mode = sc.entry.args[2];
-                    nob__ptrace_append_file(cache, node, nob_sb_to_sv(file_path), mode, false == cache->no_absolute);
+                    mode = sc.entry.args[2];
+                    should_add = true;
                 }
             }
 
             if (0 > ptrace(PTRACE_SYSCALL, cur_child, addr, NULL)) {
                 nob_log(NOB_ERROR, "Failed to get syscall info: %s", strerror(errno));
                 return Nob__Ptrace_Cache_Run_Ptrace_Error;
+            }
+
+            if (should_add) {
+                bool exists = nob_file_exists(file_path.items);
+                nob__ptrace_append_file(cache, node, nob_sb_to_sv(file_path), mode, exists, false == cache->no_absolute);
             }
         }
         nob_sb_free(file_path);
