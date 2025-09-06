@@ -167,16 +167,8 @@
 #    include <fcntl.h>
 #endif
 
-#if defined(__has_include)
-#  define NOB__HAS_INCLUDE(path) __has_include(path)
-#else
-#  define NOB__HAS_INCLUDE(path)
-#endif
-
-#if !defined(NOB_HAS_PTRACE_CACHE)
-#    if NOB__HAS_INCLUDE(<sys/ptrace.h>)
-#        define NOB_HAS_PTRACE_CACHE 1
-#    endif
+#if !defined(NOB_HAS_PTRACE_CACHE) && defined(__linux__)
+#    define NOB_HAS_PTRACE_CACHE 1
 #endif
 
 #if NOB_HAS_PTRACE_CACHE
@@ -719,6 +711,7 @@ static Nob_String_View nob__sv_relative_to_absolute(Nob_String_View sv);
 
 #if NOB_HAS_PTRACE_CACHE
 typedef enum Nob__Ptrace_Cache_Node_Kind {
+    Nob__Ptrace_Cache_Node_Cwd,
     Nob__Ptrace_Cache_Node_Arg,
     Nob__Ptrace_Cache_Node_Stdin,
     Nob__Ptrace_Cache_Node_Stdout,
@@ -762,7 +755,7 @@ struct Nob_Ptrace_Cache {
 static void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* node, Nob_String_View file_path, int mode, bool exists, bool absolute_paths);
 static void nob__ptrace_read_cstr_from_inferior(Nob_String_Builder* out, Nob_Fd inferior, long* addr);
 static bool nob__ptrace_cache_is_cached(Nob_Ptrace_Cache *cache, Nob__Ptrace_Cache_Node node);
-static Nob__Ptrace_Cache_Node *nob__ptrace_cache_node(Nob_Ptrace_Cache *cache, Nob_Cmd cmd, const char* stdin_path, const char* stdout_path, const char* stderr_path);
+static Nob__Ptrace_Cache_Node *nob__ptrace_cache_node(Nob_Ptrace_Cache *cache, Nob_Cmd cmd, const char* cwd, const char* stdin_path, const char* stdout_path, const char* stderr_path);
 static bool nob__ptrace_cache_read(Nob_Ptrace_Cache *cache);
 static bool nob__ptrace_cache_write(Nob_Ptrace_Cache *cache);
 // Ptrace Cache TODOS:
@@ -1969,7 +1962,10 @@ int nob__needs_rebuild_ex(const char *output_path, const char **input_paths, siz
         }
         int input_path_time = statbuf.st_mtime;
         // NOTE: if even a single input_path is fresher than output_path that's 100% rebuild
-        if (input_path_time > output_path_time) return 1;
+        if (input_path_time > output_path_time) {
+            nob_log(NOB_INFO, "File %s is fresher than %s", input_path, output_path);
+            return 1;
+        }
     }
 
     return 0;
@@ -2201,7 +2197,7 @@ static Nob_String_View nob__sv_relative_to_absolute(Nob_String_View sv)
     // TODO(ptrace): Windows support
     nob_log(NOB_WARNING, "relative_to_absolute not implemented on windows. Returning relative path...");
     return sv;
-#elif defined(_GNU_SOURCE)
+#elif _XOPEN_SOURCE >= 500 || _DEFAULT_SOURCE || _BSD_SOURCE
     static char temp_buffer[PATH_MAX];
     const char* temp_input = nob_temp_sv_to_cstr(sv);
     if (NULL == realpath(temp_input, temp_buffer)) {
@@ -2329,9 +2325,10 @@ static int nob__ptrace_cache_node2(Nob_Ptrace_Cache *cache, const char *to_find,
     return cache->nodes.count - 1;
 }
 
-static Nob__Ptrace_Cache_Node *nob__ptrace_cache_node(Nob_Ptrace_Cache *cache, Nob_Cmd cmd, const char *stdin_path, const char *stdout_path, const char *stderr_path)
+static Nob__Ptrace_Cache_Node *nob__ptrace_cache_node(Nob_Ptrace_Cache *cache, Nob_Cmd cmd, const char *cwd, const char *stdin_path, const char *stdout_path, const char *stderr_path)
 {
-    int current = -1;
+    int current = nob__ptrace_cache_node2(cache, cwd, -1, Nob__Ptrace_Cache_Node_Cwd);
+
     for (size_t i = 0; i < cmd.count; ++i) {
         current = nob__ptrace_cache_node2(cache, cmd.items[i], current, Nob__Ptrace_Cache_Node_Arg);
     }
@@ -2418,7 +2415,8 @@ static bool nob__ptrace_cache_read(Nob_Ptrace_Cache *cache)
         NOB__FD_READ(node->parent);
         if (node->parent < -1 || node->parent > (int)cache->nodes.count) nob__return_defer_msg(false, "Ptrace cache invalid: %d parent index", node->parent);
         NOB__FD_READ(node->kind);
-        if (node->kind != Nob__Ptrace_Cache_Node_Arg    &&
+        if (node->kind != Nob__Ptrace_Cache_Node_Cwd    &&
+            node->kind != Nob__Ptrace_Cache_Node_Arg    &&
             node->kind != Nob__Ptrace_Cache_Node_Stdin  &&
             node->kind != Nob__Ptrace_Cache_Node_Stdout &&
             node->kind != Nob__Ptrace_Cache_Node_Stderr) nob__return_defer_msg(false, "Ptrace cache invalid: %d node kind", node->kind);
@@ -2470,7 +2468,7 @@ Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
 
     if (opt.async) NOB_TODO("Ptrace cache and async is not implemented.");
 
-    Nob__Ptrace_Cache_Node *node = nob__ptrace_cache_node(cache, *cmd, opt.stdin_path, opt.stdout_path, opt.stderr_path);
+    Nob__Ptrace_Cache_Node *node = nob__ptrace_cache_node(cache, *cmd, nob_get_current_dir_temp(), opt.stdin_path, opt.stdout_path, opt.stderr_path);
 
     bool is_cached = nob__ptrace_cache_is_cached(cache, *node);
     cache->temp_sb.count = 0;
