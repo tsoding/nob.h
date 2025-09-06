@@ -724,32 +724,32 @@ typedef struct Nob__Ints {
 } Nob__Ints;
 
 typedef struct Nob__Ptrace_Cache_Node {
-  int arg_index;
-  int parent;
-  Nob__Ptrace_Cache_Node_Kind kind;
-  // Indexies into Nob_Ptrace_Cache.arena;
-  Nob__Ints input_paths;
-  Nob__Ints output_paths;
+    int arg_index;
+    int parent;
+    Nob__Ptrace_Cache_Node_Kind kind;
+    // Indexies into Nob_Ptrace_Cache.arena;
+    Nob__Ints input_paths;
+    Nob__Ints output_paths;
 } Nob__Ptrace_Cache_Node;
 
 typedef struct Nob__Ptrace_Cache_Nodes {
-  Nob__Ptrace_Cache_Node *items;
-  size_t count;
-  size_t capacity;
+    Nob__Ptrace_Cache_Node *items;
+    size_t count;
+    size_t capacity;
 } Nob__Ptrace_Cache_Nodes;
 
 struct Nob_Ptrace_Cache {
-  Nob__Ptrace_Cache_Nodes nodes;
-  Nob_Cmd temp_cmd; // Don't worry about it...
-  Nob_String_Builder temp_sb; // Don't worry about it...
-  Nob_String_Builder arena;
+    Nob__Ptrace_Cache_Nodes nodes;
+    Nob_Cmd temp_cmd; // Don't worry about it...
+    Nob_String_Builder temp_sb; // Don't worry about it...
+    Nob_String_Builder arena;
 
-  const char *file_path; // File that will be used to read and write collected information for caching
-  bool is_loaded;
-  bool is_disabled;
-  bool no_absolute;
+    const char *file_path; // File that will be used to read and write collected information for caching
+    bool is_loaded;
+    bool is_disabled;
+    bool no_absolute;
 
-  bool was_last_cached;
+    bool was_last_cached;
 };
 
 static void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* node, Nob_String_View file_path, int mode, bool exists, bool absolute_paths);
@@ -775,12 +775,12 @@ static bool nob__ptrace_cache_write(Nob_Ptrace_Cache *cache);
 
 #else
 struct Nob_Ptrace_Cache {
-  const char *file_path; // File that will be used to read and write collected information for caching
-  bool is_loaded;
-  bool is_disabled;
-  bool no_absolute;
+    const char *file_path; // File that will be used to read and write collected information for caching
+    bool is_loaded;
+    bool is_disabled;
+    bool no_absolute;
 
-  bool was_last_cached;
+    bool was_last_cached;
 };
 #endif
 
