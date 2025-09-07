@@ -232,6 +232,8 @@ NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path);
 NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
 NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
+NOBDEF bool nob_git_fetch(const char *repo_url, const char *dst_dir, const char *branch, bool shallow);
+
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
 
@@ -950,6 +952,35 @@ defer:
     close(dst_fd);
     return result;
 #endif
+}
+
+NOBDEF bool nob_git_fetch(const char *repo_url, const char *dst_dir, const char *branch, bool shallow)
+{
+    NOB_ASSERT(repo_url && dst_dir);
+
+    /* we can do more git processing here, like checking if the current folder is dirty, 
+    or if the brnach/tag is the correct one. etc */
+    if (nob_file_exists(dst_dir) == 1) return true;
+
+    nob_mkdir_if_not_exists(dst_dir);
+
+    Nob_Cmd cmd = {0};    
+    nob_cmd_append(&cmd, "git", "clone");
+    if (shallow) {
+        nob_cmd_append(&cmd, "--depth", "1");
+    }
+    if (branch && branch[0] != '\0') {
+        nob_cmd_append(&cmd, "--branch", branch);
+    }
+    nob_cmd_append(&cmd, repo_url, dst_dir);
+
+    if (!nob_cmd_run(&cmd)) {
+        nob_log(NOB_ERROR, "git clone failed for %s into %s", repo_url, dst_dir);
+        return false;
+    }
+
+    nob_log(NOB_INFO, "Repository %s is available under %s", repo_url, dst_dir);
+    return true;
 }
 
 NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render)
