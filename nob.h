@@ -2611,8 +2611,14 @@ Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
             }
         }
         nob_sb_free(file_path);
-        if (WEXITSTATUS(status) == 0) return Nob__Ptrace_Cache_Run_True;
-        else return Nob__Ptrace_Cache_Run_False;
+        if (WEXITSTATUS(status) == 0) {
+          nob__ptrace_cache_write(cache);
+          return Nob__Ptrace_Cache_Run_True;
+        } else {
+          node->input_paths.count = 0;
+          node->output_paths.count = 0;
+          return Nob__Ptrace_Cache_Run_False;
+        }
     }
 #else
     return Nob__Ptrace_Cache_Run_Ptrace_Error;
