@@ -858,6 +858,96 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
     // TODO: this is an experimental behavior behind a compilation flag.
     // Once it is confirmed that it does not cause much problems on both POSIX and Windows
     // we may turn it on by default.
+#ifdef _WIN32
+    CHAR szFileSystemName[MAX_PATH+1] = { 0 };
+    CHAR szFullPath[MAX_PATH+1] = { 0 };
+
+    GetFullPathNameA(old_binary_path, NOB_ARRAY_LEN(szFullPath), szFullPath, NULL);
+
+    CHAR *vol = nob_temp_sprintf("%c:\\", szFullPath[0]);
+    GetVolumeInformationA(vol, NULL, 0, NULL, NULL, NULL, (LPSTR)&szFileSystemName, MAX_PATH+1);
+
+    // Deleting the running executable on Windows is not possible, since the Image of
+    // the running process is mapped in memory from `nob.exe.old` and a reference
+    // to the file is kept.
+    // If we simply rename the file on disk the process will reference the newly named file,
+    // making it impossible to delete.
+    // A trick that can be used to delete `nob.exe.old` is to take advantage of NTFS streams.
+    // In essence we can rename the standard data stream `nob.exe.old:$DATA`
+    // to `nob.exe.old:del`, making the process reference the newly created data stream for
+    // its Image.
+    // At this point `nob.exe.old` is no longer referenced in the memory of the process,
+    // making it possible to be marked for deletion.
+    // In NTFS deleting a file will also remove all data streams that belong to it.
+    // Deleting `nob.exe.old` will succeed since the process keeps a reference to the
+    // `:del` data stream and the `:del` stream will vanish because it belonged to `nob.exe.old`.
+    // This will leave no trace on the disk of any executable.
+    //
+    // Here's a before and after view of a sample execution (taken from Process Hacker 2):
+    // before:
+    //  0x7ff6d5970000, Image, 8.400 kB, WCX, C:\Users\user\Programming\nob.h\nob.exe.old:del,  164 kB, 20 kB, 144 kB, 144 kB,
+    // after:
+    //  0x7ff6d5970000, Image, 8.400 kB, WCX, C:\$Extend\$Deleted\001A00000007F98D67225CE2:del, 164 kB, 20 kB, 144 kB, 144 kB,
+    //
+    // Note how the Image references an invalid path after `C:\Users\user\Programming\nob.h\nob.exe.old`
+    // gets deleted.
+    //
+    // Also, running `dir /r` right after renaming and before deletion will show:
+    //         0 nob.exe.old
+    //   193.024 nob.exe.old:del:$DATA
+    //
+    //
+    // The downside of this approach is that it will work only if the current volume supports NTFS.
+
+    if (strcmp(szFileSystemName, "NTFS") == 0) {
+        HANDLE                hFile         = INVALID_HANDLE_VALUE;
+        WCHAR                 lpszStreamW[] = L":del";
+        const DWORD           cbStream      = wcslen(lpszStreamW) * sizeof(*lpszStreamW); // do not count '\0'
+        const DWORD           cbRenameInfo  = sizeof(FILE_RENAME_INFO) + cbStream;
+        PFILE_RENAME_INFO     pRenameInfo   = NULL;
+
+        pRenameInfo = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, cbRenameInfo);
+        if (!pRenameInfo) {
+            nob_log(NOB_ERROR, "Could not allocate %zu bytes of space: %s", cbRenameInfo, nob_win32_error_message(GetLastError()));
+            nob_log(NOB_ERROR, "Could not delete file %s", old_binary_path);
+            return false;
+        }
+
+
+        hFile = CreateFileA(
+            szFullPath,
+            DELETE | SYNCHRONIZE | GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            NULL,
+            OPEN_EXISTING,
+            0,
+            NULL
+        );
+        if (hFile == INVALID_HANDLE_VALUE) {
+            nob_log(NOB_ERROR, "Could not open file `%s`: %s", old_binary_path, nob_win32_error_message(GetLastError()));
+            nob_log(NOB_ERROR, "Could not delete file %s", old_binary_path);
+            HeapFree(GetProcessHeap(), HEAP_NO_SERIALIZE, pRenameInfo);
+            return false;
+        }
+
+        pRenameInfo->ReplaceIfExists = FALSE;
+        pRenameInfo->RootDirectory = NULL;
+        pRenameInfo->FileNameLength = cbStream;
+        memcpy(pRenameInfo->FileName, lpszStreamW, cbStream);
+
+        if(!SetFileInformationByHandle(hFile, FileRenameInfo, pRenameInfo, cbRenameInfo)) {
+            nob_log(NOB_ERROR, "Could not rename the data stream: %s", nob_win32_error_message(GetLastError()));
+            nob_log(NOB_ERROR, "Could not delete file %s", old_binary_path);
+            CloseHandle(hFile);
+            HeapFree(GetProcessHeap(), HEAP_NO_SERIALIZE, pRenameInfo);
+            return false;
+        }
+        CloseHandle(hFile);
+        HeapFree(GetProcessHeap(), HEAP_NO_SERIALIZE, pRenameInfo);
+    } else {
+        nob_log(NOB_WARNING, "Volume `%s` is not NTFS, deletion of file `%s` could fail.", vol, old_binary_path);
+    }
+#endif // _WIN32
     nob_delete_file(old_binary_path);
 #endif // NOB_EXPERIMENTAL_DELETE_OLD
 
@@ -1630,95 +1720,6 @@ NOBDEF bool nob_delete_file(const char *path)
 {
     nob_log(NOB_INFO, "deleting %s", path);
 #ifdef _WIN32
-    CHAR szFileSystemName[MAX_PATH+1] = { 0 };
-    CHAR szFullPath[MAX_PATH+1] = { 0 };
-
-    GetFullPathNameA(path, NOB_ARRAY_LEN(szFullPath), szFullPath, NULL);
-
-    CHAR *vol = nob_temp_sprintf("%c:\\", szFullPath[0]);
-    GetVolumeInformationA(vol, NULL, 0, NULL, NULL, NULL, (LPSTR)&szFileSystemName, MAX_PATH+1);
-
-    // Deleting the running executable on Windows is not possible, since the Image of
-    // the running process is mapped in memory from `nob.exe.old` and a reference
-    // to the file is kept.
-    // If we simply rename the file on disk the process will reference the newly named file,
-    // making it impossible to delete.
-    // A trick that can be used to delete `nob.exe.old` is to take advantage of NTFS streams.
-    // In essence we can rename the standard data stream `nob.exe.old:$DATA`
-    // to `nob.exe.old:del`, making the process reference the newly created data stream for
-    // its Image.
-    // At this point `nob.exe.old` is no longer referenced in the memory of the process,
-    // making it possible to be marked for deletion.
-    // In NTFS deleting a file will also remove all data streams that belong to it.
-    // Deleting `nob.exe.old` will succeed since the process keeps a reference to the
-    // `:del` data stream and the `:del` stream will vanish because it belonged to `nob.exe.old`.
-    // This will leave no trace on the disk of any executable.
-    //
-    // Here's a before and after view of a sample execution (taken from Process Hacker 2):
-    // before:
-    //  0x7ff6d5970000, Image, 8.400 kB, WCX, C:\Users\user\Programming\nob.h\nob.exe.old:del,  164 kB, 20 kB, 144 kB, 144 kB,
-    // after:
-    //  0x7ff6d5970000, Image, 8.400 kB, WCX, C:\$Extend\$Deleted\001A00000007F98D67225CE2:del, 164 kB, 20 kB, 144 kB, 144 kB,
-    //
-    // Note how the Image references an invalid path after `C:\Users\user\Programming\nob.h\nob.exe.old`
-    // gets deleted.
-    //
-    // Also, running `dir /r` right after renaming and before deletion will show:
-    //         0 nob.exe.old
-    //   193.024 nob.exe.old:del:$DATA
-    //
-    //
-    // The downside of this approach is that it will work only if the current volume supports NTFS.
-
-    if (strcmp(szFileSystemName, "NTFS") == 0) {
-        HANDLE                hFile         = INVALID_HANDLE_VALUE;
-        WCHAR                 lpszStreamW[] = L":del";
-        const DWORD           cbStream      = wcslen(lpszStreamW) * sizeof(*lpszStreamW); // do not count '\0'
-        const DWORD           cbRenameInfo  = sizeof(FILE_RENAME_INFO) + cbStream;
-        PFILE_RENAME_INFO     pRenameInfo   = NULL;
-
-        pRenameInfo = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, cbRenameInfo);
-        if (!pRenameInfo) {
-            nob_log(NOB_ERROR, "Could not allocate %zu bytes of space: %s", cbRenameInfo, nob_win32_error_message(GetLastError()));
-            nob_log(NOB_ERROR, "Could not delete file %s", path);
-            return false;
-        }
-
-        //==========[RENAMING]==========
-        hFile = CreateFileA(
-            szFullPath,
-            DELETE | SYNCHRONIZE | GENERIC_READ,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            NULL,
-            OPEN_EXISTING,
-            0,
-            NULL
-        );
-        if (hFile == INVALID_HANDLE_VALUE) {
-            nob_log(NOB_ERROR, "Could not open file `%s`: %s", path, nob_win32_error_message(GetLastError()));
-            nob_log(NOB_ERROR, "Could not delete file %s", path);
-            return false;
-        }
-
-        pRenameInfo->ReplaceIfExists = FALSE;
-        pRenameInfo->RootDirectory = NULL;
-        pRenameInfo->FileNameLength = cbStream;
-        memcpy(pRenameInfo->FileName, lpszStreamW, cbStream);
-
-        if(!SetFileInformationByHandle(hFile, FileRenameInfo, pRenameInfo, cbRenameInfo)) {
-            nob_log(NOB_ERROR, "Could not rename the data stream: %s", nob_win32_error_message(GetLastError()));
-            nob_log(NOB_ERROR, "Could not delete file %s", path);
-            CloseHandle(hFile);
-            HeapFree(GetProcessHeap(), HEAP_NO_SERIALIZE, pRenameInfo);
-            return false;
-        }
-        CloseHandle(hFile);
-        HeapFree(GetProcessHeap(), HEAP_NO_SERIALIZE, pRenameInfo);
-    } else {
-        nob_log(NOB_WARNING, "Volume `%s` is not NTFS, deletion of file `%s` could fail.", vol, path);
-    }
-
-    //==========[DELETING]==========
     if (!DeleteFileA(path)) {
         nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
         return false;
