@@ -1952,7 +1952,11 @@ NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim)
     return result;
 }
 
-NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n)
+/* This chop right function should be used with caution as it changes the state of 
+the input string view struct, a better way to use it IMO is to create the input string view from
+a temporary buffer allocation
+*/
+NOBDEF Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n)
 {
     if (n > sv->count) {
         n = sv->count;
@@ -1963,6 +1967,24 @@ NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n)
     sv->data  += n;
     sv->count -= n;
 
+    return result;
+}
+
+
+/* This chop left function should be used with caution as it changes the state of 
+the input string view struct, a better way to use it IMO is to create the input string view from
+a temporary buffer
+*/
+NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n)
+{
+    if (n > sv->count) {
+        n = sv->count;
+    }
+
+    sv->data  += n;
+    sv->count -= n;
+
+    Nob_String_View result = nob_sv_from_parts(sv->data, sv->count);
     return result;
 }
 
