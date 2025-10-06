@@ -18,5 +18,7 @@ int main(void) {
         nob_log(NOB_INFO, "dname: %s", dname);
     }
 
+    dir_iter_close(iter);
+
     return 0;
 }

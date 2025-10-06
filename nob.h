@@ -769,7 +769,7 @@ typedef struct {
 NOBDEF int  nob_is_dir_empty(const char *path);
 NOBDEF bool nob_dir_iter_open(Nob_Dir_Iter *iter, const char *path);
 NOBDEF bool nob_dir_iter_next(Nob_Dir_Iter *iter);
-NOBDEF void nob_dir_iter_close(Nob_Dir_Iter *iter);
+NOBDEF void nob_dir_iter_close(Nob_Dir_Iter iter);
 NOBDEF const char *nob_dir_iter_getname(Nob_Dir_Iter iter);
 
 #ifdef NOB_IMPLEMENTATION
@@ -1716,10 +1716,9 @@ NOBDEF bool nob_dir_iter_next(Nob_Dir_Iter *iter) {
     return false;
 }
 
-NOBDEF void nob_dir_iter_close(Nob_Dir_Iter *iter) {
-    if (!iter) return;
-    if (iter->dir)
-        closedir(iter->dir);
+NOBDEF void nob_dir_iter_close(Nob_Dir_Iter iter) {
+    if (iter.dir)
+        closedir(iter.dir);
 }
 
 NOBDEF const char *nob_dir_iter_getname(Nob_Dir_Iter iter) {
