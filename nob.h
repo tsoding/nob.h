@@ -1686,23 +1686,17 @@ static bool nob__delete_directory_recursively(const char *path) {
         case NOB_FILE_DIRECTORY: {
             nob_log(NOB_INFO, "deleting directory %s recursively", path);
 
-            Nob_Dir_Iter *iter = malloc(sizeof(Nob_Dir_Iter));
-            if (iter == NULL) {
-                nob_log(NOB_ERROR, "Could not allocate memory");
-                free(iter);
-                nob_return_defer(false);
-            }
-            if (!nob_dir_iter_open(iter, path)) {
+            Nob_Dir_Iter iter = {0};
+            if (!nob_dir_iter_open(&iter, path)) {
                 nob_log(NOB_ERROR, "Could not open directory %s", path);
-                free(iter);
                 nob_return_defer(false);
             }
 
-            while (nob_dir_iter_next(iter)) {
-                char *dname = nob_dir_iter_getname(iter);
+            while (nob_dir_iter_next(&iter)) {
+                const char *dname = nob_dir_iter_getname(iter);
                 if (dname == NULL) {
                     nob_log(NOB_ERROR, "Could not get directory's name");
-                    nob_dir_iter_close(&iter);
+                    nob_dir_iter_close(iter);
                     nob_return_defer(false);
                 }
 
@@ -2409,6 +2403,8 @@ NOBDEF int closedir(DIR *dirp)
         #define write_entire_file nob_write_entire_file
         #define get_file_type nob_get_file_type
         #define delete_file nob_delete_file
+        #define delete_directory nob_delete_directory
+        #define delete_directory_recursively nob_delete_directory_recursively
         #define is_dir_empty nob_is_dir_empty
         #define Dir_Iter Nob_Dir_Iter
         #define dir_iter_open nob_dir_iter_open
