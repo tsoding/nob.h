@@ -679,6 +679,16 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
 #define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
 
+typedef struct {
+    Nob_String_View *items;
+    size_t count;
+    size_t capacity;
+} Nob_String_Views;
+
+// Generates a dynamic array of string views for each line in the original string view.
+// A line ending can be "\r\n" or "\n", and this does not get included in the output.
+NOBDEF Nob_String_Views nob_sv_splitlines(Nob_String_View sv);
+
 // printf macros for String_View
 #ifndef SV_Fmt
 #define SV_Fmt "%.*s"
@@ -2035,6 +2045,23 @@ NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_pref
     return false;
 }
 
+NOBDEF Nob_String_Views nob_sv_splitlines(Nob_String_View sv)
+{
+    Nob_String_Views svs = {0};
+
+    while (sv.count) {
+        Nob_String_View lhs = nob_sv_chop_by_delim(&sv, '\n');
+
+        // if carriage return, eliminate
+        if (lhs.count && lhs.data[lhs.count - 1] == '\r')
+            lhs.count--;
+
+        nob_da_append(&svs, lhs);
+    }
+
+    return svs;
+}
+
 // RETURNS:
 //  0 - file does not exists
 //  1 - file exists
@@ -2288,12 +2315,14 @@ NOBDEF int closedir(DIR *dirp)
         #define get_current_dir_temp nob_get_current_dir_temp
         #define set_current_dir nob_set_current_dir
         #define String_View Nob_String_View
+        #define String_Views Nob_String_Views
         #define temp_sv_to_cstr nob_temp_sv_to_cstr
         #define sv_chop_by_delim nob_sv_chop_by_delim
         #define sv_chop_left nob_sv_chop_left
         #define sv_trim nob_sv_trim
         #define sv_trim_left nob_sv_trim_left
         #define sv_trim_right nob_sv_trim_right
+        #define sv_splitlines nob_sv_splitlines
         #define sv_eq nob_sv_eq
         #define sv_starts_with nob_sv_starts_with
         #define sv_end_with nob_sv_end_with
