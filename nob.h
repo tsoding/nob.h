@@ -234,6 +234,9 @@ NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
+NOBDEF bool nob_delete_directory(const char *path);
+static bool nob__delete_directory_recursively(const char *path);
+NOBDEF bool nob_delete_directory_recursively(const char *path);
 
 #define nob_return_defer(value) do { result = (value); goto defer; } while(0)
 
@@ -1654,6 +1657,104 @@ NOBDEF bool nob_delete_file(const char *path)
     }
     return true;
 #endif // _WIN32
+}
+
+NOBDEF bool nob_delete_directory(const char *path) {
+    nob_log(NOB_INFO, "deleting directory %s", path);
+    if (nob_get_file_type(path) != NOB_FILE_DIRECTORY) {
+        nob_log(NOB_ERROR, "Not a directory %s", path);
+        return false;
+    }
+#ifdef _WIN32
+    if (!RemoveDirectoryA(path)) return false;
+    return true;
+#else
+    if (remove(path) < 0) return false;
+    return true;
+#endif // _WIN32
+}
+
+static bool nob__delete_directory_recursively(const char *path) {
+    bool result = true;
+    Nob_String_Builder path_sb = {0};
+    size_t temp_checkpoint = nob_temp_save();
+
+    Nob_File_Type type = nob_get_file_type(path);
+    if (type < 0) return false;
+
+    switch (type) {
+        case NOB_FILE_DIRECTORY: {
+            nob_log(NOB_INFO, "deleting directory %s recursively", path);
+
+            Nob_Dir_Iter *iter = malloc(sizeof(Nob_Dir_Iter));
+            if (iter == NULL) {
+                nob_log(NOB_ERROR, "Could not allocate memory");
+                free(iter);
+                nob_return_defer(false);
+            }
+            if (!nob_dir_iter_open(iter, path)) {
+                nob_log(NOB_ERROR, "Could not open directory %s", path);
+                free(iter);
+                nob_return_defer(false);
+            }
+
+            while (nob_dir_iter_next(iter)) {
+                char *dname = nob_dir_iter_getname(iter);
+                if (dname == NULL) {
+                    nob_log(NOB_ERROR, "Could not get directory's name");
+                    nob_dir_iter_close(&iter);
+                    nob_return_defer(false);
+                }
+
+                if (strcmp(dname, ".") == 0 || strcmp(dname, "..") == 0)
+                    continue;
+
+                path_sb.count = 0;
+                nob_sb_append_cstr(&path_sb, path);
+                nob_sb_append_cstr(&path_sb, "/");
+                nob_sb_append_cstr(&path_sb, dname);
+                nob_sb_append_null(&path_sb);
+
+                if (!nob__delete_directory_recursively(path_sb.items))
+                    nob_return_defer(false);
+            }
+
+            if (!nob_delete_directory(path)) {
+                nob_log(NOB_ERROR, "Could not delete directory %s", path);
+                nob_return_defer(false);
+            }
+        } break;
+        case NOB_FILE_REGULAR:
+        case NOB_FILE_SYMLINK: {
+            nob_return_defer(nob_delete_file(path));
+        } break;
+        case NOB_FILE_OTHER: {
+            nob_log(NOB_ERROR, "Unsupported type of file %s", path);
+            nob_return_defer(false);
+        } break;
+
+        default: NOB_UNREACHABLE("nob__delete_directory_recursively");
+    }
+
+defer:
+    nob_temp_rewind(temp_checkpoint);
+    nob_da_free(path_sb);
+    return result;
+}
+
+NOBDEF bool nob_delete_directory_recursively(const char *path) {
+    if (!nob_file_exists(path)) {
+        nob_log(NOB_WARNING, "No such directory: %s", path);
+        return false;
+    }
+
+    Nob_File_Type type = nob_get_file_type(path);
+    if (type == NOB_FILE_DIRECTORY) {
+        return nob__delete_directory_recursively(path);
+    } else {
+        nob_log(NOB_WARNING, "Not a directory: %s", path);
+        return false;
+    }
 }
 
 // Returns true, false, and -1.
