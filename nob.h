@@ -2306,6 +2306,11 @@ NOBDEF int closedir(DIR *dirp)
         #define write_entire_file nob_write_entire_file
         #define get_file_type nob_get_file_type
         #define delete_file nob_delete_file
+        #define is_dir_empty nob_is_dir_empty
+        #define dir_iter_open nob_dir_iter_open
+        #define dir_iter_next nob_dir_iter_next
+        #define dir_iter_close nob_dir_iter_close
+        #define dir_iter_getname nob_dir_iter_getname
         #define return_defer nob_return_defer
         #define da_append nob_da_append
         #define da_free nob_da_free
