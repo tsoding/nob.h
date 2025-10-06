@@ -769,8 +769,8 @@ typedef struct {
 NOBDEF int  nob_is_dir_empty(const char *path);
 NOBDEF bool nob_dir_iter_open(Nob_Dir_Iter *iter, const char *path);
 NOBDEF bool nob_dir_iter_next(Nob_Dir_Iter *iter);
-NOBDEF void nob_dir_iter_close(Nob_Dir_Iter **iter);
-NOBDEF char *nob_dir_iter_getname(Nob_Dir_Iter *iter);
+NOBDEF void nob_dir_iter_close(Nob_Dir_Iter *iter);
+NOBDEF const char *nob_dir_iter_getname(Nob_Dir_Iter iter);
 
 #ifdef NOB_IMPLEMENTATION
 
@@ -1716,17 +1716,14 @@ NOBDEF bool nob_dir_iter_next(Nob_Dir_Iter *iter) {
     return false;
 }
 
-NOBDEF void nob_dir_iter_close(Nob_Dir_Iter **iter) {
-    if (iter && *iter) {
-        if ((*iter)->dir)
-            closedir((*iter)->dir);
-        NOB_FREE(*iter);
-        *iter = NULL;
-    }
+NOBDEF void nob_dir_iter_close(Nob_Dir_Iter *iter) {
+    if (!iter) return;
+    if (iter->dir)
+        closedir(iter->dir);
 }
 
-NOBDEF char *nob_dir_iter_getname(Nob_Dir_Iter *iter) {
-    return iter->current ? iter->current->d_name : NULL;
+NOBDEF const char *nob_dir_iter_getname(Nob_Dir_Iter iter) {
+    return iter.current ? iter.current->d_name : NULL;
 }
 
 NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
@@ -2313,6 +2310,7 @@ NOBDEF int closedir(DIR *dirp)
         #define get_file_type nob_get_file_type
         #define delete_file nob_delete_file
         #define is_dir_empty nob_is_dir_empty
+        #define Dir_Iter Nob_Dir_Iter
         #define dir_iter_open nob_dir_iter_open
         #define dir_iter_next nob_dir_iter_next
         #define dir_iter_close nob_dir_iter_close
