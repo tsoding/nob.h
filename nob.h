@@ -235,12 +235,6 @@ NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t siz
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
 
-NOBDEF int  nob_is_dir_empty(const char *path);
-NOBDEF bool nob_dir_iter_open(Nob_Dir_Iter *iter, const char *path);
-NOBDEF bool nob_dir_iter_next(Nob_Dir_Iter *iter);
-NOBDEF bool nob_dir_iter_close(Nob_Dir_Iter **iter);
-NOBDEF char *nob_dir_iter_getname(Nob_Dir_Iter *iter);
-
 #define nob_return_defer(value) do { result = (value); goto defer; } while(0)
 
 // Initial capacity of a dynamic array
@@ -765,6 +759,18 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 #endif // _WIN32
 
 #endif // NOB_H_
+
+typedef struct {
+    const char *path;
+    DIR *dir;
+    struct dirent *current;
+} Nob_Dir_Iter;
+
+NOBDEF int  nob_is_dir_empty(const char *path);
+NOBDEF bool nob_dir_iter_open(Nob_Dir_Iter *iter, const char *path);
+NOBDEF bool nob_dir_iter_next(Nob_Dir_Iter *iter);
+NOBDEF void nob_dir_iter_close(Nob_Dir_Iter **iter);
+NOBDEF char *nob_dir_iter_getname(Nob_Dir_Iter *iter);
 
 #ifdef NOB_IMPLEMENTATION
 
