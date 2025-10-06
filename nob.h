@@ -1732,7 +1732,7 @@ static bool nob__delete_directory_recursively(const char *path) {
 
 defer:
     nob_temp_rewind(temp_checkpoint);
-    nob_da_free(path_sb);
+    nob_sb_free(path_sb);
     return result;
 }
 
