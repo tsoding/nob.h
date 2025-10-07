@@ -402,6 +402,8 @@ typedef struct {
     const char *stdout_path;
     // Redirect stderr to file
     const char *stderr_path;
+    // program working directory NULL means current
+    const char* pwd;
 } Nob_Cmd_Opt;
 
 // Run the command with options.
@@ -768,7 +770,7 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 static int nob__proc_wait_async(Nob_Proc proc, int ms);
 
 // Starts the process for the command. Its main purpose is to be the base for nob_cmd_run() and nob_cmd_run_opt().
-static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout, Nob_Fd *fderr);
+static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout, Nob_Fd *fderr, const char* pwd);
 
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
@@ -1031,6 +1033,7 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
     Nob_Fd *opt_fdin  = NULL;
     Nob_Fd *opt_fdout = NULL;
     Nob_Fd *opt_fderr = NULL;
+    const char *opt_pwd = NULL;
 
     size_t max_procs = opt.max_procs > 0 ? opt.max_procs : (size_t) nob_nprocs() + 1;
 
@@ -1062,7 +1065,10 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         if (fderr == NOB_INVALID_FD) nob_return_defer(false);
         opt_fderr = &fderr;
     }
-    Nob_Proc proc = nob__cmd_start_process(*cmd, opt_fdin, opt_fdout, opt_fderr);
+    if (opt.pwd) {
+        opt_pwd = opt.pwd;
+    }
+    Nob_Proc proc = nob__cmd_start_process(*cmd, opt_fdin, opt_fdout, opt_fderr, opt_pwd);
 
     if (opt.async) {
         if (proc == NOB_INVALID_PROC) nob_return_defer(false);
@@ -1104,10 +1110,10 @@ NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void)
 
 NOBDEF Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
 {
-    return nob__cmd_start_process(cmd, redirect.fdin, redirect.fdout, redirect.fderr);
+    return nob__cmd_start_process(cmd, redirect.fdin, redirect.fdout, redirect.fderr, NULL);
 }
 
-static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout, Nob_Fd *fderr)
+static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout, Nob_Fd *fderr, const char* pwd)
 {
     if (cmd.count < 1) {
         nob_log(NOB_ERROR, "Could not run empty command");
@@ -1140,7 +1146,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 
     nob__win32_cmd_quote(cmd, &sb);
     nob_sb_append_null(&sb);
-    BOOL bSuccess = CreateProcessA(NULL, sb.items, NULL, NULL, TRUE, 0, NULL, NULL, &siStartInfo, &piProcInfo);
+    BOOL bSuccess = CreateProcessA(NULL, sb.items, NULL, NULL, TRUE, 0, NULL, pwd, &siStartInfo, &piProcInfo);
     nob_sb_free(sb);
 
     if (!bSuccess) {
@@ -1186,6 +1192,10 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
         nob_da_append_many(&cmd_null, cmd.items, cmd.count);
         nob_cmd_append(&cmd_null, NULL);
 
+        if (pwd) {
+            NOB_TODO("changing working directory not yet supported on linux")
+        }
+
         if (execvp(cmd.items[0], (char * const*) cmd_null.items) < 0) {
             nob_log(NOB_ERROR, "Could not exec child process for %s: %s", cmd.items[0], strerror(errno));
             exit(1);
@@ -1199,19 +1209,19 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 
 NOBDEF Nob_Proc nob_cmd_run_async(Nob_Cmd cmd)
 {
-    return nob__cmd_start_process(cmd, NULL, NULL, NULL);
+    return nob__cmd_start_process(cmd, NULL, NULL, NULL, NULL);
 }
 
 NOBDEF Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd)
 {
-    Nob_Proc proc = nob__cmd_start_process(*cmd, NULL, NULL, NULL);
+    Nob_Proc proc = nob__cmd_start_process(*cmd, NULL, NULL, NULL, NULL);
     cmd->count = 0;
     return proc;
 }
 
 NOBDEF Nob_Proc nob_cmd_run_async_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect)
 {
-    Nob_Proc proc = nob__cmd_start_process(*cmd, redirect.fdin, redirect.fdout, redirect.fderr);
+    Nob_Proc proc = nob__cmd_start_process(*cmd, redirect.fdin, redirect.fdout, redirect.fderr, NULL);
     cmd->count = 0;
     if (redirect.fdin) {
         nob_fd_close(*redirect.fdin);
@@ -1468,26 +1478,26 @@ NOBDEF bool nob_procs_append_with_flush(Nob_Procs *procs, Nob_Proc proc, size_t 
 
 NOBDEF bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect)
 {
-    Nob_Proc p = nob__cmd_start_process(cmd, redirect.fdin, redirect.fdout, redirect.fderr);
+    Nob_Proc p = nob__cmd_start_process(cmd, redirect.fdin, redirect.fdout, redirect.fderr, NULL);
     return nob_proc_wait(p);
 }
 
 NOBDEF bool nob_cmd_run_sync(Nob_Cmd cmd)
 {
-    Nob_Proc p = nob__cmd_start_process(cmd, NULL, NULL, NULL);
+    Nob_Proc p = nob__cmd_start_process(cmd, NULL, NULL, NULL, NULL);
     return nob_proc_wait(p);
 }
 
 NOBDEF bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd)
 {
-    Nob_Proc p = nob__cmd_start_process(*cmd, NULL, NULL, NULL);
+    Nob_Proc p = nob__cmd_start_process(*cmd, NULL, NULL, NULL, NULL);
     cmd->count = 0;
     return nob_proc_wait(p);
 }
 
 NOBDEF bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect)
 {
-    Nob_Proc p = nob__cmd_start_process(*cmd, redirect.fdin, redirect.fdout, redirect.fderr);
+    Nob_Proc p = nob__cmd_start_process(*cmd, redirect.fdin, redirect.fdout, redirect.fderr, NULL);
     cmd->count = 0;
     if (redirect.fdin) {
         nob_fd_close(*redirect.fdin);

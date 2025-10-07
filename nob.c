@@ -41,10 +41,8 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
 
     const char *test_cwd_path = temp_sprintf("%s%s%s.cwd", BUILD_FOLDER, TESTS_FOLDER, test_name);
     if (!mkdir_if_not_exists(test_cwd_path)) return false;
-    if (!set_current_dir(test_cwd_path)) return false;
-    cmd_append(cmd, temp_sprintf("../%s", test_name));
-    if (!cmd_run(cmd))    return false;
-    if (!set_current_dir("../../../")) return false;
+    cmd_append(cmd, temp_sprintf("%s%s%s", BUILD_FOLDER, TESTS_FOLDER, test_name));
+    if (!cmd_run(cmd, .pwd = test_cwd_path))    return false;
 
     nob_log(INFO, "--- %s finished ---", bin_path);
 
