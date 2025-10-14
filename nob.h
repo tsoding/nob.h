@@ -740,7 +740,6 @@ typedef struct Nob__Ptrace_Cache_Nodes {
 
 struct Nob_Ptrace_Cache {
     Nob__Ptrace_Cache_Nodes nodes;
-    Nob_Cmd temp_cmd; // Don't worry about it...
     Nob_String_Builder temp_sb; // Don't worry about it...
     Nob_String_Builder arena;
 
@@ -2223,7 +2222,6 @@ NOBDEF void nob_ptrace_cache_finish(Nob_Ptrace_Cache cache)
         nob_delete_file(ptrace_output_path);
     }
 
-    nob_cmd_free(cache.temp_cmd);
     nob_sb_free(cache.temp_sb);
     for (size_t i = 0; i < cache.nodes.count; ++i) {
         Nob__Ptrace_Cache_Node node = cache.nodes.items[i];
@@ -2314,15 +2312,14 @@ static bool nob__ptrace_cache_is_cached(Nob_Ptrace_Cache *cache, Nob__Ptrace_Cac
 {
     if (node.input_paths.count == 0 && node.output_paths.count == 0) return false;
 
-    cache->temp_cmd.count = 0;
     for (size_t i = 0; i < node.input_paths.count; ++i) {
-        int index = node.input_paths.items[i];
-        nob_cmd_append(&cache->temp_cmd, &cache->arena.items[index]);
-    }
-
-    for (size_t i = 0; i < node.output_paths.count; ++i) {
-        int index = node.output_paths.items[i];
-        if (nob__needs_rebuild_ex(&cache->arena.items[index], cache->temp_cmd.items, cache->temp_cmd.count, true)) return false;
+        int index_input = node.input_paths.items[i];
+        const char* inputs[] = { &cache->arena.items[index_input] };
+        for (size_t j = 0; j < node.output_paths.count; ++j) {
+            int index_output = node.output_paths.items[j];
+            const char* output = &cache->arena.items[index_output];
+            if (nob__needs_rebuild_ex(output, inputs, 1, true)) return false;
+        }
     }
 
     return true;
@@ -2539,7 +2536,6 @@ static Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Op
         nob_log(NOB_INFO, "PTRACE CMD: %.*s", (int)cache->temp_sb.count, cache->temp_sb.items);
     }
     cache->was_last_cached = false;
-    cache->temp_cmd.count = 0;
     node->input_paths.count = 0;
     node->output_paths.count = 0;
 
