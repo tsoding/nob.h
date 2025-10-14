@@ -772,6 +772,7 @@ static bool nob__ptrace_cache_write(Nob_Ptrace_Cache *cache);
 //   * realpath expands symlinks and that means that if the symlink changes, cache will not be invalidated. Do something about this..
 //   * Include files that erred while opening into the .cache file
 //   * Ignore files that erred out.
+//   * Remove node if compile has failed..
 
 #else
 struct Nob_Ptrace_Cache {
@@ -2217,7 +2218,7 @@ NOBDEF void nob_ptrace_cache_finish(Nob_Ptrace_Cache cache)
     nob__ptrace_cache_write(&cache);
     const char* ptrace_output_path = nob_temp_sprintf("%s.temp", cache.file_path);
     if (nob_file_exists(ptrace_output_path) > 0) {
-      nob_delete_file(ptrace_output_path);
+        nob_delete_file(ptrace_output_path);
     }
 
     nob_cmd_free(cache.temp_cmd);
@@ -2244,7 +2245,21 @@ static void nob__ptrace_cache_node_push_file(Nob_Ptrace_Cache* cache, Nob__Ints*
     nob_sb_append_null(&cache->arena);
 }
 
-void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* node, Nob_String_View file_path, int mode, bool exists, bool absolute_paths)
+static bool nob__ptrace_cache_node_remove_file(Nob_Ptrace_Cache* cache, Nob__Ints* indexes, Nob_String_View file_path)
+{
+  for (int i = indexes->count; i; --i) {
+      int index = indexes->items[i - 1];
+      Nob_String_View file_path_hei = nob_sv_from_cstr(&cache->arena.items[index]);
+      if (nob_sv_eq(file_path, file_path_hei)) {
+          indexes->count -= 1;
+          indexes->items[i - 1] = indexes->items[indexes->count];
+          return true;
+      }
+  }
+  return false;
+}
+
+static void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* node, Nob_String_View file_path, int mode, bool exists, bool absolute_paths)
 {
     if (nob_sv_starts_with(file_path, nob_sv_from_cstr("/usr/")))  return;
     if (nob_sv_starts_with(file_path, nob_sv_from_cstr("/etc/")))  return;
@@ -2254,6 +2269,7 @@ void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* no
     if (nob__sv_contains(file_path, nob_sv_from_cstr("/.cache/"))) return;
     if (nob__sv_contains(file_path, nob_sv_from_cstr("/run/")))    return;
     if (nob_sv_starts_with(file_path, nob_sv_from_cstr("/dev/")))  return;
+    if (nob_sv_starts_with(file_path, nob_sv_from_cstr("/opt/")))  return;
 
     if (absolute_paths) file_path = nob__sv_relative_to_absolute(file_path);
 
@@ -2262,7 +2278,18 @@ void nob__ptrace_append_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* no
     else if (exists)        nob__ptrace_cache_node_push_file(cache, &node->input_paths,  file_path.data);
 }
 
-void nob__ptrace_read_cstr_from_inferior(Nob_String_Builder* out, Nob_Fd inferior, long* addr)
+static void nob__ptrace_rename_file(Nob_Ptrace_Cache* cache, Nob__Ptrace_Cache_Node* node, Nob_String_View file_path_src, Nob_String_View file_path_dst, bool absolute_paths)
+{
+  // For output files just remove src path and add dst path
+  if (nob__ptrace_cache_node_remove_file(cache, &node->output_paths, file_path_src)) {
+      nob__ptrace_append_file(cache, node, file_path_dst, O_CREAT, true, absolute_paths);
+  }
+  // For input files just remove src, because it is no longer an input? IG..
+  nob__ptrace_cache_node_remove_file(cache, &node->input_paths, file_path_src);
+}
+
+
+static void nob__ptrace_read_cstr_from_inferior(Nob_String_Builder* out, Nob_Fd inferior, long* addr)
 {
     out->count = 0;
 
@@ -2456,7 +2483,7 @@ defer:
 
 #endif // NOB_HAS_PTRACE_CACHE
 
-Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
+static Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
 {
 #if NOB_HAS_PTRACE_CACHE
     if (NULL == opt.ptrace_cache || opt.ptrace_cache->is_disabled) return Nob__Ptrace_Cache_Run_Ptrace_Error;
@@ -2537,6 +2564,7 @@ Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         long ptrace_data;
         Nob_Fd cur_child = waitpid(-1, &status, 0);
         Nob_String_Builder file_path = { 0 };
+        Nob_String_Builder file_path2 = { 0 };
 
 
         ret = ptrace(PTRACE_SETOPTIONS, cur_child, 1, PTRACE_O_TRACEVFORK | PTRACE_O_TRACEFORK | PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACECLONE);
@@ -2590,13 +2618,26 @@ Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
             }
 
             bool should_add = false;
+            bool should_rename = false;
             unsigned long long mode;
             if (sc.op == PTRACE_SYSCALL_INFO_ENTRY) {
-                if (sc.entry.nr == /* sys_openat */257) {
+                if (sc.entry.nr == /* sys_openat */ 257) {
                     long* file_path_in_inferior = (long*)sc.entry.args[1];
                     nob__ptrace_read_cstr_from_inferior(&file_path, cur_child, file_path_in_inferior);
                     mode = sc.entry.args[2];
                     should_add = true;
+                } else if (sc.entry.nr == /* sys_chdir */ 80) {
+                    long* file_path_in_inferior = (long*)sc.entry.args[0];
+                    nob__ptrace_read_cstr_from_inferior(&file_path, cur_child, file_path_in_inferior);
+                    printf("TODO CD: %s\n", file_path.items);
+                } else if (sc.entry.nr == /* sys_rename */ 82) {
+                    long* file_path_in_inferior_src = (long*)sc.entry.args[0];
+                    long* file_path_in_inferior_dst = (long*)sc.entry.args[1];
+                    nob__ptrace_read_cstr_from_inferior(&file_path, cur_child, file_path_in_inferior_src);
+                    nob__ptrace_read_cstr_from_inferior(&file_path2, cur_child, file_path_in_inferior_dst);
+                    should_rename = true;
+                } else if (sc.entry.nr == /* sys_renameat2 */ 316) {
+                    nob_log(NOB_INFO, "TODO Renameat2");
                 }
             }
 
@@ -2608,16 +2649,30 @@ Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
             if (should_add) {
                 bool exists = nob_file_exists(file_path.items);
                 nob__ptrace_append_file(cache, node, nob_sb_to_sv(file_path), mode, exists, false == cache->no_absolute);
+            } else if (should_rename) {
+                file_path.count -= 1;
+                file_path2.count -= 1;
+                nob__ptrace_rename_file(cache, node, nob_sb_to_sv(file_path), nob_sb_to_sv(file_path2), false == cache->no_absolute);
             }
         }
         nob_sb_free(file_path);
         if (WEXITSTATUS(status) == 0) {
-          nob__ptrace_cache_write(cache);
-          return Nob__Ptrace_Cache_Run_True;
+            // Remove output files that no longer exist. They are most likely temp files
+            // and are not important for caching.
+            for (int i = node->output_paths.count; i; --i) {
+                int index = node->output_paths.items[i - 1];
+                const char* file_path = &cache->arena.items[index];
+                if (false == nob_file_exists(file_path)) {
+                    node->output_paths.count -= 1;
+                    node->output_paths.items[i - 1] = node->output_paths.items[node->output_paths.count];
+                }
+            }
+            nob__ptrace_cache_write(cache);
+            return Nob__Ptrace_Cache_Run_True;
         } else {
-          node->input_paths.count = 0;
-          node->output_paths.count = 0;
-          return Nob__Ptrace_Cache_Run_False;
+            node->input_paths.count = 0;
+            node->output_paths.count = 0;
+            return Nob__Ptrace_Cache_Run_False;
         }
     }
 #else
