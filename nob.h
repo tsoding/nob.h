@@ -758,6 +758,7 @@ static bool nob__ptrace_cache_is_cached(Nob_Ptrace_Cache *cache, Nob__Ptrace_Cac
 static Nob__Ptrace_Cache_Node *nob__ptrace_cache_node(Nob_Ptrace_Cache *cache, Nob_Cmd cmd, const char* cwd, const char* stdin_path, const char* stdout_path, const char* stderr_path);
 static bool nob__ptrace_cache_read(Nob_Ptrace_Cache *cache);
 static bool nob__ptrace_cache_write(Nob_Ptrace_Cache *cache);
+static void nob__ptrace_cache_compress(Nob_Ptrace_Cache *cache);
 // Ptrace Cache TODOS:
 //   * Use in combination with async - Idk how...
 //   * Think about other syscalls that a command can make that can invalidate cache:
@@ -2215,6 +2216,7 @@ static Nob_String_View nob__sv_relative_to_absolute(Nob_String_View sv)
 NOBDEF void nob_ptrace_cache_finish(Nob_Ptrace_Cache cache)
 {
 #if NOB_HAS_PTRACE_CACHE
+    nob__ptrace_cache_compress(&cache);
     nob__ptrace_cache_write(&cache);
     const char* ptrace_output_path = nob_temp_sprintf("%s.temp", cache.file_path);
     if (nob_file_exists(ptrace_output_path) > 0) {
@@ -2365,6 +2367,34 @@ static Nob__Ptrace_Cache_Node *nob__ptrace_cache_node(Nob_Ptrace_Cache *cache, N
     if (stderr_path) current = nob__ptrace_cache_node2(cache, stderr_path, current, Nob__Ptrace_Cache_Node_Stderr);
 
     return &cache->nodes.items[current];
+}
+
+static void nob__ptrace_cache_compress(Nob_Ptrace_Cache *cache) {
+    Nob_String_Builder new_arena = { 0 };
+    for (int i = 0; i < cache->nodes.count; ++i) {
+        Nob__Ptrace_Cache_Node node = cache->nodes.items[i];
+        for (int j = 0; j < node.input_paths.count; ++j) {
+            int new_index = new_arena.count;
+            nob_sb_append_cstr(&new_arena, &cache->arena.items[node.input_paths.items[j]]);
+            nob_sb_append_null(&new_arena);
+            node.input_paths.items[j] = new_index;
+        }
+        for (int j = 0; j < node.output_paths.count; ++j) {
+            int new_index = new_arena.count;
+            nob_sb_append_cstr(&new_arena, &cache->arena.items[node.output_paths.items[j]]);
+            nob_sb_append_null(&new_arena);
+            node.output_paths.items[j] = new_index;
+        }
+        int new_index = new_arena.count;
+        nob_sb_append_cstr(&new_arena, &cache->arena.items[node.arg_index]);
+        nob_sb_append_null(&new_arena);
+        cache->nodes.items[i].arg_index = new_index;
+    }
+
+    nob_log(NOB_INFO, "Compressed arena: %d -> %d", cache->arena.count, new_arena.count);
+
+    nob_da_free(cache->arena);
+    cache->arena = new_arena;
 }
 
 static bool nob__ptrace_cache_write(Nob_Ptrace_Cache *cache)
@@ -2651,7 +2681,6 @@ static Nob__Ptrace_Cache_Run_Status nob__cmd_run_ptrace(Nob_Cmd *cmd, Nob_Cmd_Op
                 nob__ptrace_append_file(cache, node, nob_sb_to_sv(file_path), mode, exists, false == cache->no_absolute);
             } else if (should_rename) {
                 file_path.count -= 1;
-                file_path2.count -= 1;
                 nob__ptrace_rename_file(cache, node, nob_sb_to_sv(file_path), nob_sb_to_sv(file_path2), false == cache->no_absolute);
             }
         }
