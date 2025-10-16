@@ -10,7 +10,7 @@
 
 // TODO: we should test on C++ compilers too
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
 #  define nob_cc_flags(cmd) cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "/I.")
 #elif defined(__APPLE__) || defined(__MACH__)
 // TODO: "-std=c99", "-D_POSIX_C_SOURCE=200112L" didn't work for MacOS, don't know why, don't really care that much at the moment.
