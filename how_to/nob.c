@@ -8,6 +8,7 @@
 
 const char *examples[] = {
     "001_basic_usage",
+    "002_object_dependencies",
     "005_parallel_build",
     "010_nob_two_stage",
 };
