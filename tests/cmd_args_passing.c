@@ -21,7 +21,7 @@ int main(void)
     nob_cc_flags(&cmd);
     nob_cc_output(&cmd, "print_args");
     nob_cc_inputs(&cmd, "print_args.c");
-    if (!cmd_run_sync_and_reset(&cmd)) return 1;
+    if (!cmd_run(&cmd)) return 1;
 
     cmd_append(&cmd, "./print_args");
     cmd_append(&cmd, "foo");
@@ -29,7 +29,7 @@ int main(void)
     cmd_append(&cmd, "Hello, world");
     cmd_append(&cmd, "\"Hello, world\"");
     cmd_append(&cmd, "\"\\` %$*@");
-    if (!cmd_run_sync_and_reset(&cmd)) return 1;
+    if (!cmd_run(&cmd)) return 1;
 
     return 0;
 }
