@@ -680,15 +680,15 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
 #define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
 
-Nob_String_View nob_sv_take_left_while(Nob_String_View sv, bool (*predicate)(char x));
-Nob_String_View nob_sv_chop_by_sv(Nob_String_View *sv, Nob_String_View thicc_delim);
-bool nob_sv_try_chop_by_delim(Nob_String_View *sv, char delim, Nob_String_View *chunk);
-Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n);
-Nob_String_View nob_sv_chop_left_while(Nob_String_View *sv, bool (*predicate)(char x));
-bool nob_sv_index_of(Nob_String_View sv, char c, size_t *index);
-bool nob_sv_eq_ignorecase(Nob_String_View a, Nob_String_View b);
-uint64_t nob_sv_to_u64(Nob_String_View sv);
-uint64_t nob_sv_chop_u64(Nob_String_View *sv);
+NOBDEF Nob_String_View nob_sv_take_left_while(Nob_String_View sv, bool (*predicate)(char x));
+NOBDEF Nob_String_View nob_sv_chop_by_sv(Nob_String_View *sv, Nob_String_View thicc_delim);
+NOBDEF bool nob_sv_try_chop_by_delim(Nob_String_View *sv, char delim, Nob_String_View *chunk);
+NOBDEF Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n);
+NOBDEF Nob_String_View nob_sv_chop_left_while(Nob_String_View *sv, bool (*predicate)(char x));
+NOBDEF bool nob_sv_index_of(Nob_String_View sv, char c, size_t *index);
+NOBDEF bool nob_sv_eq_ignorecase(Nob_String_View a, Nob_String_View b);
+NOBDEF uint64_t nob_sv_to_u64(Nob_String_View sv);
+NOBDEF uint64_t nob_sv_chop_u64(Nob_String_View *sv);
 
 #define SV(cstr_lit) nob_sv_from_parts(cstr_lit, sizeof(cstr_lit) - 1)
 #define SV_STATIC(cstr_lit)   \
@@ -2044,7 +2044,7 @@ NOBDEF bool nob_sv_end_with(Nob_String_View sv, const char *cstr)
     return false;
 }
 
-Nob_String_View nob_sv_take_left_while(Nob_String_View sv, bool (*predicate)(char x)) {
+NOBDEF Nob_String_View nob_sv_take_left_while(Nob_String_View sv, bool (*predicate)(char x)) {
     size_t i = 0;
     while (i < sv.count && predicate(sv.data[i])) {
         i += 1;
@@ -2052,7 +2052,7 @@ Nob_String_View nob_sv_take_left_while(Nob_String_View sv, bool (*predicate)(cha
     return nob_sv_from_parts(sv.data, i);
 }
 
-Nob_String_View nob_sv_chop_by_sv(Nob_String_View *sv, Nob_String_View thicc_delim) {
+NOBDEF Nob_String_View nob_sv_chop_by_sv(Nob_String_View *sv, Nob_String_View thicc_delim) {
     Nob_String_View window = nob_sv_from_parts(sv->data, thicc_delim.count);
     size_t i = 0;
     while (i + thicc_delim.count < sv->count && !(nob_sv_eq(window, thicc_delim))) {
@@ -2075,7 +2075,7 @@ Nob_String_View nob_sv_chop_by_sv(Nob_String_View *sv, Nob_String_View thicc_del
     return result;
 }
 
-bool nob_sv_try_chop_by_delim(Nob_String_View *sv, char delim, Nob_String_View *chunk) {
+NOBDEF bool nob_sv_try_chop_by_delim(Nob_String_View *sv, char delim, Nob_String_View *chunk) {
     size_t i = 0;
     while (i < sv->count && sv->data[i] != delim) {
         i += 1;
@@ -2095,7 +2095,7 @@ bool nob_sv_try_chop_by_delim(Nob_String_View *sv, char delim, Nob_String_View *
     return false;
 }
 
-Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n) {
+NOBDEF Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n) {
     if (n > sv->count) {
         n = sv->count;
     }
@@ -2107,7 +2107,7 @@ Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n) {
     return result;
 }
 
-Nob_String_View nob_sv_chop_left_while(Nob_String_View *sv, bool (*predicate)(char x)) {
+NOBDEF Nob_String_View nob_sv_chop_left_while(Nob_String_View *sv, bool (*predicate)(char x)) {
     size_t i = 0;
     while (i < sv->count && predicate(sv->data[i])) {
         i += 1;
@@ -2115,7 +2115,7 @@ Nob_String_View nob_sv_chop_left_while(Nob_String_View *sv, bool (*predicate)(ch
     return nob_sv_chop_left(sv, i);
 }
 
-bool nob_sv_index_of(Nob_String_View sv, char c, size_t *index) {
+NOBDEF bool nob_sv_index_of(Nob_String_View sv, char c, size_t *index) {
     size_t i = 0;
     while (i < sv.count && sv.data[i] != c) {
         i += 1;
@@ -2131,7 +2131,7 @@ bool nob_sv_index_of(Nob_String_View sv, char c, size_t *index) {
     }
 }
 
-bool nob_sv_eq_ignorecase(Nob_String_View a, Nob_String_View b) {
+NOBDEF bool nob_sv_eq_ignorecase(Nob_String_View a, Nob_String_View b) {
     if (a.count != b.count) {
         return false;
     }
@@ -2158,7 +2158,7 @@ NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_pref
     return false;
 }
 
-uint64_t nob_sv_to_u64(Nob_String_View sv) {
+NOBDEF uint64_t nob_sv_to_u64(Nob_String_View sv) {
     uint64_t result = 0;
 
     for (size_t i = 0; i < sv.count && isdigit(sv.data[i]); ++i) {
@@ -2168,7 +2168,7 @@ uint64_t nob_sv_to_u64(Nob_String_View sv) {
     return result;
 }
 
-uint64_t nob_sv_chop_u64(Nob_String_View *sv) {
+NOBDEF uint64_t nob_sv_chop_u64(Nob_String_View *sv) {
     uint64_t result = 0;
     while (sv->count > 0 && isdigit(*sv->data)) {
         result = result * 10 + *sv->data - '0';
