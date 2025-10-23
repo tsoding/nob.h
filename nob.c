@@ -10,6 +10,8 @@
 const char *test_names[] = {
     "minimal_log_level",
     "nob_sv_end_with",
+    "nob_sv_chop_left",
+    "nob_sv_chop_right",
     "set_get_current_dir",
     "cmd_redirect",
     "cmd_args_passing",
