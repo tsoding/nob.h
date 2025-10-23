@@ -1,4 +1,4 @@
-/* nob - v1.23.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.24.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -80,6 +80,7 @@
       - NOB_EXPERIMENTAL_DELETE_OLD - Experimental feature that automatically removes `nob.old` files. It's unclear how well
         it works on Windows, so it's experimental for now.
       - NOB_STRIP_PREFIX - string the `nob_` prefixes from non-redefinable names.
+      - NOB_NO_ECHO - do not echo the actions various nob functions are doing (like nob_cmd_run(), nob_mkdir_if_not_exists(), etc).
 
    ## Redefinable Macros
 
@@ -879,20 +880,26 @@ NOBDEF bool nob_mkdir_if_not_exists(const char *path)
 #endif
     if (result < 0) {
         if (errno == EEXIST) {
+#ifndef NOB_NO_ECHO
             nob_log(NOB_INFO, "directory `%s` already exists", path);
+#endif // NOB_NO_ECHO
             return true;
         }
         nob_log(NOB_ERROR, "could not create directory `%s`: %s", path, strerror(errno));
         return false;
     }
 
+#ifndef NOB_NO_ECHO
     nob_log(NOB_INFO, "created directory `%s`", path);
+#endif // NOB_NO_ECHO
     return true;
 }
 
 NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path)
 {
+#ifndef NOB_NO_ECHO
     nob_log(NOB_INFO, "copying %s -> %s", src_path, dst_path);
+#endif // NOB_NO_ECHO
 #ifdef _WIN32
     if (!CopyFile(src_path, dst_path, FALSE)) {
         nob_log(NOB_ERROR, "Could not copy file: %s", nob_win32_error_message(GetLastError()));
@@ -1114,12 +1121,14 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
         return NOB_INVALID_PROC;
     }
 
+#ifndef NOB_NO_ECHO
     Nob_String_Builder sb = {0};
     nob_cmd_render(cmd, &sb);
     nob_sb_append_null(&sb);
     nob_log(NOB_INFO, "CMD: %s", sb.items);
     nob_sb_free(sb);
     memset(&sb, 0, sizeof(sb));
+#endif // NOB_NO_ECHO
 
 #ifdef _WIN32
     // https://docs.microsoft.com/en-us/windows/win32/procthread/creating-a-child-process-with-redirected-input-and-output
@@ -1628,7 +1637,9 @@ NOBDEF Nob_File_Type nob_get_file_type(const char *path)
 
 NOBDEF bool nob_delete_file(const char *path)
 {
+#ifndef NOB_NO_ECHO
     nob_log(NOB_INFO, "deleting %s", path);
+#endif // NOB_NO_ECHO
 #ifdef _WIN32
     if (!DeleteFileA(path)) {
         nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
@@ -1858,7 +1869,9 @@ NOBDEF const char *nob_path_name(const char *path)
 
 NOBDEF bool nob_rename(const char *old_path, const char *new_path)
 {
+#ifndef NOB_NO_ECHO
     nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
+#endif // NOB_NO_ECHO
 #ifdef _WIN32
     if (!MoveFileEx(old_path, new_path, MOVEFILE_REPLACE_EXISTING)) {
         nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, nob_win32_error_message(GetLastError()));
@@ -2310,6 +2323,7 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.24.0 (2025-10-23) Introduce NOB_NO_ECHO macro flag (@rexim)
      1.23.0 (2025-08-22) Introduce new API for running commands (by @rexim, @programmerlexi, @0x152a)
                            - Add nob_cmd_run()
                            - Add nob_cmd_run_opt()
