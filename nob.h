@@ -805,7 +805,7 @@ NOBDEF const char *nob_win32_error_message(DWORD err) {
             return newErrMsg;
 
         return win32ErrMsg;
-            }
+    }
 
     errMsgSize = WideCharToMultiByte(CP_UTF8, 0, lpBuffer, -1, win32ErrMsg, NOB_WIN32_ERR_MSG_SIZE, NULL, NULL);
     if (errMsgSize == 0) {
