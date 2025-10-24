@@ -892,7 +892,9 @@ NOBDEF bool nob_mkdir_if_not_exists(const char *path)
     if (result == 0) {
         DWORD err = GetLastError();
         if (err == ERROR_ALREADY_EXISTS) {
+#ifndef NOB_NO_ECHO
             nob_log(NOB_INFO, "directory `%s` already exists", path);
+#endif // NOB_NO_ECHO
             return true;
         }
         nob_log(NOB_ERROR, "could not create directory `%s`: %s", path, nob_win32_error_message(err));
@@ -910,13 +912,17 @@ NOBDEF bool nob_mkdir_if_not_exists(const char *path)
         return false;
     }
 #endif
+#ifndef NOB_NO_ECHO
     nob_log(NOB_INFO, "created directory `%s`", path);
+#endif // NOB_NO_ECHO
     return true;
 }
 
 NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path)
 {
+#ifndef NOB_NO_ECHO
     nob_log(NOB_INFO, "copying %s -> %s", src_path, dst_path);
+#endif // NOB_NO_ECHO
 #ifdef _WIN32
     WCHAR wSrcPath[MAX_PATH];
     WCHAR wDstPath[MAX_PATH];
@@ -1152,9 +1158,11 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
     }
 
     Nob_String_Builder sb = {0};
+#ifndef NOB_NO_ECHO
     nob_cmd_render(cmd, &sb);
     nob_sb_append_null(&sb);
     nob_log(NOB_INFO, "CMD: %s", sb.items);
+#endif // NOB_NO_ECHO
 
 #ifdef _WIN32
     const size_t cp = nob_temp_save();
@@ -1720,7 +1728,9 @@ NOBDEF Nob_File_Type nob_get_file_type(const char *path)
 
 NOBDEF bool nob_delete_file(const char *path)
 {
+#ifndef NOB_NO_ECHO
     nob_log(NOB_INFO, "deleting %s", path);
+#endif // NOB_NO_ECHO
 #ifdef _WIN32
     WCHAR wPath[MAX_PATH];
 
@@ -1968,7 +1978,9 @@ NOBDEF const char *nob_path_name(const char *path)
 
 NOBDEF bool nob_rename(const char *old_path, const char *new_path)
 {
+#ifndef NOB_NO_ECHO
     nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
+#endif // NOB_NO_ECHO
 #ifdef _WIN32
     WCHAR wOldPath[MAX_PATH];
     WCHAR wNewPath[MAX_PATH];
