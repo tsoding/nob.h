@@ -761,6 +761,18 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 
 #endif // NOB_H_
 
+typedef struct {
+    const char *path;
+    DIR *dir;
+    struct dirent *current;
+} Nob_Dir_Iter;
+
+NOBDEF int  nob_is_dir_empty(const char *path);
+NOBDEF bool nob_dir_iter_open(Nob_Dir_Iter *iter, const char *path);
+NOBDEF bool nob_dir_iter_next(Nob_Dir_Iter *iter);
+NOBDEF void nob_dir_iter_close(Nob_Dir_Iter iter);
+NOBDEF const char *nob_dir_iter_getname(Nob_Dir_Iter iter);
+
 #ifdef NOB_IMPLEMENTATION
 
 // This is like nob_proc_wait() but waits asynchronously. Depending on the platform ms means different thing.
@@ -1655,6 +1667,75 @@ NOBDEF bool nob_delete_file(const char *path)
 #endif // _WIN32
 }
 
+// Returns true, false, and -1.
+NOBDEF int nob_is_dir_empty(const char *path) {
+    DIR *dir = opendir(path);
+    if (dir == NULL) {
+#ifdef _WIN32
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", path, nob_win32_error_message(GetLastError()));
+#else
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", path, strerror(errno));
+#endif // _WIN32
+        return -1;
+    }
+
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+            continue;
+        closedir(dir);
+        return false;
+    }
+
+    closedir(dir);
+    return true;
+}
+
+// Returns NULL if gets failed
+NOBDEF bool nob_dir_iter_open(Nob_Dir_Iter *iter, const char *path) {
+    if (iter == NULL) return false;
+    if (path == NULL) return false;
+
+    iter->path = path;
+    iter->dir = opendir(path);
+    iter->current = NULL;
+
+    if (iter->dir == NULL) {
+#ifdef _WIN32
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", path, nob_win32_error_message(GetLastError()));
+#else
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", path, strerror(errno));
+#endif // _WIN32
+        return false;
+    }
+
+    return true;
+}
+
+NOBDEF bool nob_dir_iter_next(Nob_Dir_Iter *iter) {
+    if (iter->dir == NULL) return false;
+
+    struct dirent *ent;
+    while ((ent = readdir(iter->dir)) != NULL) {
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+            continue;
+        iter->current = ent;
+        return true;
+    }
+
+    iter->current = NULL;
+    return false;
+}
+
+NOBDEF void nob_dir_iter_close(Nob_Dir_Iter iter) {
+    if (iter.dir)
+        closedir(iter.dir);
+}
+
+NOBDEF const char *nob_dir_iter_getname(Nob_Dir_Iter iter) {
+    return iter.current ? iter.current->d_name : NULL;
+}
+
 NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
 {
     bool result = true;
@@ -2240,6 +2321,12 @@ NOBDEF int closedir(DIR *dirp)
         #define write_entire_file nob_write_entire_file
         #define get_file_type nob_get_file_type
         #define delete_file nob_delete_file
+        #define is_dir_empty nob_is_dir_empty
+        #define Dir_Iter Nob_Dir_Iter
+        #define dir_iter_open nob_dir_iter_open
+        #define dir_iter_next nob_dir_iter_next
+        #define dir_iter_close nob_dir_iter_close
+        #define dir_iter_getname nob_dir_iter_getname
         #define return_defer nob_return_defer
         #define da_append nob_da_append
         #define da_free nob_da_free
