@@ -1,4 +1,4 @@
-/* nob - v1.23.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.24.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -80,6 +80,7 @@
       - NOB_EXPERIMENTAL_DELETE_OLD - Experimental feature that automatically removes `nob.old` files. It's unclear how well
         it works on Windows, so it's experimental for now.
       - NOB_STRIP_PREFIX - string the `nob_` prefixes from non-redefinable names.
+      - NOB_NO_ECHO - do not echo the actions various nob functions are doing (like nob_cmd_run(), nob_mkdir_if_not_exists(), etc).
 
    ## Redefinable Macros
 
@@ -905,7 +906,9 @@ NOBDEF bool nob_mkdir_if_not_exists(const char *path)
 
     if (result < 0) {
         if (errno == EEXIST) {
+#ifndef NOB_NO_ECHO
             nob_log(NOB_INFO, "directory `%s` already exists", path);
+#endif // NOB_NO_ECHO
             return true;
         }
         nob_log(NOB_ERROR, "could not create directory `%s`: %s", path, strerror(errno));
@@ -2540,6 +2543,7 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.24.0 (2025-10-23) Introduce NOB_NO_ECHO macro flag (@rexim)
      1.23.0 (2025-08-22) Introduce new API for running commands (by @rexim, @programmerlexi, @0x152a)
                            - Add nob_cmd_run()
                            - Add nob_cmd_run_opt()
