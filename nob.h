@@ -99,7 +99,9 @@
 #ifndef NOB_H_
 #define NOB_H_
 #ifdef _WIN32
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS (1)
+#endif
 #endif
 
 #ifndef NOBDEF
@@ -734,8 +736,7 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 #include <dirent.h>
 #else // _WIN32
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <fileapi.h>
 
 struct dirent
 {
