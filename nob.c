@@ -24,6 +24,8 @@ const char *test_names[] = {
     "sb_appendf",
     "da_foreach",
     "temp_aligned_alloc",
+    "temp_path_comps",
+    "temp_running_executable_path",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
