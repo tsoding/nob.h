@@ -161,6 +161,9 @@
 #    include <direct.h>
 #    include <shellapi.h>
 #else
+#    ifdef __APPLE__
+#        include <mach-o/dyld.h>
+#    endif
 #    include <sys/types.h>
 #    include <sys/wait.h>
 #    include <sys/stat.h>
