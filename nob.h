@@ -100,7 +100,9 @@
 #ifndef NOB_H_
 #define NOB_H_
 #ifdef _WIN32
-#define _CRT_SECURE_NO_WARNINGS (1)
+#ifndef _CRT_SECURE_NO_WARNINGS
+    #define _CRT_SECURE_NO_WARNINGS (1)
+#endif
 #endif
 
 #ifndef NOBDEF
