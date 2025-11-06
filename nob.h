@@ -1,4 +1,4 @@
-/* nob - v1.25.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.25.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -161,6 +161,9 @@
 #    include <direct.h>
 #    include <shellapi.h>
 #else
+#    ifdef __APPLE__
+#        include <mach-o/dyld.h>
+#    endif
 #    include <sys/types.h>
 #    include <sys/wait.h>
 #    include <sys/stat.h>
@@ -2446,6 +2449,7 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.25.1 (2025-11-06) Fix forward declaration of _NSGetExecutablePath on MacOS (by agss0)
      1.25.0 (2025-10-25)   - Add nob_sb_pad_align()
                            - Add nob_swap()
                            - Add nob_temp_strndup()
