@@ -2,3 +2,4 @@ nob
 nob.old
 nob.exe
 build/
+**/*.obj

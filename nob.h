@@ -100,7 +100,9 @@
 #ifndef NOB_H_
 #define NOB_H_
 #ifdef _WIN32
-#define _CRT_SECURE_NO_WARNINGS (1)
+#   ifndef _CRT_SECURE_NO_WARNINGS
+#       define _CRT_SECURE_NO_WARNINGS (1)
+#   endif
 #endif
 
 #ifndef NOBDEF
@@ -881,12 +883,36 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
     // TODO: this is an experimental behavior behind a compilation flag.
     // Once it is confirmed that it does not cause much problems on both POSIX and Windows
     // we may turn it on by default.
+# ifdef _WIN32
+    nob_log(NOB_INFO, "Defer deleting of %s...", old_binary_path);
+# else
     nob_delete_file(old_binary_path);
+# endif
 #endif // NOB_EXPERIMENTAL_DELETE_OLD
 
     nob_cmd_append(&cmd, binary_path);
     nob_da_append_many(&cmd, argv, argc);
     if (!nob_cmd_run_opt(&cmd, opt)) exit(1);
+    
+#if defined(NOB_EXPERIMENTAL_DELETE_OLD) && defined(_WIN32)
+    // Workaround to delete the old nob from a script instead, only after we exit this process.
+    // If we don't do this, Windows will complain with "Access is denied" error, since
+    // the current process is still being executed from the old nob executable.
+    Nob_String_Builder sb = {0};
+    nob_sb_appendf(&sb, "$Attempts = 0; While ($Attempts++ -Lt 10) {\n");
+    nob_sb_appendf(&sb, "    Remove-Item -Path \"%s\" -ErrorAction SilentlyContinue\n", old_binary_path);
+    nob_sb_appendf(&sb, "    If (Test-Path -Path \"%s\") { Start-Sleep -Milliseconds 100 }\n", old_binary_path);
+    nob_sb_appendf(&sb, "}");
+    nob_sb_append_null(&sb);
+    Nob_Procs procs = {0};
+    opt.async = &procs;
+    // WARN: Running a PowerShell script like this might trigger anti-virus software
+    // to think we are trying to run malicious code.
+    nob_cmd_append(&cmd, "PowerShell", "-Command", sb.items);
+    if (!nob_cmd_run_opt(&cmd, opt)) exit(1);
+    nob_sb_free(sb);
+#endif // NOB_EXPERIMENTAL_DELETE_OLD
+
     exit(0);
 }
 
@@ -1900,7 +1926,7 @@ NOBDEF bool nob_rename(const char *old_path, const char *new_path)
     nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
 #endif // NOB_NO_ECHO
 #ifdef _WIN32
-    if (!MoveFileEx(old_path, new_path, MOVEFILE_REPLACE_EXISTING)) {
+    if (!MoveFileEx(old_path, new_path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, nob_win32_error_message(GetLastError()));
         return false;
     }
