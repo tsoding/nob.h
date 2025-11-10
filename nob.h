@@ -607,7 +607,7 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #  else
 #    define nob_cc_flags(cmd) nob_cmd_append(cmd, "-Wall", "-Wextra")
 #  endif
-#endif // nob_cc_output
+#endif // nob_cc_flags
 
 #ifndef nob_cc_output
 #  if defined(_MSC_VER) && !defined(__clang__)
