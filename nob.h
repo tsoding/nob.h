@@ -434,7 +434,7 @@ NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void);
 
 // Same as nob_cmd_run_opt but using cool variadic macro to set the default options.
 // See https://x.com/vkrajacic/status/1749816169736073295 for more info on how to use such macros.
-#define nob_cmd_run(cmd, ...) nob_cmd_run_opt((cmd), (Nob_Cmd_Opt){__VA_ARGS__})
+#define nob_cmd_run(cmd, ...) nob_cmd_run_opt((cmd), (Nob_Cmd_Opt){.async = NULL, __VA_ARGS__})
 
 // DEPRECATED:
 //
