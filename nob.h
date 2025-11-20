@@ -413,6 +413,8 @@ typedef struct {
     Nob_Procs *async;
     // Maximum processes allowed in the .async list. Zero implies nob_nprocs().
     size_t max_procs;
+    // Do not reset the command after execution.
+    bool keep_cmd;
     // Redirect stdin to file
     const char *stdin_path;
     // Redirect stdout to file
@@ -1104,7 +1106,7 @@ defer:
     if (opt_fdin)  nob_fd_close(*opt_fdin);
     if (opt_fdout) nob_fd_close(*opt_fdout);
     if (opt_fderr) nob_fd_close(*opt_fderr);
-    cmd->count = 0;
+    if (!opt.keep_cmd) cmd->count = 0;
     return result;
 }
 
