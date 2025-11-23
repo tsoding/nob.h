@@ -81,6 +81,8 @@
         it works on Windows, so it's experimental for now.
       - NOB_STRIP_PREFIX - string the `nob_` prefixes from non-redefinable names.
       - NOB_NO_ECHO - do not echo the actions various nob functions are doing (like nob_cmd_run(), nob_mkdir_if_not_exists(), etc).
+      - NOB_LOG_CUSTOM_IMPLEMENTATION - Declares nob_log_default as a separate function with the same signature as nob_log
+        and renames the definition of nob_log to nob_log_default. The user must define and implement nob_log themselves.
 
    ## Redefinable Macros
 
@@ -207,7 +209,12 @@ typedef enum {
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 extern Nob_Log_Level nob_minimal_log_level;
 
-NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
+#define NOB_LOG_DECLARATION(nob_log_name) NOBDEF void nob_log_name(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3)
+NOB_LOG_DECLARATION(nob_log);
+#ifdef NOB_LOG_CUSTOM_IMPLEMENTATION
+NOB_LOG_DECLARATION(nob_log_default);
+#endif
+#undef NOB_LOG_DECLARATION
 
 // It is an equivalent of shift command from bash (do `help shift` in bash). It basically
 // pops an element from the beginning of a sized array.
@@ -1535,7 +1542,13 @@ NOBDEF bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect r
     return nob_proc_wait(p);
 }
 
-NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
+NOBDEF void
+#ifdef NOB_LOG_CUSTOM_IMPLEMENTATION
+nob_log_default
+#else
+nob_log
+#endif
+(Nob_Log_Level level, const char *fmt, ...)
 {
     if (level < nob_minimal_log_level) return;
 
@@ -2344,6 +2357,9 @@ NOBDEF int closedir(DIR *dirp)
         // NOTE: Name log is already defined in math.h and historically always was the natural logarithmic function.
         // So there should be no reason to strip the `nob_` prefix in this specific case.
         // #define log nob_log
+        #ifdef NOB_LOG_CUSTOM_IMPLEMENTATION
+            #define log_default nob_log_default
+        #endif // NOB_LOG_CUSTOM_IMPLEMENTATION
         #define shift nob_shift
         #define shift_args nob_shift_args
         #define File_Paths Nob_File_Paths
