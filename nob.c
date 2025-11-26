@@ -23,6 +23,7 @@ const char *test_names[] = {
     "da_append",
     "sb_appendf",
     "da_foreach",
+    "nob_sv_test",
     "temp_aligned_alloc",
     "temp_path_comps",
     "temp_running_executable_path",
