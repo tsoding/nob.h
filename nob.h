@@ -2097,7 +2097,8 @@ NOBDEF int nob_file_exists(const char *file_path)
 #else
     struct stat statbuf;
     if (stat(file_path, &statbuf) < 0) {
-        if (errno == ENOENT) return 0;
+        if (errno == ENOENT)  return 0;
+        if (errno == ENOTDIR) return 0;
         nob_log(NOB_ERROR, "Could not check if file %s exists: %s", file_path, strerror(errno));
         return -1;
     }
