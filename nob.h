@@ -1143,8 +1143,8 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
         return NOB_INVALID_PROC;
     }
 
-#ifndef NOB_NO_ECHO
     Nob_String_Builder sb = {0};
+#ifndef NOB_NO_ECHO
     nob_cmd_render(cmd, &sb);
     nob_sb_append_null(&sb);
     nob_log(NOB_INFO, "CMD: %s", sb.items);
