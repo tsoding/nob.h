@@ -3,7 +3,16 @@
  * This is a single-header library. Define NOB_LEXER_IMPLEMENTATION in exactly one
  * source file before including this header to get the implementation.
  *
+ * Requires C99 or later (for strtod hex float support).
  * Requires nob.h to be included before this header with NOB_IMPLEMENTATION defined.
+ *
+ * Features:
+ *   - Identifiers (including UTF-8/Unicode)
+ *   - Integers: decimal, hex (0x), binary (0b), octal (0o)
+ *   - Floats: decimal (3.14, 1e10) and C99 hex floats (0x1.Fp+10)
+ *   - String and character literals with escape sequences
+ *   - Line (//) and block comments
+ *   - Location tracking (file:line:column)
  *
  * Usage:
  *   #define NOB_IMPLEMENTATION
@@ -39,6 +48,17 @@
 
 #ifdef _WIN32
 #define _CRT_SECURE_NO_WARNINGS (1)
+#endif
+
+/* Require C99 or later */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
+    /* C99+ is fine */
+#elif defined(__cplusplus)
+    /* C++ is fine */
+#elif defined(_MSC_VER) && _MSC_VER >= 1800
+    /* MSVC 2013+ is fine (C99-ish support) */
+#else
+#error "nob_lexer.h requires C99 or later (for strtod hex float support)"
 #endif
 
 #ifndef NOBLEXERDEF
@@ -228,12 +248,14 @@ static char nob_lexer__advance(Nob_Lexer *lexer)
     return c;
 }
 
-/* Internal: Check if character is alphabetic or underscore */
+/* Internal: Check if character is alphabetic or underscore
+ * Also accepts UTF-8 continuation bytes (>= 128) for Unicode identifier support */
 static bool nob_lexer__is_alpha(char c)
 {
     return (c >= 'a' && c <= 'z') ||
            (c >= 'A' && c <= 'Z') ||
-           c == '_';
+           c == '_' ||
+           (unsigned char)c >= 128;
 }
 
 /* Internal: Check if character is a digit */
@@ -330,6 +352,29 @@ static Nob_Lexer_Token nob_lexer__lex_number(Nob_Lexer *lexer)
             while (!nob_lexer__at_end(lexer) && nob_lexer__is_hex(nob_lexer__current(lexer))) {
                 nob_lexer__advance(lexer);
             }
+
+            /* C99 hex float: check for decimal point */
+            if (nob_lexer__current(lexer) == '.') {
+                is_float = true;
+                nob_lexer__advance(lexer); /* . */
+                while (!nob_lexer__at_end(lexer) && nob_lexer__is_hex(nob_lexer__current(lexer))) {
+                    nob_lexer__advance(lexer);
+                }
+            }
+
+            /* C99 hex float: binary exponent (p/P) - required for hex floats */
+            char exp = nob_lexer__current(lexer);
+            if (exp == 'p' || exp == 'P') {
+                is_float = true;
+                nob_lexer__advance(lexer); /* p */
+                char sign = nob_lexer__current(lexer);
+                if (sign == '+' || sign == '-') {
+                    nob_lexer__advance(lexer);
+                }
+                while (!nob_lexer__at_end(lexer) && nob_lexer__is_digit(nob_lexer__current(lexer))) {
+                    nob_lexer__advance(lexer);
+                }
+            }
         } else if (next == 'b' || next == 'B') {
             base = 2;
             nob_lexer__advance(lexer); /* 0 */
@@ -386,7 +431,7 @@ decimal:
     );
 
     /* Parse the numeric value */
-    /* Need null-terminated string for strtoll/strtod */
+    /* C99 strtod handles hex floats (0x1.Fp+10) natively */
     const char *numstr = nob_temp_sv_to_cstr(token.text);
 
     if (is_float) {

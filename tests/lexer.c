@@ -314,6 +314,64 @@ static int test_loc_str(void)
     return 0;
 }
 
+/* Test Unicode/UTF-8 identifiers */
+static int test_unicode_identifiers(void)
+{
+    TEST("unicode_identifiers");
+
+    /* UTF-8 encoded identifiers: 変数 (Japanese), переменная (Russian), café */
+    const char *src = "hello 変数 world переменная café _日本語";
+    Nob_Lexer_Tokens tokens = {0};
+    nob_lexer_tokenize(nob_sv_from_cstr(src), "test", &tokens);
+
+    /* Should have 6 identifiers + EOF */
+    ASSERT_EQ_INT(tokens.count, 7);
+
+    for (size_t i = 0; i < 6; i++) {
+        ASSERT_EQ_INT(tokens.items[i].kind, NOB_LEXER_IDENT);
+    }
+    ASSERT_EQ_INT(tokens.items[6].kind, NOB_LEXER_EOF);
+
+    /* Verify first and third are ASCII */
+    ASSERT_EQ_INT(tokens.items[0].text.count, 5); /* hello */
+    ASSERT_EQ_INT(tokens.items[2].text.count, 5); /* world */
+
+    nob_da_free(tokens);
+    nob_log(INFO, "  PASS");
+    return 0;
+}
+
+/* Test C99 hex floats */
+static int test_hex_floats(void)
+{
+    TEST("hex_floats");
+
+    /* C99 hex float format: 0x[hex].[hex]p[+-][decimal] */
+    const char *src = "0x1.0p+0 0xA.Bp-2 0x1p10 0xFF.FFp0";
+    Nob_Lexer_Tokens tokens = {0};
+    nob_lexer_tokenize(nob_sv_from_cstr(src), "test", &tokens);
+
+    /* 0x1.0p+0 = 1.0 * 2^0 = 1.0 */
+    /* 0xA.Bp-2 = (10 + 11/16) * 2^-2 = 10.6875 * 0.25 = 2.671875 */
+    /* 0x1p10 = 1 * 2^10 = 1024.0 */
+    /* 0xFF.FFp0 = (255 + 255/256) * 2^0 = 255.99609375 */
+
+    double expected[] = {1.0, 2.671875, 1024.0, 255.99609375};
+
+    ASSERT_EQ_INT(tokens.count, sizeof(expected)/sizeof(expected[0]) + 1); /* +1 for EOF */
+
+    for (size_t i = 0; i < sizeof(expected)/sizeof(expected[0]); i++) {
+        ASSERT_EQ_INT(tokens.items[i].kind, NOB_LEXER_FLOAT);
+        double diff = tokens.items[i].value.float_value - expected[i];
+        if (diff < 0) diff = -diff;
+        ASSERT(diff < 0.0001);
+    }
+
+    nob_da_free(tokens);
+    nob_log(INFO, "  PASS");
+    return 0;
+}
+
 int main(void)
 {
     int result = 0;
@@ -330,6 +388,8 @@ int main(void)
     result |= test_invalid();
     result |= test_token_kind_str();
     result |= test_loc_str();
+    result |= test_unicode_identifiers();
+    result |= test_hex_floats();
 
     if (result == 0) {
         nob_log(INFO, "All tests passed!");
