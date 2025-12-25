@@ -99,17 +99,73 @@
 
 #ifndef NOB_H_
 #define NOB_H_
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <errno.h>
+#include <ctype.h>
+#include <limits.h>
+#include <time.h>
+
+//================================================================
+//Platform and compiler dependent defines
+//================================================================
+
 #ifdef _WIN32
-#define _CRT_SECURE_NO_WARNINGS (1)
+#    define _CRT_SECURE_NO_WARNINGS (1)
+
+#    define WIN32_LEAN_AND_MEAN
+#    define _WINUSER_
+#    define _WINGDI_
+#    define _IMM_
+#    define _WINCON_
+#    include <windows.h>
+#    include <direct.h>
+#    include <shellapi.h>
+
+    typedef HANDLE Nob_Proc;
+#   define NOB_INVALID_PROC INVALID_HANDLE_VALUE
+    typedef HANDLE Nob_Fd;
+#   define NOB_INVALID_FD INVALID_HANDLE_VALUE
+
+#    define NOB_LINE_END "\r\n"
+#else
+#    ifdef __APPLE__
+#        include <mach-o/dyld.h>
+#    endif
+#    include <sys/types.h>
+#    include <sys/wait.h>
+#    include <sys/stat.h>
+#    include <unistd.h>
+#    include <fcntl.h>
+
+    typedef int Nob_Proc;
+#   define NOB_INVALID_PROC (-1)
+    typedef int Nob_Fd;
+#   define NOB_INVALID_FD (-1)
+
+#    define NOB_LINE_END "\n"
+#endif //_WIN32
+
+#if defined(__GNUC__) || defined(__clang__)
+//   https://gcc.gnu.org/onlinedocs/gcc-4.7.2/gcc/Function-Attributes.html
+#    ifdef __MINGW_PRINTF_FORMAT
+#        define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (__MINGW_PRINTF_FORMAT, STRING_INDEX, FIRST_TO_CHECK)))
+#    else
+#        define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (printf, STRING_INDEX, FIRST_TO_CHECK)))
+#    endif // __MINGW_PRINTF_FORMAT
+#else
+//   TODO: implement NOB_PRINTF_FORMAT for MSVC
+#    define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK)
 #endif
 
-#ifndef NOBDEF
-/*
-   Goes before declarations and definitions of the nob functions. Useful to `#define NOBDEF static inline`
-   if your source code is a single file and you want the compiler to remove unused functions.
-*/
-#define NOBDEF
-#endif /* NOBDEF */
+//================================================================
+//assert, realloc and free defines
+//================================================================
 
 #ifndef NOB_ASSERT
 #include <assert.h>
@@ -126,68 +182,16 @@
 #define NOB_FREE free
 #endif /* NOB_FREE */
 
-#ifdef NOB_WARN_DEPRECATED
-#    ifndef NOB_DEPRECATED
-#        if defined(__GNUC__) || defined(__clang__)
-#            define NOB_DEPRECATED(message) __attribute__((deprecated(message)))
-#        elif defined(_MSC_VER)
-#            define NOB_DEPRECATED(message) __declspec(deprecated(message))
-#        else
-#            define NOB_DEPRECATED(...)
-#        endif
-#    endif /* NOB_DEPRECATED */
-#else
-#    define NOB_DEPRECATED(...)
-#endif /* NOB_WARN_DEPRECATED */
-
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
-#include <errno.h>
-#include <ctype.h>
-#include <limits.h>
-#include <time.h>
-
-#ifdef _WIN32
-#    define WIN32_LEAN_AND_MEAN
-#    define _WINUSER_
-#    define _WINGDI_
-#    define _IMM_
-#    define _WINCON_
-#    include <windows.h>
-#    include <direct.h>
-#    include <shellapi.h>
-#else
-#    ifdef __APPLE__
-#        include <mach-o/dyld.h>
-#    endif
-#    include <sys/types.h>
-#    include <sys/wait.h>
-#    include <sys/stat.h>
-#    include <unistd.h>
-#    include <fcntl.h>
-#endif
-
-#ifdef _WIN32
-#    define NOB_LINE_END "\r\n"
-#else
-#    define NOB_LINE_END "\n"
-#endif
-
-#if defined(__GNUC__) || defined(__clang__)
-//   https://gcc.gnu.org/onlinedocs/gcc-4.7.2/gcc/Function-Attributes.html
-#    ifdef __MINGW_PRINTF_FORMAT
-#        define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (__MINGW_PRINTF_FORMAT, STRING_INDEX, FIRST_TO_CHECK)))
-#    else
-#        define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (printf, STRING_INDEX, FIRST_TO_CHECK)))
-#    endif // __MINGW_PRINTF_FORMAT
-#else
-//   TODO: implement NOB_PRINTF_FORMAT for MSVC
-#    define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK)
-#endif
+//================================================================
+//Misc defines and functions
+//================================================================
+#ifndef NOBDEF
+/*
+   Goes before declarations and definitions of the nob functions. Useful to `#define NOBDEF static inline`
+   if your source code is a single file and you want the compiler to remove unused functions.
+*/
+#define NOBDEF
+#endif /* NOBDEF */
 
 #define NOB_UNUSED(value) (void)(value)
 #define NOB_TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
@@ -196,18 +200,6 @@
 #define NOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 #define NOB_ARRAY_GET(array, index) \
     (NOB_ASSERT((size_t)index < NOB_ARRAY_LEN(array)), array[(size_t)index])
-
-typedef enum {
-    NOB_INFO,
-    NOB_WARNING,
-    NOB_ERROR,
-    NOB_NO_LOGS,
-} Nob_Log_Level;
-
-// Any messages with the level below nob_minimal_log_level are going to be suppressed.
-extern Nob_Log_Level nob_minimal_log_level;
-
-NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
 
 // It is an equivalent of shift command from bash (do `help shift` in bash). It basically
 // pops an element from the beginning of a sized array.
@@ -218,28 +210,19 @@ NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT
 // remove it. This alias does not hurt anybody.
 #define nob_shift_args(argc, argv) nob_shift(*argv, *argc)
 
-typedef struct {
-    const char **items;
-    size_t count;
-    size_t capacity;
-} Nob_File_Paths;
-
-typedef enum {
-    NOB_FILE_REGULAR = 0,
-    NOB_FILE_DIRECTORY,
-    NOB_FILE_SYMLINK,
-    NOB_FILE_OTHER,
-} Nob_File_Type;
-
-NOBDEF bool nob_mkdir_if_not_exists(const char *path);
-NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path);
-NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
-NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
-NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
-NOBDEF Nob_File_Type nob_get_file_type(const char *path);
-NOBDEF bool nob_delete_file(const char *path);
-
 #define nob_return_defer(value) do { result = (value); goto defer; } while(0)
+
+// Get amount of processors on the machine.
+NOBDEF int nob_nprocs(void);
+
+#define NOB_NANOS_PER_SEC (1000*1000*1000)
+
+// The maximum time span representable is 584 years.
+NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void);
+
+//================================================================
+//Dynamic Arrays
+//================================================================
 
 // Initial capacity of a dynamic array
 #ifndef NOB_DA_INIT_CAP
@@ -320,6 +303,26 @@ NOBDEF bool nob_delete_file(const char *path);
 // ```
 #define nob_da_foreach(Type, it, da) for (Type *it = (da)->items; it < (da)->items + (da)->count; ++it)
 
+//================================================================
+//Logging
+//================================================================
+
+typedef enum {
+    NOB_INFO,
+    NOB_WARNING,
+    NOB_ERROR,
+    NOB_NO_LOGS,
+} Nob_Log_Level;
+
+// Any messages with the level below nob_minimal_log_level are going to be suppressed.
+extern Nob_Log_Level nob_minimal_log_level;
+
+NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
+
+//================================================================
+//String Builder
+//================================================================
+
 typedef struct {
     char *items;
     size_t count;
@@ -360,18 +363,69 @@ NOBDEF void nob_sb_pad_align(Nob_String_Builder *sb, size_t size);
 // Free the memory allocated by a string builder
 #define nob_sb_free(sb) NOB_FREE((sb).items)
 
-// Process handle
-#ifdef _WIN32
-typedef HANDLE Nob_Proc;
-#define NOB_INVALID_PROC INVALID_HANDLE_VALUE
-typedef HANDLE Nob_Fd;
-#define NOB_INVALID_FD INVALID_HANDLE_VALUE
-#else
-typedef int Nob_Proc;
-#define NOB_INVALID_PROC (-1)
-typedef int Nob_Fd;
-#define NOB_INVALID_FD (-1)
-#endif // _WIN32
+//================================================================
+//String View
+//================================================================
+
+typedef struct {
+    size_t count;
+    const char *data;
+} Nob_String_View;
+
+NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv);
+
+NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim);
+NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n);
+NOBDEF Nob_String_View nob_sv_trim(Nob_String_View sv);
+NOBDEF Nob_String_View nob_sv_trim_left(Nob_String_View sv);
+NOBDEF Nob_String_View nob_sv_trim_right(Nob_String_View sv);
+NOBDEF bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
+NOBDEF bool nob_sv_end_with(Nob_String_View sv, const char *cstr);
+NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_prefix);
+NOBDEF Nob_String_View nob_sv_from_cstr(const char *cstr);
+NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
+// nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
+#define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
+
+// printf macros for String_View
+#ifndef SV_Fmt
+#define SV_Fmt "%.*s"
+#endif // SV_Fmt
+#ifndef SV_Arg
+#define SV_Arg(sv) (int) (sv).count, (sv).data
+#endif // SV_Arg
+// USAGE:
+//   String_View name = ...;
+//   printf("Name: "SV_Fmt"\n", SV_Arg(name));
+
+//================================================================
+//File Handling
+//================================================================
+
+typedef struct {
+    const char **items;
+    size_t count;
+    size_t capacity;
+} Nob_File_Paths;
+
+typedef enum {
+    NOB_FILE_REGULAR = 0,
+    NOB_FILE_DIRECTORY,
+    NOB_FILE_SYMLINK,
+    NOB_FILE_OTHER,
+} Nob_File_Type;
+
+NOBDEF bool nob_mkdir_if_not_exists(const char *path);
+NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path);
+NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
+NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
+NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
+NOBDEF Nob_File_Type nob_get_file_type(const char *path);
+NOBDEF bool nob_delete_file(const char *path);
+
+//================================================================
+//Processes
+//================================================================
 
 NOBDEF Nob_Fd nob_fd_open_for_read(const char *path);
 NOBDEF Nob_Fd nob_fd_open_for_write(const char *path);
@@ -392,13 +446,9 @@ NOBDEF bool nob_procs_wait(Nob_Procs procs);
 // Wait until all the processes have finished and empty the procs array.
 NOBDEF bool nob_procs_flush(Nob_Procs *procs);
 
-// Alias to nob_procs_flush
-NOB_DEPRECATED("Use `nob_procs_flush(&procs)` instead.")
-NOBDEF bool nob_procs_wait_and_reset(Nob_Procs *procs);
-
-// Append a new process to procs array and if procs.count reaches max_procs_count call nob_procs_wait_and_reset() on it
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd, .async = &procs, .max_procs = <integer>)` instead")
-NOBDEF bool nob_procs_append_with_flush(Nob_Procs *procs, Nob_Proc proc, size_t max_procs_count);
+//================================================================
+//Commands
+//================================================================
 
 // A command - the main workhorse of Nob. Nob is all about building commands and running them
 typedef struct {
@@ -424,47 +474,9 @@ typedef struct {
 // Run the command with options.
 NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt);
 
-// Get amount of processors on the machine.
-NOBDEF int nob_nprocs(void);
-
-#define NOB_NANOS_PER_SEC (1000*1000*1000)
-
-// The maximum time span representable is 584 years.
-NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void);
-
 // Same as nob_cmd_run_opt but using cool variadic macro to set the default options.
 // See https://x.com/vkrajacic/status/1749816169736073295 for more info on how to use such macros.
 #define nob_cmd_run(cmd, ...) nob_cmd_run_opt((cmd), (Nob_Cmd_Opt){__VA_ARGS__})
-
-// DEPRECATED:
-//
-// You were suppose to use this structure like this:
-//
-// ```c
-// Nob_Fd fdin = nob_fd_open_for_read("input.txt");
-// if (fdin == NOB_INVALID_FD) fail();
-// Nob_Fd fdout = nob_fd_open_for_write("output.txt");
-// if (fdout == NOB_INVALID_FD) fail();
-// Nob_Cmd cmd = {0};
-// nob_cmd_append(&cmd, "cat");
-// if (!nob_cmd_run_sync_redirect_and_reset(&cmd, (Nob_Cmd_Redirect) {
-//     .fdin = &fdin,
-//     .fdout = &fdout
-// })) fail();
-// ```
-//
-// But these days you should do:
-//
-// ```c
-// Nob_Cmd cmd = {0};
-// nob_cmd_append(&cmd, "cat");
-// if (!nob_cmd_run(&cmd, .stdin_path = "input.txt", .stdout_path = "output.txt")) fail();
-// ```
-typedef struct {
-    Nob_Fd *fdin;
-    Nob_Fd *fdout;
-    Nob_Fd *fderr;
-} Nob_Cmd_Redirect;
 
 // Render a string representation of a command into a string builder. Keep in mind the the
 // string builder is not NULL-terminated by default. Use nob_sb_append_null if you plan to
@@ -483,56 +495,9 @@ NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
 // Free all the memory allocated by command arguments
 #define nob_cmd_free(cmd) NOB_FREE(cmd.items)
 
-// Run command asynchronously
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd, .async = &procs)` instead, but keep in mind that it always resets the cmd array.")
-NOBDEF Nob_Proc nob_cmd_run_async(Nob_Cmd cmd);
-
-// nob_cmd_run_async_and_reset() is just like nob_cmd_run_async() except it also resets cmd.count to 0
-// so the Nob_Cmd instance can be seamlessly used several times in a row
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd, .async = &procs)` intead.")
-NOBDEF Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd);
-
-// Run redirected command asynchronously
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
-               ".async = &procs, "
-               ".stdin_path = \"path/to/stdin\", "
-               ".stdout_path = \"path/to/stdout\", "
-               ".stderr_path = \"path/to/stderr\")` instead, "
-               "but keep in mind that it always resets the cmd array.")
-NOBDEF Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
-
-// Run redirected command asynchronously and set cmd.count to 0 and close all the opened files
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
-               ".async = &procs, "
-               ".stdin_path = \"path/to/stdin\", "
-               ".stdout_path = \"path/to/stdout\", "
-               ".stderr_path = \"path/to/stderr\")` instead.")
-NOBDEF Nob_Proc nob_cmd_run_async_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
-
-// Run command synchronously
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd)` instead, "
-               "but keep in mind that it always resets the cmd array.")
-NOBDEF bool nob_cmd_run_sync(Nob_Cmd cmd);
-
-// NOTE: nob_cmd_run_sync_and_reset() is just like nob_cmd_run_sync() except it also resets cmd.count to 0
-// so the Nob_Cmd instance can be seamlessly used several times in a row
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd)` instead.")
-NOBDEF bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd);
-
-// Run redirected command synchronously
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
-               ".stdin_path  = \"path/to/stdin\", "
-               ".stdout_path = \"path/to/stdout\", "
-               ".stderr_path = \"path/to/stderr\")` instead, "
-               "but keep in mind that it always resets the cmd array.")
-NOBDEF bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
-
-// Run redirected command synchronously and set cmd.count to 0 and close all the opened files
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
-               ".stdin_path = \"path/to/stdin\", "
-               ".stdout_path = \"path/to/stdout\", "
-               ".stderr_path = \"path/to/stderr\")` instead.")
-NOBDEF bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
+//================================================================
+//Temp functions
+//================================================================
 
 #ifndef NOB_TEMP_CAPACITY
 #define NOB_TEMP_CAPACITY (8*1024*1024)
@@ -581,6 +546,10 @@ NOBDEF char *nob_temp_file_name(const char *path);
 NOBDEF char *nob_temp_file_ext(const char *path);
 NOBDEF char *nob_temp_running_executable_path(void);
 
+//================================================================
+//Compiler dependent config
+//================================================================
+
 // TODO: we should probably document somewhere all the compiler we support
 
 // The nob_cc_* macros try to abstract away the specific compiler.
@@ -620,6 +589,10 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #ifndef nob_cc_inputs
 #  define nob_cc_inputs(cmd, ...) nob_cmd_append(cmd, __VA_ARGS__)
 #endif // nob_cc_inputs
+
+//================================================================
+//Go Rebuild Urself™ Technology
+//================================================================
 
 // TODO: add MinGW support for Go Rebuild Urself™ Technology and all the nob_cc_* macros above
 //   Musializer contributors came up with a pretty interesting idea of an optional prefix macro which could be useful for
@@ -682,36 +655,112 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
 // }
 #define NOB_GO_REBUILD_URSELF_PLUS(argc, argv, ...) nob__go_rebuild_urself(argc, argv, __FILE__, __VA_ARGS__, NULL);
 
+//================================================================
+//DEPRECATED
+//================================================================
+
+#ifdef NOB_WARN_DEPRECATED
+#    ifndef NOB_DEPRECATED
+#        if defined(__GNUC__) || defined(__clang__)
+#            define NOB_DEPRECATED(message) __attribute__((deprecated(message)))
+#        elif defined(_MSC_VER)
+#            define NOB_DEPRECATED(message) __declspec(deprecated(message))
+#        else
+#            define NOB_DEPRECATED(...)
+#        endif
+#    endif /* NOB_DEPRECATED */
+#else
+#    define NOB_DEPRECATED(...)
+#endif /* NOB_WARN_DEPRECATED */
+
+// Alias to nob_procs_flush
+NOB_DEPRECATED("Use `nob_procs_flush(&procs)` instead.")
+NOBDEF bool nob_procs_wait_and_reset(Nob_Procs *procs);
+
+// Append a new process to procs array and if procs.count reaches max_procs_count call nob_procs_wait_and_reset() on it
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd, .async = &procs, .max_procs = <integer>)` instead")
+NOBDEF bool nob_procs_append_with_flush(Nob_Procs *procs, Nob_Proc proc, size_t max_procs_count);
+
+// DEPRECATED:
+//
+// You were suppose to use this structure like this:
+//
+// ```c
+// Nob_Fd fdin = nob_fd_open_for_read("input.txt");
+// if (fdin == NOB_INVALID_FD) fail();
+// Nob_Fd fdout = nob_fd_open_for_write("output.txt");
+// if (fdout == NOB_INVALID_FD) fail();
+// Nob_Cmd cmd = {0};
+// nob_cmd_append(&cmd, "cat");
+// if (!nob_cmd_run_sync_redirect_and_reset(&cmd, (Nob_Cmd_Redirect) {
+//     .fdin = &fdin,
+//     .fdout = &fdout
+// })) fail();
+// ```
+//
+// But these days you should do:
+//
+// ```c
+// Nob_Cmd cmd = {0};
+// nob_cmd_append(&cmd, "cat");
+// if (!nob_cmd_run(&cmd, .stdin_path = "input.txt", .stdout_path = "output.txt")) fail();
+// ```
 typedef struct {
-    size_t count;
-    const char *data;
-} Nob_String_View;
+    Nob_Fd *fdin;
+    Nob_Fd *fdout;
+    Nob_Fd *fderr;
+} Nob_Cmd_Redirect;
 
-NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv);
+// Run command asynchronously
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd, .async = &procs)` instead, but keep in mind that it always resets the cmd array.")
+NOBDEF Nob_Proc nob_cmd_run_async(Nob_Cmd cmd);
 
-NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim);
-NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n);
-NOBDEF Nob_String_View nob_sv_trim(Nob_String_View sv);
-NOBDEF Nob_String_View nob_sv_trim_left(Nob_String_View sv);
-NOBDEF Nob_String_View nob_sv_trim_right(Nob_String_View sv);
-NOBDEF bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
-NOBDEF bool nob_sv_end_with(Nob_String_View sv, const char *cstr);
-NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_prefix);
-NOBDEF Nob_String_View nob_sv_from_cstr(const char *cstr);
-NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
-// nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
-#define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
+// nob_cmd_run_async_and_reset() is just like nob_cmd_run_async() except it also resets cmd.count to 0
+// so the Nob_Cmd instance can be seamlessly used several times in a row
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd, .async = &procs)` intead.")
+NOBDEF Nob_Proc nob_cmd_run_async_and_reset(Nob_Cmd *cmd);
 
-// printf macros for String_View
-#ifndef SV_Fmt
-#define SV_Fmt "%.*s"
-#endif // SV_Fmt
-#ifndef SV_Arg
-#define SV_Arg(sv) (int) (sv).count, (sv).data
-#endif // SV_Arg
-// USAGE:
-//   String_View name = ...;
-//   printf("Name: "SV_Fmt"\n", SV_Arg(name));
+// Run redirected command asynchronously
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
+               ".async = &procs, "
+               ".stdin_path = \"path/to/stdin\", "
+               ".stdout_path = \"path/to/stdout\", "
+               ".stderr_path = \"path/to/stderr\")` instead, "
+               "but keep in mind that it always resets the cmd array.")
+NOBDEF Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
+
+// Run redirected command asynchronously and set cmd.count to 0 and close all the opened files
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
+               ".async = &procs, "
+               ".stdin_path = \"path/to/stdin\", "
+               ".stdout_path = \"path/to/stdout\", "
+               ".stderr_path = \"path/to/stderr\")` instead.")
+NOBDEF Nob_Proc nob_cmd_run_async_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
+
+// Run command synchronously
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd)` instead, "
+               "but keep in mind that it always resets the cmd array.")
+NOBDEF bool nob_cmd_run_sync(Nob_Cmd cmd);
+
+// NOTE: nob_cmd_run_sync_and_reset() is just like nob_cmd_run_sync() except it also resets cmd.count to 0
+// so the Nob_Cmd instance can be seamlessly used several times in a row
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd)` instead.")
+NOBDEF bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd);
+
+// Run redirected command synchronously
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
+               ".stdin_path  = \"path/to/stdin\", "
+               ".stdout_path = \"path/to/stdout\", "
+               ".stderr_path = \"path/to/stderr\")` instead, "
+               "but keep in mind that it always resets the cmd array.")
+NOBDEF bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
+
+// Run redirected command synchronously and set cmd.count to 0 and close all the opened files
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
+               ".stdin_path = \"path/to/stdin\", "
+               ".stdout_path = \"path/to/stdout\", "
+               ".stderr_path = \"path/to/stderr\")` instead.")
+NOBDEF bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
 
 // DEPRECATED: Usage of the bundled minirent.h below is deprecated, because it introduces more
 // problems than it solves. It will be removed in the next major release of nob.h. In the meantime,
@@ -782,6 +831,10 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 #endif // _WIN32
 
 #endif // NOB_H_
+
+//================================================================
+////////////////////////IMPLEMENTATION////////////////////////////
+//================================================================
 
 #ifdef NOB_IMPLEMENTATION
 
