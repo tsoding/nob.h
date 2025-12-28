@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 {
     set_log_handler(cancer_log_handler);
 
-    NOB_GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
+    GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
 
     Cmd cmd = {0};
 

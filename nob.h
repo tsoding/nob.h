@@ -2409,6 +2409,8 @@ NOBDEF int closedir(DIR *dirp)
         // #define log nob_log
         #define shift nob_shift
         #define shift_args nob_shift_args
+        #define GO_REBUILD_URSELF NOB_GO_REBUILD_URSELF
+        #define GO_REBUILD_URSELF_PLUS NOB_GO_REBUILD_URSELF_PLUS
         #define File_Paths Nob_File_Paths
         #define FILE_REGULAR NOB_FILE_REGULAR
         #define FILE_DIRECTORY NOB_FILE_DIRECTORY
