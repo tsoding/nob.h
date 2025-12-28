@@ -26,6 +26,7 @@ const char *test_names[] = {
     "temp_aligned_alloc",
     "temp_path_comps",
     "temp_running_executable_path",
+    "no_echo",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
@@ -56,6 +57,8 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
 
 int main(int argc, char **argv)
 {
+    set_log_handler(cancer_log_handler);
+
     NOB_GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
 
     Cmd cmd = {0};
