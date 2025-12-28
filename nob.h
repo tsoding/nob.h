@@ -100,8 +100,10 @@
 #ifndef NOB_H_
 #define NOB_H_
 #ifdef _WIN32
-#define _CRT_SECURE_NO_WARNINGS (1)
-#endif
+#    ifndef _CRT_SECURE_NO_WARNINGS
+#        define _CRT_SECURE_NO_WARNINGS (1)
+#    endif // _CRT_SECURE_NO_WARNINGS
+#endif //  _WIN32
 
 #ifndef NOBDEF
 /*
@@ -2519,6 +2521,7 @@ NOBDEF int closedir(DIR *dirp)
                            - Add nob_cancer_log_handler
                          Introduce nob_temp_vsprintf (by @rexim)
                          Fix compilation error on Windows when NOB_NO_ECHO is enabled (by @mlorenc227)
+                         Do not redefine _CRT_SECURE_NO_WARNINGS if it's already defined (by @vylsaz)
      1.25.1 (2025-11-06) Fix forward declaration of _NSGetExecutablePath on MacOS (by @agss0)
      1.25.0 (2025-10-25)   - Add nob_sb_pad_align()
                            - Add nob_swap()
