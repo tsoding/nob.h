@@ -212,8 +212,8 @@ typedef void (nob_log_handler)(Nob_Log_Level level, const char *fmt, va_list arg
 NOBDEF void nob_set_log_handler(nob_log_handler *handler);
 NOBDEF nob_log_handler *nob_get_log_handler(void);
 
-nob_log_handler nob_default_log_handler;
-nob_log_handler nob_cancer_log_handler;
+NOBDEF nob_log_handler nob_default_log_handler;
+NOBDEF nob_log_handler nob_cancer_log_handler;
 
 NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
 
@@ -1556,7 +1556,7 @@ NOBDEF nob_log_handler *nob_get_log_handler(void)
     return nob__log_handler;
 }
 
-void nob_default_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
+NOBDEF void nob_default_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
 {
     if (level < nob_minimal_log_level) return;
 
@@ -1579,7 +1579,7 @@ void nob_default_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
     fprintf(stderr, "\n");
 }
 
-void nob_cancer_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
+NOBDEF void nob_cancer_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
 {
     switch (level) {
     case NOB_INFO:
