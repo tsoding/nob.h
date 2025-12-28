@@ -1152,8 +1152,8 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
         return NOB_INVALID_PROC;
     }
 
-#ifndef NOB_NO_ECHO
     Nob_String_Builder sb = {0};
+#ifndef NOB_NO_ECHO
     nob_cmd_render(cmd, &sb);
     nob_sb_append_null(&sb);
     nob_log(NOB_INFO, "CMD: %s", sb.items);
@@ -2518,6 +2518,7 @@ NOBDEF int closedir(DIR *dirp)
                            - Add nob_default_log_handler
                            - Add nob_cancer_log_handler
                          Introduce nob_temp_vsprintf (by @rexim)
+                         Fix compilation error on Windows when NOB_NO_ECHO is enabled (by @mlorenc227)
      1.25.1 (2025-11-06) Fix forward declaration of _NSGetExecutablePath on MacOS (by @agss0)
      1.25.0 (2025-10-25)   - Add nob_sb_pad_align()
                            - Add nob_swap()
