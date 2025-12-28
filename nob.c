@@ -36,10 +36,10 @@ bool build_and_run_test(Cmd *cmd, const char *test_name)
 
     const char *bin_path = temp_sprintf("%s%s", BUILD_FOLDER TESTS_FOLDER, test_name);
     const char *src_path = temp_sprintf("%s%s.c", TESTS_FOLDER, test_name);
-    nob_cc(cmd);
-    nob_cc_flags(cmd);
-    nob_cc_output(cmd, bin_path);
-    nob_cc_inputs(cmd, src_path);
+    cc(cmd);
+    cc_flags(cmd);
+    cc_output(cmd, bin_path);
+    cc_inputs(cmd, src_path);
     if (!cmd_run(cmd)) return false;
 
     const char *test_cwd_path = temp_sprintf("%s%s%s.cwd", BUILD_FOLDER, TESTS_FOLDER, test_name);
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 {
     set_log_handler(cancer_log_handler);
 
-    NOB_GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
+    GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
 
     Cmd cmd = {0};
 
