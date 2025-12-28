@@ -1,4 +1,4 @@
-/* nob - v1.25.1 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.26.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -206,6 +206,14 @@ typedef enum {
 
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 extern Nob_Log_Level nob_minimal_log_level;
+
+typedef void (nob_log_handler)(Nob_Log_Level level, const char *fmt, va_list args);
+
+NOBDEF void nob_set_log_handler(nob_log_handler *handler);
+NOBDEF nob_log_handler *nob_get_log_handler(void);
+
+nob_log_handler nob_default_log_handler;
+nob_log_handler nob_cancer_log_handler;
 
 NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
 
@@ -541,6 +549,7 @@ NOBDEF char *nob_temp_strdup(const char *cstr);
 NOBDEF char *nob_temp_strndup(const char *cstr, size_t size);
 NOBDEF void *nob_temp_alloc(size_t size);
 NOBDEF char *nob_temp_sprintf(const char *format, ...) NOB_PRINTF_FORMAT(1, 2);
+NOBDEF char *nob_temp_vsprintf(const char *format, va_list ap);
 // nob_temp_reset() - Resets the entire temporary storage to 0.
 //
 // It is generally not recommended to call this function ever. What you usually want to do is let's say you have a loop,
@@ -1535,7 +1544,19 @@ NOBDEF bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect r
     return nob_proc_wait(p);
 }
 
-NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
+static nob_log_handler *nob__log_handler = &nob_default_log_handler;
+
+NOBDEF void nob_set_log_handler(nob_log_handler *handler)
+{
+    nob__log_handler = handler;
+}
+
+NOBDEF nob_log_handler *nob_get_log_handler(void)
+{
+    return nob__log_handler;
+}
+
+void nob_default_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
 {
     if (level < nob_minimal_log_level) return;
 
@@ -1551,14 +1572,40 @@ NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
         break;
     case NOB_NO_LOGS: return;
     default:
-        NOB_UNREACHABLE("nob_log");
+        NOB_UNREACHABLE("Nob_Log_Level");
     }
 
+    vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n");
+}
+
+void nob_cancer_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
+{
+    switch (level) {
+    case NOB_INFO:
+        fprintf(stderr, "ℹ️ \x1b[36m[INFO]\x1b[0m ");
+        break;
+    case NOB_WARNING:
+        fprintf(stderr, "⚠️ \x1b[33m[WARNING]\x1b[0m ");
+        break;
+    case NOB_ERROR:
+        fprintf(stderr, "🚨 \x1b[31m[ERROR]\x1b[0m ");
+        break;
+    case NOB_NO_LOGS: return;
+    default:
+        NOB_UNREACHABLE("Nob_Log_Level");
+    }
+
+    vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n");
+}
+
+NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
+{
     va_list args;
     va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
+    nob__log_handler(level, fmt, args);
     va_end(args);
-    fprintf(stderr, "\n");
 }
 
 NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
@@ -1770,10 +1817,10 @@ NOBDEF void *nob_temp_alloc(size_t requested_size)
     return result;
 }
 
-NOBDEF char *nob_temp_sprintf(const char *format, ...)
+NOBDEF char *nob_temp_vsprintf(const char *format, va_list ap)
 {
     va_list args;
-    va_start(args, format);
+    va_copy(args, ap);
     int n = vsnprintf(NULL, 0, format, args);
     va_end(args);
 
@@ -1781,10 +1828,19 @@ NOBDEF char *nob_temp_sprintf(const char *format, ...)
     char *result = (char*)nob_temp_alloc(n + 1);
     NOB_ASSERT(result != NULL && "Extend the size of the temporary allocator");
     // TODO: use proper arenas for the temporary allocator;
-    va_start(args, format);
+    va_copy(args, ap);
     vsnprintf(result, n + 1, format, args);
     va_end(args);
 
+    return result;
+}
+
+NOBDEF char *nob_temp_sprintf(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    char *result = nob_temp_vsprintf(format, args);
+    va_end(args);
     return result;
 }
 
@@ -2341,6 +2397,11 @@ NOBDEF int closedir(DIR *dirp)
         #define NO_LOGS NOB_NO_LOGS
         #define Log_Level Nob_Log_Level
         #define minimal_log_level nob_minimal_log_level
+        #define log_handler nob_log_handler
+        #define set_log_handler nob_set_log_handler
+        #define get_log_handler nob_get_log_handler
+        #define default_log_handler nob_default_log_handler
+        #define cancer_log_handler nob_cancer_log_handler
         // NOTE: Name log is already defined in math.h and historically always was the natural logarithmic function.
         // So there should be no reason to strip the `nob_` prefix in this specific case.
         // #define log nob_log
@@ -2411,6 +2472,7 @@ NOBDEF int closedir(DIR *dirp)
         #define temp_strndup nob_temp_strndup
         #define temp_alloc nob_temp_alloc
         #define temp_sprintf nob_temp_sprintf
+        #define temp_vsprintf nob_temp_vsprintf
         #define temp_reset nob_temp_reset
         #define temp_save nob_temp_save
         #define temp_rewind nob_temp_rewind
@@ -2449,7 +2511,14 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
-     1.25.1 (2025-11-06) Fix forward declaration of _NSGetExecutablePath on MacOS (by agss0)
+     1.26.0 (2025-12-28) Introduce customizable log handlers (by @rexim)
+                           - Add nob_log_handler
+                           - Add nob_set_log_handler
+                           - Add nob_get_log_handler
+                           - Add nob_default_log_handler
+                           - Add nob_cancer_log_handler
+                         Introduce nob_temp_vsprintf (by @rexim)
+     1.25.1 (2025-11-06) Fix forward declaration of _NSGetExecutablePath on MacOS (by @agss0)
      1.25.0 (2025-10-25)   - Add nob_sb_pad_align()
                            - Add nob_swap()
                            - Add nob_temp_strndup()
