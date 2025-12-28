@@ -26,6 +26,7 @@ const char *test_names[] = {
     "temp_aligned_alloc",
     "temp_path_comps",
     "temp_running_executable_path",
+    "no_echo",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
