@@ -166,6 +166,9 @@
 #    ifdef __APPLE__
 #        include <mach-o/dyld.h>
 #    endif
+#    ifdef __FreeBSD__
+#        include <sys/sysctl.h>
+#    endif
 #    include <sys/types.h>
 #    include <sys/wait.h>
 #    include <sys/stat.h>
@@ -2283,6 +2286,12 @@ NOBDEF char *nob_temp_running_executable_path(void)
     uint32_t size = NOB_ARRAY_LEN(buf);
     if (_NSGetExecutablePath(buf, &size) != 0) return "";
     int length = strlen(buf);
+    return nob_temp_strndup(buf, length);
+#elif defined(__FreeBSD__)
+    char buf[4096];
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+    size_t length = sizeof(buf);
+    if (sysctl(mib, 4, buf, &length, NULL, 0) < 0) return "";
     return nob_temp_strndup(buf, length);
 #else
     fprintf(stderr, "%s:%d: TODO: nob_temp_running_executable_path is not implemented for this platform\n", __FILE__, __LINE__);
