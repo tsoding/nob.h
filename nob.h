@@ -628,7 +628,7 @@ NOBDEF char *nob_temp_running_executable_path(void);
 
 #ifndef nob_cc_output
 #  if defined(_MSC_VER) && !defined(__clang__)
-#    define nob_cc_output(cmd, output_path) nob_cmd_append(cmd, nob_temp_sprintf("/Fe:%s", (output_path)))
+#    define nob_cc_output(cmd, output_path) nob_cmd_append(cmd, nob_temp_sprintf("/Fe:%s", (output_path)), nob_temp_sprintf("/Fo:%s", (output_path)))
 #  else
 #    define nob_cc_output(cmd, output_path) nob_cmd_append(cmd, "-o", (output_path))
 #  endif
@@ -2531,6 +2531,7 @@ NOBDEF int closedir(DIR *dirp)
      1.27.0 (2025-12-30) Add .dot_reset option to cmd_run (by @Israel77)
                          Fix support for FreeBSD (by @cqundefine)
                          Strip prefixes from NOB_GO_REBUILD_URSELF and NOB_GO_REBUILD_URSELF_PLUS (by @huwwa)
+                         Add /Fo flag to MSVC version of nob_cc_output() (by @ratchetfreak)
      1.26.0 (2025-12-28) Introduce customizable log handlers (by @rexim)
                            - Add nob_log_handler
                            - Add nob_set_log_handler
