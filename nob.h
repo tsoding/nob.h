@@ -55,7 +55,9 @@
       nob_log() function. Stripping away the prefix results in log() which was historically always referring
       to the natural logarithmic function that is already defined in math.h. So there is no reason to strip
       off the prefix for nob_log(). Another exception is nob_rename() which collides with the widely known
-      POSIX function rename(2) if you strip the prefix off.
+      POSIX function rename(2) if you strip the prefix off. The last exception applies to user-redefinable
+      macros like `nob_cc_flags`, as they have default #ifndef-guarded definitions, they must be overridden
+      using their full prefixed name, and defining the stripped alias after stripping does nothing.
 
       The prefixes are stripped off only on the level of preprocessor. The names of the functions in the
       compiled object file will still retain the `nob_` prefix. Keep that in mind when you FFI with nob.h
