@@ -423,6 +423,8 @@ typedef struct {
     Nob_Procs *async;
     // Maximum processes allowed in the .async list. Zero implies nob_nprocs().
     size_t max_procs;
+    // Do not reset the command after execution.
+    bool dont_reset;
     // Redirect stdin to file
     const char *stdin_path;
     // Redirect stdout to file
@@ -494,7 +496,7 @@ NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
 #define nob_cmd_free(cmd) NOB_FREE(cmd.items)
 
 // Run command asynchronously
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd, .async = &procs)` instead, but keep in mind that it always resets the cmd array.")
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd, .async = &procs, .dont_reset = true)`.")
 NOBDEF Nob_Proc nob_cmd_run_async(Nob_Cmd cmd);
 
 // nob_cmd_run_async_and_reset() is just like nob_cmd_run_async() except it also resets cmd.count to 0
@@ -507,8 +509,9 @@ NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
                ".async = &procs, "
                ".stdin_path = \"path/to/stdin\", "
                ".stdout_path = \"path/to/stdout\", "
-               ".stderr_path = \"path/to/stderr\")` instead, "
-               "but keep in mind that it always resets the cmd array.")
+               ".stderr_path = \"path/to/stderr\", "
+               ".dont_reset = true"
+               ")` instead.")
 NOBDEF Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
 
 // Run redirected command asynchronously and set cmd.count to 0 and close all the opened files
@@ -520,8 +523,7 @@ NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
 NOBDEF Nob_Proc nob_cmd_run_async_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect redirect);
 
 // Run command synchronously
-NOB_DEPRECATED("Use `nob_cmd_run(&cmd)` instead, "
-               "but keep in mind that it always resets the cmd array.")
+NOB_DEPRECATED("Use `nob_cmd_run(&cmd, .dont_reset = true)` instead.")
 NOBDEF bool nob_cmd_run_sync(Nob_Cmd cmd);
 
 // NOTE: nob_cmd_run_sync_and_reset() is just like nob_cmd_run_sync() except it also resets cmd.count to 0
@@ -533,8 +535,9 @@ NOBDEF bool nob_cmd_run_sync_and_reset(Nob_Cmd *cmd);
 NOB_DEPRECATED("Use `nob_cmd_run(&cmd, "
                ".stdin_path  = \"path/to/stdin\", "
                ".stdout_path = \"path/to/stdout\", "
-               ".stderr_path = \"path/to/stderr\")` instead, "
-               "but keep in mind that it always resets the cmd array.")
+               ".stderr_path = \"path/to/stderr\", "
+               ".dont_reset = true"
+               ")` instead.")
 NOBDEF bool nob_cmd_run_sync_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirect);
 
 // Run redirected command synchronously and set cmd.count to 0 and close all the opened files
@@ -1115,7 +1118,7 @@ defer:
     if (opt_fdin)  nob_fd_close(*opt_fdin);
     if (opt_fdout) nob_fd_close(*opt_fdout);
     if (opt_fderr) nob_fd_close(*opt_fderr);
-    cmd->count = 0;
+    if (!opt.dont_reset) cmd->count = 0;
     return result;
 }
 
@@ -2513,7 +2516,7 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
-     1.27.0 (2025-12-30)
+     1.27.0 (2025-12-30) Add .dot_reset option to cmd_run (by @Israel77)
      1.26.0 (2025-12-28) Introduce customizable log handlers (by @rexim)
                            - Add nob_log_handler
                            - Add nob_set_log_handler

@@ -27,6 +27,7 @@ const char *test_names[] = {
     "temp_path_comps",
     "temp_running_executable_path",
     "no_echo",
+    "cmd_run_dont_reset",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
