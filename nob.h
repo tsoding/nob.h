@@ -76,7 +76,7 @@
         See https://github.com/nothings/stb/blob/f58f558c120e9b32c217290b80bad1a0729fbb2c/docs/stb_howto.txt
         for more info.
       - NOB_WARN_DEPRECATED - Warn about the usage of deprecated function. We rarely actually remove deprecated functions,
-        but if you want to know what is discourage you may want to enable this flag.
+        but if you want to know what is discouraged you may want to enable this flag.
       - NOB_EXPERIMENTAL_DELETE_OLD - Experimental feature that automatically removes `nob.old` files. It's unclear how well
         it works on Windows, so it's experimental for now.
       - NOB_STRIP_PREFIX - string the `nob_` prefixes from non-redefinable names.
