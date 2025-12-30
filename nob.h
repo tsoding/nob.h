@@ -50,7 +50,7 @@
       }
       ```
 
-      Not all the names have strippable prefixes. All the redefinable names like `NOB_GO_REBUILD_URSELF`
+      Not all the names have strippable prefixes. All the redefinable names like `NOB_REBUILD_URSELF`
       for instance will retain their prefix even if NOB_STRIP_PREFIX is enabled. Notable exception is the
       nob_log() function. Stripping away the prefix results in log() which was historically always referring
       to the natural logarithmic function that is already defined in math.h. So there is no reason to strip
@@ -2422,6 +2422,8 @@ NOBDEF int closedir(DIR *dirp)
         // #define log nob_log
         #define shift nob_shift
         #define shift_args nob_shift_args
+        #define GO_REBUILD_URSELF NOB_GO_REBUILD_URSELF
+        #define GO_REBUILD_URSELF_PLUS NOB_GO_REBUILD_URSELF_PLUS
         #define File_Paths Nob_File_Paths
         #define FILE_REGULAR NOB_FILE_REGULAR
         #define FILE_DIRECTORY NOB_FILE_DIRECTORY
@@ -2528,6 +2530,7 @@ NOBDEF int closedir(DIR *dirp)
 
      1.27.0 (2025-12-30) Add .dot_reset option to cmd_run (by @Israel77)
                          Fix support for FreeBSD (by @cqundefine)
+                         Strip prefixes from NOB_GO_REBUILD_URSELF and NOB_GO_REBUILD_URSELF_PLUS (by @huwwa)
      1.26.0 (2025-12-28) Introduce customizable log handlers (by @rexim)
                            - Add nob_log_handler
                            - Add nob_set_log_handler
