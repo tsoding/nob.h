@@ -45,8 +45,9 @@ The only file you need from here is [nob.h](https://raw.githubusercontent.com/ts
 This is obviously applicable not only to C. You can implement the same kind of approach for other languages (apart from the languages that support this natively, of course). Here is few examples in the wild:
 
 - C++ - [https://github.com/zhiayang/nabs](https://github.com/zhiayang/nabs)
-- Java - [https://gitlab.com/NikaDev/arris](https://gitlab.com/NikaDev/arris)
-- Java - [https://codeberg.org/ptrace/job](https://codeberg.org/ptrace/job)
+- Java
+  - [https://gitlab.com/NikaDev/arris](https://gitlab.com/NikaDev/arris)
+  - [https://codeberg.org/ptrace/job](https://codeberg.org/ptrace/job)
 - ...
 
 *Feel free to contribute more*
