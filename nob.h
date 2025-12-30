@@ -1,4 +1,4 @@
-/* nob - v1.26.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v1.27.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -2513,6 +2513,7 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
+     1.27.0 (2025-12-30)
      1.26.0 (2025-12-28) Introduce customizable log handlers (by @rexim)
                            - Add nob_log_handler
                            - Add nob_set_log_handler
