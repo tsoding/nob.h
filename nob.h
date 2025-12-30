@@ -166,6 +166,9 @@
 #    ifdef __APPLE__
 #        include <mach-o/dyld.h>
 #    endif
+#    ifdef __FreeBSD__
+#        include <sys/sysctl.h>
+#    endif
 #    include <sys/types.h>
 #    include <sys/wait.h>
 #    include <sys/stat.h>
@@ -2287,6 +2290,12 @@ NOBDEF char *nob_temp_running_executable_path(void)
     if (_NSGetExecutablePath(buf, &size) != 0) return "";
     int length = strlen(buf);
     return nob_temp_strndup(buf, length);
+#elif defined(__FreeBSD__)
+    char buf[4096];
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+    size_t length = sizeof(buf);
+    if (sysctl(mib, 4, buf, &length, NULL, 0) < 0) return "";
+    return nob_temp_strndup(buf, length);
 #else
     fprintf(stderr, "%s:%d: TODO: nob_temp_running_executable_path is not implemented for this platform\n", __FILE__, __LINE__);
     return "";
@@ -2517,6 +2526,7 @@ NOBDEF int closedir(DIR *dirp)
    Revision history:
 
      1.27.0 (2025-12-30) Add .dot_reset option to cmd_run (by @Israel77)
+                         Fix support for FreeBSD (by @cqundefine)
      1.26.0 (2025-12-28) Introduce customizable log handlers (by @rexim)
                            - Add nob_log_handler
                            - Add nob_set_log_handler
