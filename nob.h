@@ -2528,7 +2528,7 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
-     1.27.0 (2025-12-30) Add .dot_reset option to cmd_run (by @Israel77)
+     1.27.0 (2025-12-30) Add .dont_reset option to cmd_run (by @Israel77)
                          Fix support for FreeBSD (by @cqundefine)
                          Strip prefixes from NOB_GO_REBUILD_URSELF and NOB_GO_REBUILD_URSELF_PLUS (by @huwwa)
                          Add /Fo flag to MSVC version of nob_cc_output() (by @ratchetfreak)
