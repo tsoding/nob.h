@@ -1,4 +1,4 @@
-/* nob - v1.27.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v2.0.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -174,6 +174,12 @@
 #    include <sys/stat.h>
 #    include <unistd.h>
 #    include <fcntl.h>
+#    include <fcntl.h>
+#    include <dirent.h>
+#endif
+
+#ifdef __HAIKU__
+#   include <image.h>
 #endif
 
 #ifdef _WIN32
@@ -251,6 +257,47 @@ NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
+
+typedef enum {
+    // If the current file is a directory go inside of it.
+    NOB_WALK_CONT,
+    // If the current file is a directory do not go inside of it.
+    NOB_WALK_SKIP,
+    // Stop the recursive traversal process entirely.
+    NOB_WALK_STOP,
+} Nob_Walk_Action;
+
+typedef struct {
+    // The path to the visited file
+    const char *path;
+    // The type of the visited file
+    Nob_File_Type type;
+    // How nested we currently are in the directory tree
+    size_t level;
+    // User data supplied in Nob_Walk_Dir_Opt.data
+    void *data;
+    // The action nob_walk_dir_opt() must perform after the Nob_Walk_Func has returned.
+    // Default is NOB_WALK_CONT.
+    Nob_Walk_Action *action;
+} Nob_Walk_Entry;
+
+// A function that is called by nob_walk_dir_opt() on each visited file.
+// Nob_Walk_Entry provides the details about the visited file and also
+// expects you to modify the `action` in case you want to alter the
+// usual behavior of the recursive walking algorithm.
+//
+// If the function returns `false`, an error is assumed which causes the entire
+// recursive walking process to exit and nob_walk_dir_opt() return `false`.
+typedef bool (*Nob_Walk_Func)(Nob_Walk_Entry entry);
+
+typedef struct {
+    // User data passed to Nob_Walk_Entry.data
+    void *data;
+} Nob_Walk_Dir_Opt;
+
+NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_Opt);
+
+#define nob_walk_dir(root, func, ...) nob_walk_dir_opt((root), (func), (Nob_Walk_Dir_Opt){__VA_ARGS__})
 
 #define nob_return_defer(value) do { result = (value); goto defer; } while(0)
 
@@ -729,68 +776,6 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // USAGE:
 //   String_View name = ...;
 //   printf("Name: "SV_Fmt"\n", SV_Arg(name));
-
-// DEPRECATED: Usage of the bundled minirent.h below is deprecated, because it introduces more
-// problems than it solves. It will be removed in the next major release of nob.h. In the meantime,
-// it is recommended to `#define NOB_NO_MINIRENT` if it causes problems for you.
-// TODO: Use NOB_DEPRECATED for minirent.h declarations
-
-// minirent.h HEADER BEGIN ////////////////////////////////////////
-// Copyright 2021 Alexey Kutepov <reximkut@gmail.com>
-//
-// Permission is hereby granted, free of charge, to any person obtaining
-// a copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to
-// permit persons to whom the Software is furnished to do so, subject to
-// the following conditions:
-//
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-//
-// ============================================================
-//
-// minirent — 0.0.1 — A subset of dirent interface for Windows.
-//
-// https://github.com/tsoding/minirent
-//
-// ============================================================
-//
-// ChangeLog (https://semver.org/ is implied)
-//
-//    0.0.2 Automatically include dirent.h on non-Windows
-//          platforms
-//    0.0.1 First Official Release
-
-#if !defined(_WIN32) || defined(NOB_NO_MINIRENT)
-#include <dirent.h>
-#else // _WIN32
-
-#define WIN32_LEAN_AND_MEAN
-#include "windows.h"
-
-struct dirent
-{
-    char d_name[MAX_PATH+1];
-};
-
-typedef struct DIR DIR;
-
-static DIR *opendir(const char *dirpath);
-static struct dirent *readdir(DIR *dirp);
-static int closedir(DIR *dirp);
-
-#endif // _WIN32
-// minirent.h HEADER END ////////////////////////////////////////
 
 #ifdef _WIN32
 
@@ -1617,41 +1602,148 @@ NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
     va_end(args);
 }
 
-NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
+bool nob__walk_dir_opt_impl(const char *root, Nob_Walk_Func func, size_t level, bool *stop, Nob_Walk_Dir_Opt opt)
 {
+#ifdef _WIN32
     bool result = true;
+    Nob_String_Builder sb = {0};
+    WIN32_FIND_DATA data;
+    HANDLE hFind = INVALID_HANDLE_VALUE;
+
+    Nob_File_Type type = nob_get_file_type(root);
+    if (type < 0) nob_return_defer(false);
+    Nob_Walk_Action action = NOB_WALK_CONT;
+    if (!func((Nob_Walk_Entry) {
+        .path = root,
+        .type = type,
+        .data = opt.data,
+        .level = level,
+        .action = &action,
+    })) nob_return_defer(false);
+
+    switch (action) {
+    case NOB_WALK_CONT: break;
+    case NOB_WALK_STOP: *stop = true; // fallthrough
+    case NOB_WALK_SKIP: nob_return_defer(true);
+    default: NOB_UNREACHABLE("Nob_Walk_Action");
+    }
+
+    if (type != NOB_FILE_DIRECTORY) nob_return_defer(true);
+
+    {
+        size_t mark = nob_temp_save();
+        char *buffer = nob_temp_sprintf("%s\\*", root);
+        hFind = FindFirstFile(buffer, &data);
+        nob_temp_rewind(mark);
+    }
+
+    if (hFind == INVALID_HANDLE_VALUE) {
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", root, nob_win32_error_message(GetLastError()));
+        nob_return_defer(false);
+    }
+
+    for (;;) {
+        if (strcmp(data.cFileName, ".") != 0 && strcmp(data.cFileName, "..") != 0) {
+            sb.count = 0;
+            nob_sb_appendf(&sb, "%s/%s", root, data.cFileName);
+            nob_sb_append_null(&sb);
+            const char *path = sb.items;
+            if (!nob__walk_dir_opt_impl(path, func, level+1, stop, opt)) nob_return_defer(false);
+            if (*stop) nob_return_defer(true);
+        }
+
+        if (!FindNextFile(hFind, &data)) {
+            if (GetLastError() == ERROR_NO_MORE_FILES) nob_return_defer(true);
+            nob_log(NOB_ERROR, "Could not read directory %s: %s", root, nob_win32_error_message(GetLastError()));
+            nob_return_defer(false);
+        }
+    }
+
+defer:
+    FindClose(hFind);
+    free(sb.items);
+    return result;
+#else // POSIX
+    bool result = true;
+
     DIR *dir = NULL;
+    Nob_String_Builder sb = {0};
+
+    Nob_File_Type type = nob_get_file_type(root);
+    if (type < 0) nob_return_defer(false);
+    Nob_Walk_Action action = NOB_WALK_CONT;
+    if (!func((Nob_Walk_Entry) {
+        .path = root,
+        .type = type,
+        .data = opt.data,
+        .level = level,
+        .action = &action,
+    })) nob_return_defer(false);
+
+    switch (action) {
+    case NOB_WALK_CONT: break;
+    case NOB_WALK_STOP: *stop = true; // fallthrough
+    case NOB_WALK_SKIP: nob_return_defer(true);
+    default: NOB_UNREACHABLE("Nob_Walk_Action");
+    }
+
+    if (type != NOB_FILE_DIRECTORY) nob_return_defer(true);
+
     struct dirent *ent = NULL;
 
-    dir = opendir(parent);
+    dir = opendir(root);
     if (dir == NULL) {
-        #ifdef _WIN32
-        nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, nob_win32_error_message(GetLastError()));
-        #else
-        nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, strerror(errno));
-        #endif // _WIN32
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", root, strerror(errno));
         nob_return_defer(false);
     }
 
     errno = 0;
     ent = readdir(dir);
     while (ent != NULL) {
-        nob_da_append(children, nob_temp_strdup(ent->d_name));
+        if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
+            sb.count = 0;
+            nob_sb_appendf(&sb, "%s/%s", root, ent->d_name);
+            nob_sb_append_null(&sb);
+            const char *path = sb.items;
+            if (!nob__walk_dir_opt_impl(path, func, level+1, stop, opt)) nob_return_defer(false);
+            if (*stop) nob_return_defer(true);
+        }
         ent = readdir(dir);
     }
 
     if (errno != 0) {
-        #ifdef _WIN32
-        nob_log(NOB_ERROR, "Could not read directory %s: %s", parent, nob_win32_error_message(GetLastError()));
-        #else
-        nob_log(NOB_ERROR, "Could not read directory %s: %s", parent, strerror(errno));
-        #endif // _WIN32
+        nob_log(NOB_ERROR, "Could not read directory %s: %s", root, strerror(errno));
         nob_return_defer(false);
     }
 
 defer:
     if (dir) closedir(dir);
+    free(sb.items);
     return result;
+#endif // _WIN32
+}
+
+NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_Opt opt)
+{
+    bool stop = false;
+    return nob__walk_dir_opt_impl(root, func, 0, &stop, opt);
+}
+
+bool nob__read_entire_dir_visit(Nob_Walk_Entry entry)
+{
+    if (entry.level == 1) {
+        Nob_File_Paths *children = entry.data;
+        nob_da_append(children, nob_temp_file_name(entry.path));
+    }
+    if (entry.level > 1) *entry.action = NOB_WALK_SKIP;
+    return true;
+}
+
+NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
+{
+    nob_da_append(children, ".");
+    nob_da_append(children, "..");
+    return nob_walk_dir(parent, nob__read_entire_dir_visit, .data = children);
 }
 
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size)
@@ -2152,21 +2244,12 @@ NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_pref
 // RETURNS:
 //  0 - file does not exists
 //  1 - file exists
-// -1 - error while checking if file exists. The error is logged
 NOBDEF int nob_file_exists(const char *file_path)
 {
 #if _WIN32
-    // TODO: distinguish between "does not exists" and other errors
-    DWORD dwAttrib = GetFileAttributesA(file_path);
-    return dwAttrib != INVALID_FILE_ATTRIBUTES;
+    return GetFileAttributesA(file_path) != INVALID_FILE_ATTRIBUTES;
 #else
-    struct stat statbuf;
-    if (stat(file_path, &statbuf) < 0) {
-        if (errno == ENOENT) return 0;
-        nob_log(NOB_ERROR, "Could not check if file %s exists: %s", file_path, strerror(errno));
-        return -1;
-    }
-    return 1;
+    return access(file_path, F_OK) == 0;
 #endif
 }
 
@@ -2297,98 +2380,18 @@ NOBDEF char *nob_temp_running_executable_path(void)
     size_t length = sizeof(buf);
     if (sysctl(mib, 4, buf, &length, NULL, 0) < 0) return "";
     return nob_temp_strndup(buf, length);
+#elif defined(__HAIKU__)
+    int cookie = 0;
+    image_info info;
+    while (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK)
+        if (info.type == B_APP_IMAGE)
+            break;
+    return nob_temp_strndup(info.name, strlen(info.name));
 #else
     fprintf(stderr, "%s:%d: TODO: nob_temp_running_executable_path is not implemented for this platform\n", __FILE__, __LINE__);
     return "";
 #endif
 }
-
-// minirent.h SOURCE BEGIN ////////////////////////////////////////
-#if defined(_WIN32) && !defined(NOB_NO_MINIRENT)
-struct DIR
-{
-    HANDLE hFind;
-    WIN32_FIND_DATA data;
-    struct dirent *dirent;
-};
-
-NOBDEF DIR *opendir(const char *dirpath)
-{
-    NOB_ASSERT(dirpath);
-
-    char buffer[MAX_PATH];
-    snprintf(buffer, MAX_PATH, "%s\\*", dirpath);
-
-    DIR *dir = (DIR*)NOB_REALLOC(NULL, sizeof(DIR));
-    memset(dir, 0, sizeof(DIR));
-
-    dir->hFind = FindFirstFile(buffer, &dir->data);
-    if (dir->hFind == INVALID_HANDLE_VALUE) {
-        // TODO: opendir should set errno accordingly on FindFirstFile fail
-        // https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror
-        errno = ENOSYS;
-        goto fail;
-    }
-
-    return dir;
-
-fail:
-    if (dir) {
-        NOB_FREE(dir);
-    }
-
-    return NULL;
-}
-
-NOBDEF struct dirent *readdir(DIR *dirp)
-{
-    NOB_ASSERT(dirp);
-
-    if (dirp->dirent == NULL) {
-        dirp->dirent = (struct dirent*)NOB_REALLOC(NULL, sizeof(struct dirent));
-        memset(dirp->dirent, 0, sizeof(struct dirent));
-    } else {
-        if(!FindNextFile(dirp->hFind, &dirp->data)) {
-            if (GetLastError() != ERROR_NO_MORE_FILES) {
-                // TODO: readdir should set errno accordingly on FindNextFile fail
-                // https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror
-                errno = ENOSYS;
-            }
-
-            return NULL;
-        }
-    }
-
-    memset(dirp->dirent->d_name, 0, sizeof(dirp->dirent->d_name));
-
-    strncpy(
-        dirp->dirent->d_name,
-        dirp->data.cFileName,
-        sizeof(dirp->dirent->d_name) - 1);
-
-    return dirp->dirent;
-}
-
-NOBDEF int closedir(DIR *dirp)
-{
-    NOB_ASSERT(dirp);
-
-    if(!FindClose(dirp->hFind)) {
-        // TODO: closedir should set errno accordingly on FindClose fail
-        // https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror
-        errno = ENOSYS;
-        return -1;
-    }
-
-    if (dirp->dirent) {
-        NOB_FREE(dirp->dirent);
-    }
-    NOB_FREE(dirp);
-
-    return 0;
-}
-#endif // _WIN32
-// minirent.h SOURCE END ////////////////////////////////////////
 
 #endif // NOB_IMPLEMENTATION
 
@@ -2434,6 +2437,15 @@ NOBDEF int closedir(DIR *dirp)
         #define copy_file nob_copy_file
         #define copy_directory_recursively nob_copy_directory_recursively
         #define read_entire_dir nob_read_entire_dir
+        #define WALK_CONT NOB_WALK_CONT
+        #define WALK_SKIP NOB_WALK_SKIP
+        #define WALK_STOP NOB_WALK_STOP
+        #define Walk_Action Nob_Walk_Action
+        #define Walk_Func_Entry Nob_Walk_Func_Entry
+        #define Walk_Func Nob_Walk_Func
+        #define Walk_Dir_Opt Nob_Walk_Dir_Opt
+        #define walk_dir nob_walk_dir
+        #define walk_dir_opt nob_walk_dir_opt
         #define write_entire_file nob_write_entire_file
         #define get_file_type nob_get_file_type
         #define delete_file nob_delete_file
@@ -2528,6 +2540,22 @@ NOBDEF int closedir(DIR *dirp)
 /*
    Revision history:
 
+      2.0.0 (          ) Remove minirent.h (by @rexim)
+                           BACKWARD INCOMPATIBLE CHANGE!!! If you were using minirent.h from this library
+                           just use it directly from https://github.com/tsoding/minirent
+                           or consider using the New Directory Walking API.
+                         Introduce New Directory Walking API (by @rexim)
+                           - NOB_WALK_CONT
+                           - NOB_WALK_SKIP
+                           - NOB_WALK_STOP
+                           - Nob_Walk_Action
+                           - Nob_Walk_Entry
+                           - Nob_Walk_Func
+                           - Nob_Walk_Dir_Opt
+                           - nob_walk_dir()
+                           - nob_walk_dir_opt()
+                         Add support for Haiku to nob_temp_running_executable_path() (By @Cephon)
+                         Make nob_file_exists() unfailable (By @rexim)
      1.27.0 (2025-12-30) Add .dont_reset option to cmd_run (by @Israel77)
                          Fix support for FreeBSD (by @cqundefine)
                          Strip prefixes from NOB_GO_REBUILD_URSELF and NOB_GO_REBUILD_URSELF_PLUS (by @huwwa)
