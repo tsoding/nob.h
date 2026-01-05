@@ -178,6 +178,10 @@
 #    include <dirent.h>
 #endif
 
+#ifdef __HAIKU__
+#   include <image.h>
+#endif
+
 #ifdef _WIN32
 #    define NOB_LINE_END "\r\n"
 #else
@@ -2385,6 +2389,13 @@ NOBDEF char *nob_temp_running_executable_path(void)
     size_t length = sizeof(buf);
     if (sysctl(mib, 4, buf, &length, NULL, 0) < 0) return "";
     return nob_temp_strndup(buf, length);
+#elif defined(__HAIKU__)
+    int cookie = 0;
+    image_info info;
+    while (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK)
+        if (info.type == B_APP_IMAGE)
+            break;
+    return nob_temp_strndup(info.name, strlen(info.name));
 #else
     fprintf(stderr, "%s:%d: TODO: nob_temp_running_executable_path is not implemented for this platform\n", __FILE__, __LINE__);
     return "";
@@ -2552,6 +2563,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
                            - Nob_Walk_Dir_Opt
                            - nob_walk_dir()
                            - nob_walk_dir_opt()
+                         Add support for Haiku to nob_temp_running_executable_path() (By @Cephon)
      1.27.0 (2025-12-30) Add .dont_reset option to cmd_run (by @Israel77)
                          Fix support for FreeBSD (by @cqundefine)
                          Strip prefixes from NOB_GO_REBUILD_URSELF and NOB_GO_REBUILD_URSELF_PLUS (by @huwwa)
