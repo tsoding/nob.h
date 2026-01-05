@@ -2244,21 +2244,12 @@ NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_pref
 // RETURNS:
 //  0 - file does not exists
 //  1 - file exists
-// -1 - error while checking if file exists. The error is logged
 NOBDEF int nob_file_exists(const char *file_path)
 {
 #if _WIN32
-    // TODO: distinguish between "does not exists" and other errors
-    DWORD dwAttrib = GetFileAttributesA(file_path);
-    return dwAttrib != INVALID_FILE_ATTRIBUTES;
+    return GetFileAttributesA(file_path) != INVALID_FILE_ATTRIBUTES;
 #else
-    struct stat statbuf;
-    if (stat(file_path, &statbuf) < 0) {
-        if (errno == ENOENT) return 0;
-        nob_log(NOB_ERROR, "Could not check if file %s exists: %s", file_path, strerror(errno));
-        return -1;
-    }
-    return 1;
+    return access(file_path, F_OK) == 0;
 #endif
 }
 
@@ -2564,6 +2555,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
                            - nob_walk_dir()
                            - nob_walk_dir_opt()
                          Add support for Haiku to nob_temp_running_executable_path() (By @Cephon)
+                         Make nob_file_exists() unfailable (By @rexim)
      1.27.0 (2025-12-30) Add .dont_reset option to cmd_run (by @Israel77)
                          Fix support for FreeBSD (by @cqundefine)
                          Strip prefixes from NOB_GO_REBUILD_URSELF and NOB_GO_REBUILD_URSELF_PLUS (by @huwwa)
