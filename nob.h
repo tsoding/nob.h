@@ -1602,19 +1602,18 @@ NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
     va_end(args);
 }
 
-bool nob__walk_dir_opt_impl(const char *root, Nob_Walk_Func func, size_t level, bool *stop, Nob_Walk_Dir_Opt opt)
+bool nob__walk_dir_opt_impl(Nob_String_Builder sb, Nob_Walk_Func func, size_t level, bool *stop, Nob_Walk_Dir_Opt opt)
 {
 #ifdef _WIN32
     bool result = true;
-    Nob_String_Builder sb = {0};
     WIN32_FIND_DATA data;
     HANDLE hFind = INVALID_HANDLE_VALUE;
 
-    Nob_File_Type type = nob_get_file_type(root);
+    Nob_File_Type type = nob_get_file_type(sb.items);
     if (type < 0) nob_return_defer(false);
     Nob_Walk_Action action = NOB_WALK_CONT;
     if (!func((Nob_Walk_Entry) {
-        .path = root,
+        .path = sb.items,
         .type = type,
         .data = opt.data,
         .level = level,
@@ -1632,23 +1631,21 @@ bool nob__walk_dir_opt_impl(const char *root, Nob_Walk_Func func, size_t level, 
 
     {
         size_t mark = nob_temp_save();
-        char *buffer = nob_temp_sprintf("%s\\*", root);
+        char *buffer = nob_temp_sprintf("%s\\*", sb.items);
         hFind = FindFirstFile(buffer, &data);
         nob_temp_rewind(mark);
     }
 
     if (hFind == INVALID_HANDLE_VALUE) {
-        nob_log(NOB_ERROR, "Could not open directory %s: %s", root, nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", sb.items, nob_win32_error_message(GetLastError()));
         nob_return_defer(false);
     }
 
     for (;;) {
         if (strcmp(data.cFileName, ".") != 0 && strcmp(data.cFileName, "..") != 0) {
-            sb.count = 0;
-            nob_sb_appendf(&sb, "%s/%s", root, data.cFileName);
+            nob_sb_appendf(&sb, "\\%s", data.cFileName);
             nob_sb_append_null(&sb);
-            const char *path = sb.items;
-            if (!nob__walk_dir_opt_impl(path, func, level+1, stop, opt)) nob_return_defer(false);
+            if (!nob__walk_dir_opt_impl(sb, func, level+1, stop, opt)) nob_return_defer(false);
             if (*stop) nob_return_defer(true);
         }
 
@@ -1661,19 +1658,17 @@ bool nob__walk_dir_opt_impl(const char *root, Nob_Walk_Func func, size_t level, 
 
 defer:
     FindClose(hFind);
-    free(sb.items);
     return result;
 #else // POSIX
     bool result = true;
 
     DIR *dir = NULL;
-    Nob_String_Builder sb = {0};
 
-    Nob_File_Type type = nob_get_file_type(root);
+    Nob_File_Type type = nob_get_file_type(sb.items);
     if (type < 0) nob_return_defer(false);
     Nob_Walk_Action action = NOB_WALK_CONT;
     if (!func((Nob_Walk_Entry) {
-        .path = root,
+        .path = sb.items,
         .type = type,
         .data = opt.data,
         .level = level,
@@ -1691,9 +1686,9 @@ defer:
 
     struct dirent *ent = NULL;
 
-    dir = opendir(root);
+    dir = opendir(sb.items);
     if (dir == NULL) {
-        nob_log(NOB_ERROR, "Could not open directory %s: %s", root, strerror(errno));
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", sb.items, strerror(errno));
         nob_return_defer(false);
     }
 
@@ -1701,24 +1696,21 @@ defer:
     ent = readdir(dir);
     while (ent != NULL) {
         if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
-            sb.count = 0;
-            nob_sb_appendf(&sb, "%s/%s", root, ent->d_name);
+            nob_sb_appendf(&sb, "/%s", ent->d_name);
             nob_sb_append_null(&sb);
-            const char *path = sb.items;
-            if (!nob__walk_dir_opt_impl(path, func, level+1, stop, opt)) nob_return_defer(false);
+            if (!nob__walk_dir_opt_impl(sb, func, level+1, stop, opt)) nob_return_defer(false);
             if (*stop) nob_return_defer(true);
         }
         ent = readdir(dir);
     }
 
     if (errno != 0) {
-        nob_log(NOB_ERROR, "Could not read directory %s: %s", root, strerror(errno));
+        nob_log(NOB_ERROR, "Could not read directory %s: %s", sb.items, strerror(errno));
         nob_return_defer(false);
     }
 
 defer:
     if (dir) closedir(dir);
-    free(sb.items);
     return result;
 #endif // _WIN32
 }
@@ -1726,7 +1718,11 @@ defer:
 NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_Opt opt)
 {
     bool stop = false;
-    return nob__walk_dir_opt_impl(root, func, 0, &stop, opt);
+    Nob_String_Builder sb = {0};
+    nob_sb_appendf(&sb, "%s", root);
+    bool ok = nob__walk_dir_opt_impl(sb, func, 0, &stop, opt);
+    free(sb.items);
+    return ok;
 }
 
 bool nob__read_entire_dir_visit(Nob_Walk_Entry entry)
