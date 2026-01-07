@@ -1,4 +1,4 @@
-/* nob - v2.0.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v2.0.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -161,6 +161,7 @@
 #    define _WINCON_
 #    include <windows.h>
 #    include <direct.h>
+#    include <io.h>
 #    include <shellapi.h>
 #else
 #    ifdef __APPLE__
@@ -659,6 +660,8 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #       define nob_cc(cmd) nob_cmd_append(cmd, "clang")
 #    elif defined(_MSC_VER)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "cl.exe")
+#    elif defined(__TINYC__)
+#       define nob_cc(cmd) nob_cmd_append(cmd, "tcc")
 #    endif
 #  else
 #    define nob_cc(cmd) nob_cmd_append(cmd, "cc")
@@ -699,6 +702,8 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #       define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-o", binary_path, source_path
 #    elif defined(_MSC_VER)
 #       define NOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", nob_temp_sprintf("/Fe:%s", (binary_path)), source_path
+#    elif defined(__TINYC__)
+#       define NOB_REBUILD_URSELF(binary_path, source_path) "tcc", "-o", binary_path, source_path
 #    endif
 #  else
 #    define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
@@ -1602,19 +1607,18 @@ NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
     va_end(args);
 }
 
-bool nob__walk_dir_opt_impl(const char *root, Nob_Walk_Func func, size_t level, bool *stop, Nob_Walk_Dir_Opt opt)
+bool nob__walk_dir_opt_impl(Nob_String_Builder *sb, Nob_Walk_Func func, size_t level, bool *stop, Nob_Walk_Dir_Opt opt)
 {
 #ifdef _WIN32
     bool result = true;
-    Nob_String_Builder sb = {0};
     WIN32_FIND_DATA data;
     HANDLE hFind = INVALID_HANDLE_VALUE;
 
-    Nob_File_Type type = nob_get_file_type(root);
+    Nob_File_Type type = nob_get_file_type(sb->items);
     if (type < 0) nob_return_defer(false);
     Nob_Walk_Action action = NOB_WALK_CONT;
     if (!func((Nob_Walk_Entry) {
-        .path = root,
+        .path = sb->items,
         .type = type,
         .data = opt.data,
         .level = level,
@@ -1632,48 +1636,46 @@ bool nob__walk_dir_opt_impl(const char *root, Nob_Walk_Func func, size_t level, 
 
     {
         size_t mark = nob_temp_save();
-        char *buffer = nob_temp_sprintf("%s\\*", root);
+        char *buffer = nob_temp_sprintf("%s\\*", sb->items);
         hFind = FindFirstFile(buffer, &data);
         nob_temp_rewind(mark);
     }
 
     if (hFind == INVALID_HANDLE_VALUE) {
-        nob_log(NOB_ERROR, "Could not open directory %s: %s", root, nob_win32_error_message(GetLastError()));
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", sb->items, nob_win32_error_message(GetLastError()));
         nob_return_defer(false);
     }
 
+    size_t mark = sb->count - 1;
     for (;;) {
         if (strcmp(data.cFileName, ".") != 0 && strcmp(data.cFileName, "..") != 0) {
-            sb.count = 0;
-            nob_sb_appendf(&sb, "%s/%s", root, data.cFileName);
-            nob_sb_append_null(&sb);
-            const char *path = sb.items;
-            if (!nob__walk_dir_opt_impl(path, func, level+1, stop, opt)) nob_return_defer(false);
+            sb->count = mark;
+            nob_sb_appendf(sb, "\\%s", data.cFileName);
+            nob_sb_append_null(sb);
+            if (!nob__walk_dir_opt_impl(sb, func, level+1, stop, opt)) nob_return_defer(false);
             if (*stop) nob_return_defer(true);
         }
 
         if (!FindNextFile(hFind, &data)) {
             if (GetLastError() == ERROR_NO_MORE_FILES) nob_return_defer(true);
-            nob_log(NOB_ERROR, "Could not read directory %s: %s", root, nob_win32_error_message(GetLastError()));
+            nob_log(NOB_ERROR, "Could not read directory %s: %s", sb->items, nob_win32_error_message(GetLastError()));
             nob_return_defer(false);
         }
     }
 
 defer:
     FindClose(hFind);
-    free(sb.items);
     return result;
 #else // POSIX
     bool result = true;
 
     DIR *dir = NULL;
-    Nob_String_Builder sb = {0};
 
-    Nob_File_Type type = nob_get_file_type(root);
+    Nob_File_Type type = nob_get_file_type(sb->items);
     if (type < 0) nob_return_defer(false);
     Nob_Walk_Action action = NOB_WALK_CONT;
     if (!func((Nob_Walk_Entry) {
-        .path = root,
+        .path = sb->items,
         .type = type,
         .data = opt.data,
         .level = level,
@@ -1691,34 +1693,33 @@ defer:
 
     struct dirent *ent = NULL;
 
-    dir = opendir(root);
+    dir = opendir(sb->items);
     if (dir == NULL) {
-        nob_log(NOB_ERROR, "Could not open directory %s: %s", root, strerror(errno));
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", sb->items, strerror(errno));
         nob_return_defer(false);
     }
 
+    size_t mark = sb->count - 1;
     errno = 0;
     ent = readdir(dir);
     while (ent != NULL) {
         if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
-            sb.count = 0;
-            nob_sb_appendf(&sb, "%s/%s", root, ent->d_name);
-            nob_sb_append_null(&sb);
-            const char *path = sb.items;
-            if (!nob__walk_dir_opt_impl(path, func, level+1, stop, opt)) nob_return_defer(false);
+            sb->count = mark;
+            nob_sb_appendf(sb, "/%s", ent->d_name);
+            nob_sb_append_null(sb);
+            if (!nob__walk_dir_opt_impl(sb, func, level+1, stop, opt)) nob_return_defer(false);
             if (*stop) nob_return_defer(true);
         }
         ent = readdir(dir);
     }
 
     if (errno != 0) {
-        nob_log(NOB_ERROR, "Could not read directory %s: %s", root, strerror(errno));
+        nob_log(NOB_ERROR, "Could not read directory %s: %s", sb->items, strerror(errno));
         nob_return_defer(false);
     }
 
 defer:
     if (dir) closedir(dir);
-    free(sb.items);
     return result;
 #endif // _WIN32
 }
@@ -1726,7 +1727,12 @@ defer:
 NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_Opt opt)
 {
     bool stop = false;
-    return nob__walk_dir_opt_impl(root, func, 0, &stop, opt);
+    Nob_String_Builder sb = {0};
+    nob_sb_appendf(&sb, "%s", root);
+    nob_sb_append_null(&sb);
+    bool ok = nob__walk_dir_opt_impl(&sb, func, 0, &stop, opt);
+    free(sb.items);
+    return ok;
 }
 
 bool nob__read_entire_dir_visit(Nob_Walk_Entry entry)
@@ -2015,7 +2021,7 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
         nob_log(NOB_ERROR, "could not stat %s: %s", output_path, strerror(errno));
         return -1;
     }
-    int output_path_time = statbuf.st_mtime;
+    time_t output_path_time = statbuf.st_mtime;
 
     for (size_t i = 0; i < input_paths_count; ++i) {
         const char *input_path = input_paths[i];
@@ -2024,7 +2030,7 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
             nob_log(NOB_ERROR, "could not stat %s: %s", input_path, strerror(errno));
             return -1;
         }
-        int input_path_time = statbuf.st_mtime;
+        time_t input_path_time = statbuf.st_mtime;
         // NOTE: if even a single input_path is fresher than output_path that's 100% rebuild
         if (input_path_time > output_path_time) return 1;
     }
@@ -2082,7 +2088,7 @@ NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 #ifndef _WIN32
     m = ftell(f);
 #else
-    m = _ftelli64(f);
+    m = _telli64(_fileno(f));
 #endif
     if (m < 0)                     nob_return_defer(false);
     if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
@@ -2441,7 +2447,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define WALK_SKIP NOB_WALK_SKIP
         #define WALK_STOP NOB_WALK_STOP
         #define Walk_Action Nob_Walk_Action
-        #define Walk_Func_Entry Nob_Walk_Func_Entry
+        #define Walk_Entry Nob_Walk_Entry
         #define Walk_Func Nob_Walk_Func
         #define Walk_Dir_Opt Nob_Walk_Dir_Opt
         #define walk_dir nob_walk_dir
@@ -2540,7 +2546,12 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      2.0.0 (          ) Remove minirent.h (by @rexim)
+      2.0.1 (2026-01-07) Fix Walk_Entry naming (by @Sinha-Ujjawal)
+                         Using single String Builder in nob__walk_dir_opt_impl (by @Sinha-Ujjawal)
+                         Add tcc to nob_cc_*() and NOB_REBUILD_URSELF() macros (by @vylsaz)
+                         Fix building nob_read_entire_file() with tcc on windows  (by @vylsaz)
+                         Fix Y2038 in nob_needs_rebuild() (by @lnvitesace)
+      2.0.0 (2026-01-06) Remove minirent.h (by @rexim)
                            BACKWARD INCOMPATIBLE CHANGE!!! If you were using minirent.h from this library
                            just use it directly from https://github.com/tsoding/minirent
                            or consider using the New Directory Walking API.
