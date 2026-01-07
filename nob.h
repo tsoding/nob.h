@@ -2441,7 +2441,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define WALK_SKIP NOB_WALK_SKIP
         #define WALK_STOP NOB_WALK_STOP
         #define Walk_Action Nob_Walk_Action
-        #define Walk_Func_Entry Nob_Walk_Func_Entry
+        #define Walk_Entry Nob_Walk_Entry
         #define Walk_Func Nob_Walk_Func
         #define Walk_Dir_Opt Nob_Walk_Dir_Opt
         #define walk_dir nob_walk_dir
@@ -2540,7 +2540,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      2.0.1 (          )
+      2.0.1 (          ) Fix Walk_Entry naming (by @Sinha-Ujjawal)
       2.0.0 (2026-01-06) Remove minirent.h (by @rexim)
                            BACKWARD INCOMPATIBLE CHANGE!!! If you were using minirent.h from this library
                            just use it directly from https://github.com/tsoding/minirent
