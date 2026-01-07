@@ -2015,7 +2015,7 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
         nob_log(NOB_ERROR, "could not stat %s: %s", output_path, strerror(errno));
         return -1;
     }
-    int output_path_time = statbuf.st_mtime;
+    time_t output_path_time = statbuf.st_mtime;
 
     for (size_t i = 0; i < input_paths_count; ++i) {
         const char *input_path = input_paths[i];
@@ -2024,7 +2024,7 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
             nob_log(NOB_ERROR, "could not stat %s: %s", input_path, strerror(errno));
             return -1;
         }
-        int input_path_time = statbuf.st_mtime;
+        time_t input_path_time = statbuf.st_mtime;
         // NOTE: if even a single input_path is fresher than output_path that's 100% rebuild
         if (input_path_time > output_path_time) return 1;
     }
