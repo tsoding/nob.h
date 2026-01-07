@@ -1,4 +1,4 @@
-/* nob - v2.0.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v2.0.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -2540,7 +2540,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      2.0.0 (          ) Remove minirent.h (by @rexim)
+      2.0.1 (          )
+      2.0.0 (2026-01-06) Remove minirent.h (by @rexim)
                            BACKWARD INCOMPATIBLE CHANGE!!! If you were using minirent.h from this library
                            just use it directly from https://github.com/tsoding/minirent
                            or consider using the New Directory Walking API.
