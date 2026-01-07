@@ -358,6 +358,27 @@ NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_
         (da)->items[j] = (da)->items[--(da)->count]; \
     } while(0)
 
+// Declare generic structure for simplify declaration dynamic array. Example:
+// ```c
+//
+// nob_declare(int) xs = {0};
+// nob_da_append(&xs, 69);
+// nob_da_append(&xs, 420);
+// nob_da_append(&xs, 1337);
+//
+// nob_declare(char) chrs = {0};
+// nob_da_append(&chrs, 'a');
+// nob_da_append(&chrs, 'b');
+// nob_da_append(&chrs, 'c');
+//
+// ```
+#define nob_da_declare(type)		\
+	struct {			\
+		type *items;		\
+		size_t capacity;	\
+		size_t count;		\
+	}
+
 // Foreach over Dynamic Arrays. Example:
 // ```c
 // typedef struct {
@@ -2457,6 +2478,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define delete_file nob_delete_file
         #define return_defer nob_return_defer
         #define da_append nob_da_append
+        #define da_declare nob_da_declare
         #define da_free nob_da_free
         #define da_append_many nob_da_append_many
         #define da_resize nob_da_resize
