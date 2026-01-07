@@ -2546,7 +2546,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      2.0.1 (          ) Fix Walk_Entry naming (by @Sinha-Ujjawal)
+      2.0.1 (2026-01-07) Fix Walk_Entry naming (by @Sinha-Ujjawal)
                          Using single String Builder in nob__walk_dir_opt_impl (by @Sinha-Ujjawal)
                          Add tcc to nob_cc_*() and NOB_REBUILD_URSELF() macros (by @vylsaz)
                          Fix building nob_read_entire_file() with tcc on windows  (by @vylsaz)
