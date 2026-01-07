@@ -2021,7 +2021,7 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
         nob_log(NOB_ERROR, "could not stat %s: %s", output_path, strerror(errno));
         return -1;
     }
-    int output_path_time = statbuf.st_mtime;
+    time_t output_path_time = statbuf.st_mtime;
 
     for (size_t i = 0; i < input_paths_count; ++i) {
         const char *input_path = input_paths[i];
@@ -2030,7 +2030,7 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
             nob_log(NOB_ERROR, "could not stat %s: %s", input_path, strerror(errno));
             return -1;
         }
-        int input_path_time = statbuf.st_mtime;
+        time_t input_path_time = statbuf.st_mtime;
         // NOTE: if even a single input_path is fresher than output_path that's 100% rebuild
         if (input_path_time > output_path_time) return 1;
     }
@@ -2550,6 +2550,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
                          Using single String Builder in nob__walk_dir_opt_impl (by @Sinha-Ujjawal)
                          Add tcc to nob_cc_*() and NOB_REBUILD_URSELF() macros (by @vylsaz)
                          Fix building nob_read_entire_file() with tcc on windows  (by @vylsaz)
+                         Fix Y2038 in nob_needs_rebuild() (by @lnvitesace)
       2.0.0 (2026-01-06) Remove minirent.h (by @rexim)
                            BACKWARD INCOMPATIBLE CHANGE!!! If you were using minirent.h from this library
                            just use it directly from https://github.com/tsoding/minirent
