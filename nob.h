@@ -161,6 +161,7 @@
 #    define _WINCON_
 #    include <windows.h>
 #    include <direct.h>
+#    include <io.h>
 #    include <shellapi.h>
 #else
 #    ifdef __APPLE__
@@ -659,6 +660,8 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #       define nob_cc(cmd) nob_cmd_append(cmd, "clang")
 #    elif defined(_MSC_VER)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "cl.exe")
+#    elif defined(__TINYC__)
+#       define nob_cc(cmd) nob_cmd_append(cmd, "tcc")
 #    endif
 #  else
 #    define nob_cc(cmd) nob_cmd_append(cmd, "cc")
@@ -699,6 +702,8 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #       define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-o", binary_path, source_path
 #    elif defined(_MSC_VER)
 #       define NOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", nob_temp_sprintf("/Fe:%s", (binary_path)), source_path
+#    elif defined(__TINYC__)
+#       define NOB_REBUILD_URSELF(binary_path, source_path) "tcc", "-o", binary_path, source_path
 #    endif
 #  else
 #    define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
@@ -2083,7 +2088,7 @@ NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 #ifndef _WIN32
     m = ftell(f);
 #else
-    m = _ftelli64(f);
+    m = _telli64(_fileno(f));
 #endif
     if (m < 0)                     nob_return_defer(false);
     if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
@@ -2543,6 +2548,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
 
       2.0.1 (          ) Fix Walk_Entry naming (by @Sinha-Ujjawal)
                          Using single String Builder in nob__walk_dir_opt_impl (by @Sinha-Ujjawal)
+                         Add tcc to nob_cc_*() and NOB_REBUILD_URSELF() macros (by @vylsaz)
+                         Fix building nob_read_entire_file() with tcc on windows  (by @vylsaz)
       2.0.0 (2026-01-06) Remove minirent.h (by @rexim)
                            BACKWARD INCOMPATIBLE CHANGE!!! If you were using minirent.h from this library
                            just use it directly from https://github.com/tsoding/minirent
