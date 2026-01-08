@@ -50,7 +50,7 @@ int main(int argc, char **argv)
     nob_cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", BUILD_FOLDER"hello", SRC_FOLDER"hello.c");
 #else
     // On MSVC
-    nob_cmd_append(&cmd, "cl", "-I.", "-o", BUILD_FOLDER"hello", SRC_FOLDER"hello.c");
+    nob_cmd_append(&cmd, "cl", "-I.", "/Fe:"BUILD_FOLDER"hello", SRC_FOLDER"hello.c");
 #endif // _MSC_VER
 
     // Let's execute the command.
