@@ -654,10 +654,10 @@ NOBDEF char *nob_temp_running_executable_path(void);
 
 #ifndef nob_cc
 #  if _WIN32
-#    if defined(__GNUC__)
-#       define nob_cc(cmd) nob_cmd_append(cmd, "cc")
-#    elif defined(__clang__)
+#    if defined(__GNUC__) && defined(__clang__)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "clang")
+#    elif defined(__GNUC__) && !defined(__clang__)
+#       define nob_cc(cmd) nob_cmd_append(cmd, "gcc")
 #    elif defined(_MSC_VER)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "cl.exe")
 #    elif defined(__TINYC__)
