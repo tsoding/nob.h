@@ -2094,11 +2094,19 @@ NOBDEF bool nob_delete_file(const char *path)
     nob_log(NOB_INFO, "deleting %s", path);
 #endif // NOB_NO_ECHO
 #ifdef _WIN32
-    if (!DeleteFileA(path)) {
+    bool ret;
+    size_t mark;
+    wchar_t* wide_path;
+
+    ret = true;
+    mark = nob_temp_save();
+    wide_path = nob_unicode_utf8_to_unicode_utf16(path);
+    if (!DeleteFileW(wide_path)) {
         nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
-        return false;
+        ret = false;
     }
-    return true;
+    nob_temp_rewind(mark);
+    return ret;
 #else
     if (remove(path) < 0) {
         nob_log(NOB_ERROR, "Could not delete file %s: %s", path, strerror(errno));
