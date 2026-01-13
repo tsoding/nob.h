@@ -419,6 +419,8 @@ NOBDEF void nob_sb_pad_align(Nob_String_Builder *sb, size_t size);
 // use it a NULL-terminated C string
 #define nob_sb_append_null(sb) nob_da_append_many(sb, "", 1)
 
+#define nob_sb_append nob_da_append
+
 // Free the memory allocated by a string builder
 #define nob_sb_free(sb) NOB_FREE((sb).items)
 
@@ -2494,6 +2496,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define sb_append_buf nob_sb_append_buf
         #define sb_append_cstr nob_sb_append_cstr
         #define sb_append_null nob_sb_append_null
+        #define sb_append nob_sb_append
         #define sb_pad_align nob_sb_pad_align
         #define sb_free nob_sb_free
         #define Proc Nob_Proc
@@ -2579,6 +2582,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
                            BACKWARD INCOMPATIBLE CHANGE!!! If you had code that intentionally didn't enable NOB_STRIP_PREFIX
                            because all the names from nob.h were causing too many collisions for you, upgrading to 3.0.0 may break it.
                            In that case you should go and explicitly enable NOB_UNSTRIP_PREFIX where needed after upgrading.
+                         Add nob_sb_append alias to nob_da_append (by @rexim)
       2.0.1 (2026-01-07) Fix Walk_Entry naming (by @Sinha-Ujjawal)
                          Using single String Builder in nob__walk_dir_opt_impl (by @Sinha-Ujjawal)
                          Add tcc to nob_cc_*() and NOB_REBUILD_URSELF() macros (by @vylsaz)
