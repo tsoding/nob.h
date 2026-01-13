@@ -1831,8 +1831,23 @@ NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
 bool nob__walk_dir_opt_impl(Nob_String_Builder *sb, Nob_Walk_Func func, size_t level, bool *stop, Nob_Walk_Dir_Opt opt)
 {
 #ifdef _WIN32
+    /*
+    UTF-16 is variable length encoding. Every code point could be encoded by 1 or 2 UTF-16 code units. Every UTF-16 code units is two bytes.
+    UTF-8 is variable length encoding. Every code point could be encoded by 1, 2, 3 or 4 UTF-8 code units. Every UTF-8 code units is one byte.
+    In the worst case, single UTF-16 code unit code point could be encoded by 3 UTF-8 code units. Code points from U+0800 to U+FFFF. Meaning from 1 wchar_t to 3 char.
+    In the worst case, doble UTF-16 code unit code point could be encoded by 4 UTF-8 code units. Code points from U+010000 to U+10FFFF. Meaning from 2 wchar_t to 4 char.
+    Given the rules above, we need to allcoate 3 char for each 1 wchar_t in order to be able to represent any sequecne of any code points.
+    */
+    #define nob_worst_case_utf16_to_utf8(count) (3 * (count))
+
+    typedef struct
+    {
+      WIN32_FIND_DATAW win_find_data;
+      char utf8_file_name[nob_worst_case_utf16_to_utf8(MAX_PATH)];
+    } nob_win32_find_dataw;
+
     bool result = true;
-    WIN32_FIND_DATA data;
+    nob_win32_find_dataw data;
     HANDLE hFind = INVALID_HANDLE_VALUE;
 
     Nob_File_Type type = nob_get_file_type(sb->items);
@@ -1857,8 +1872,9 @@ bool nob__walk_dir_opt_impl(Nob_String_Builder *sb, Nob_Walk_Func func, size_t l
 
     {
         size_t mark = nob_temp_save();
-        char *buffer = nob_temp_sprintf("%s\\*", sb->items);
-        hFind = FindFirstFile(buffer, &data);
+        char *narrow_path = nob_temp_sprintf("%s\\*", sb->items);
+        wchar_t *wide_path = nob_unicode_utf8_to_unicode_utf16(narrow_path);
+        hFind = FindFirstFileW(wide_path, &data.win_find_data);
         nob_temp_rewind(mark);
     }
 
@@ -1869,15 +1885,16 @@ bool nob__walk_dir_opt_impl(Nob_String_Builder *sb, Nob_Walk_Func func, size_t l
 
     size_t mark = sb->count - 1;
     for (;;) {
-        if (strcmp(data.cFileName, ".") != 0 && strcmp(data.cFileName, "..") != 0) {
+        nob_unicode_utf16_to_unicode_utf8(data.win_find_data.cFileName, (int)wcslen(data.win_find_data.cFileName) + 1, data.utf8_file_name, NOB_ARRAY_LEN(data.utf8_file_name));
+        if (strcmp(data.utf8_file_name, ".") != 0 && strcmp(data.utf8_file_name, "..") != 0) {
             sb->count = mark;
-            nob_sb_appendf(sb, "\\%s", data.cFileName);
+            nob_sb_appendf(sb, "\\%s", data.utf8_file_name);
             nob_sb_append_null(sb);
             if (!nob__walk_dir_opt_impl(sb, func, level+1, stop, opt)) nob_return_defer(false);
             if (*stop) nob_return_defer(true);
         }
 
-        if (!FindNextFile(hFind, &data)) {
+        if (!FindNextFileW(hFind, &data.win_find_data)) {
             if (GetLastError() == ERROR_NO_MORE_FILES) nob_return_defer(true);
             nob_log(NOB_ERROR, "Could not read directory %s: %s", sb->items, nob_win32_error_message(GetLastError()));
             nob_return_defer(false);
