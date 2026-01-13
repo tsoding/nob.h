@@ -112,6 +112,9 @@ static void test_unicode_utf8_file_operations(void)
 		b = nob_rename(k_strings[(i + 1) % NOB_ARRAY_LEN(k_strings)], k_strings[i]);
 		test(b);
 
+		b = nob_write_entire_file(k_strings[i], "test", 4);
+		test(b);
+
 		b = nob_delete_file(k_strings[i]);
 		test(b);
 	}

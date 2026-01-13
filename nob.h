@@ -2032,6 +2032,42 @@ NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
 
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size)
 {
+#ifdef _WIN32
+    bool result;
+    HANDLE file;
+    size_t mark;
+    wchar_t* wide_path;
+    DWORD err;
+    BOOL b;
+    DWORD written;
+
+    result = true;
+    file = INVALID_HANDLE_VALUE;
+    mark = nob_temp_save();
+    wide_path = nob_unicode_utf8_to_unicode_utf16(path);
+    file = CreateFileW(wide_path, GENERIC_WRITE, FILE_SHARE_DELETE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    err = GetLastError();
+    nob_temp_rewind(mark);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        nob_log(NOB_ERROR, "Could not open file %s for writing: %s\n", path, nob_win32_error_message(err));
+        nob_return_defer(false);
+    }
+    b = WriteFile(file, data, (DWORD)size, &written, NULL);
+    if (!(b != FALSE && written == (DWORD)size))
+    {
+        err = GetLastError();
+        nob_log(NOB_ERROR, "Could not write into file %s: %s\n", path, nob_win32_error_message(err));
+        nob_return_defer(false);
+    }
+defer:
+    if (file != INVALID_HANDLE_VALUE)
+    {
+        b = CloseHandle(file);
+        NOB_ASSERT(b != FALSE);
+    }
+    return result;
+#else
     bool result = true;
 
     const char *buf = NULL;
@@ -2061,6 +2097,7 @@ NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t siz
 defer:
     if (f) fclose(f);
     return result;
+#endif
 }
 
 NOBDEF Nob_File_Type nob_get_file_type(const char *path)
