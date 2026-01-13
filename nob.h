@@ -1110,10 +1110,42 @@ static char nob_temp[NOB_TEMP_CAPACITY] = {0};
 NOBDEF bool nob_mkdir_if_not_exists(const char *path)
 {
 #ifdef _WIN32
-    int result = _mkdir(path);
+    size_t mark;
+    wchar_t* wide_path;
+    BOOL b;
+    DWORD err;
+
+    mark = nob_temp_save();
+    wide_path = nob_unicode_utf8_to_unicode_utf16(path);
+    b = CreateDirectoryW(wide_path, NULL);
+    err = GetLastError();
+    nob_temp_rewind(mark);
+    if(b != 0)
+    {
+      #ifndef NOB_NO_ECHO
+      nob_log(NOB_INFO, "created directory `%s`", path);
+      #endif // NOB_NO_ECHO
+      return true;
+    }
+    else if(b == 0 && err == ERROR_ALREADY_EXISTS)
+    {
+        #ifndef NOB_NO_ECHO
+        nob_log(NOB_INFO, "directory `%s` already exists", path);
+        #endif // NOB_NO_ECHO
+        return true;
+    }
+    else if(b == 0 && err == ERROR_PATH_NOT_FOUND)
+    {
+        NOB_TODO("One or more intermediate directories do not exist; this function will only create the final directory in the path.");
+        return false;
+    }
+    else
+    {
+        nob_log(NOB_ERROR, "Could not create directory: %s", nob_win32_error_message(err));
+        return false;
+    }
 #else
     int result = mkdir(path, 0755);
-#endif
     if (result < 0) {
         if (errno == EEXIST) {
 #ifndef NOB_NO_ECHO
@@ -1129,6 +1161,7 @@ NOBDEF bool nob_mkdir_if_not_exists(const char *path)
     nob_log(NOB_INFO, "created directory `%s`", path);
 #endif // NOB_NO_ECHO
     return true;
+#endif
 }
 
 NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path)
