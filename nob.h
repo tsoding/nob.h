@@ -2598,11 +2598,19 @@ NOBDEF const char *nob_get_current_dir_temp(void)
 NOBDEF bool nob_set_current_dir(const char *path)
 {
 #ifdef _WIN32
-    if (!SetCurrentDirectory(path)) {
+    bool ret;
+    size_t mark;
+    wchar_t* wide_path;
+
+    ret = true;
+    mark = nob_temp_save();
+    wide_path = nob_unicode_utf8_to_unicode_utf16(path);
+    if (!SetCurrentDirectoryW(wide_path)) {
         nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, nob_win32_error_message(GetLastError()));
-        return false;
+        ret = false;
     }
-    return true;
+    nob_temp_rewind(mark);
+    return ret;
 #else
     if (chdir(path) < 0) {
         nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, strerror(errno));
