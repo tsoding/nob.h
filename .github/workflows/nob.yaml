@@ -3,35 +3,39 @@ on: [push, pull_request]
 
 jobs:
   macos:
+    strategy:
+      matrix:
+        lang: [c, c++]
     runs-on: macos-latest
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
       - name: Run tests
         run: |
-          clang -o nob nob.c
+          clang -x ${{ matrix.lang }} -o nob nob.c
           ./nob
       - name: Build how_to-s
         run: |
           cd how_to/
-          clang -o nob nob.c
+          clang -x ${{ matrix.lang }} -o nob nob.c
           ./nob
   ubuntu:
     strategy:
       matrix:
         cc: [gcc, clang]
+        lang: [c, c++]
     runs-on: ubuntu-latest
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
       - name: Build tests
         run: |
-          ${{ matrix.cc }} -o nob nob.c
+          ${{ matrix.cc }} -x ${{ matrix.lang }} -o nob nob.c
           ./nob
       - name: Build how_to-s
         run: |
           cd how_to/
-          ${{ matrix.cc }} -o nob nob.c
+          ${{ matrix.cc }} -x ${{ matrix.lang }} -o nob nob.c
           ./nob
   windows:
     runs-on: windows-latest

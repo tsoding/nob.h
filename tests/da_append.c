@@ -1,5 +1,4 @@
 #define NOB_IMPLEMENTATION
-#define NOB_STRIP_PREFIX
 #define NOB_DA_INIT_CAP 4
 #include "nob.h"
 
