@@ -2352,17 +2352,28 @@ NOBDEF bool nob_rename(const char *old_path, const char *new_path)
     nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
 #endif // NOB_NO_ECHO
 #ifdef _WIN32
-    if (!MoveFileEx(old_path, new_path, MOVEFILE_REPLACE_EXISTING)) {
+    bool ret;
+    size_t mark;
+    wchar_t* wide_old_path;
+    wchar_t* wide_new_path;
+
+    ret = true;
+    mark = nob_temp_save();
+    wide_old_path = nob_unicode_utf8_to_unicode_utf16(old_path);
+    wide_new_path = nob_unicode_utf8_to_unicode_utf16(new_path);
+    if (!MoveFileExW(wide_old_path, wide_new_path, MOVEFILE_REPLACE_EXISTING)) {
         nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, nob_win32_error_message(GetLastError()));
-        return false;
+        ret = false;
     }
+    nob_temp_rewind(mark);
+    return ret;
 #else
     if (rename(old_path, new_path) < 0) {
         nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, strerror(errno));
         return false;
     }
-#endif // _WIN32
     return true;
+#endif // _WIN32
 }
 
 NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
