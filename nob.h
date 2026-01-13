@@ -31,18 +31,16 @@
 
       Since Pure C does not have any namespaces we prefix each name of the API with the `nob_` to avoid any
       potential conflicts with any other names in your code. But sometimes it is very annoying and makes
-      the code noisy. If you know that none of the names from nob.h conflict with anything in your code
-      you can enable NOB_STRIP_PREFIX macro and just drop all the prefixes:
+      the code noisy. Because of that you can drop the `nob_` prefix.
 
       ```c
       // nob.c
       #define NOB_IMPLEMENTATION
-      #define NOB_STRIP_PREFIX
       #include "nob.h"
 
       int main(int argc, char **argv)
       {
-          NOB_GO_REBUILD_URSELF(argc, argv);
+          GO_REBUILD_URSELF(argc, argv);
           Cmd cmd = {0};
           cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-o", "main", "main.c");
           if (!cmd_run(&cmd)) return 1;
@@ -50,19 +48,22 @@
       }
       ```
 
-      Not all the names have strippable prefixes. All the redefinable names like `NOB_REBUILD_URSELF`
-      for instance will retain their prefix even if NOB_STRIP_PREFIX is enabled. Notable exception is the
-      nob_log() function. Stripping away the prefix results in log() which was historically always referring
-      to the natural logarithmic function that is already defined in math.h. So there is no reason to strip
-      off the prefix for nob_log(). Another exception is nob_rename() which collides with the widely known
-      POSIX function rename(2) if you strip the prefix off.
+      If the lack of prefixes causes any problems you can disable the prefix stripping by defining
+      `NOB_UNSTRIP_PREFIX` feature macro before including "nob.h".
 
-      The prefixes are stripped off only on the level of preprocessor. The names of the functions in the
+      Not all the names have strippable prefixes. All the redefinable names like `NOB_REBUILD_URSELF`
+      for instance will retain their prefix always. Notable exception is the nob_log() function. Stripping
+      away the prefix results in log() which was historically always referring to the natural logarithmic
+      function that is already defined in math.h. So there is no reason to strip off the prefix for nob_log().
+      Another exception is nob_rename() which collides with the widely known POSIX function rename(2) if you
+      strip the prefix off.
+
+      The prefixes are stripped off only on the level of the preprocessor. The names of the functions in the
       compiled object file will still retain the `nob_` prefix. Keep that in mind when you FFI with nob.h
       from other languages (for whatever reason).
 
       If only few specific names create conflicts for you, you can just #undef those names after the
-      `#include <nob.h>` since they are macros anyway.
+      `#include <nob.h>` without enabling `NOB_UNSTRIP_PREFIX` since they are macros anyway.
 
    # Macro Interface
 
@@ -79,7 +80,7 @@
         but if you want to know what is discouraged you may want to enable this flag.
       - NOB_EXPERIMENTAL_DELETE_OLD - Experimental feature that automatically removes `nob.old` files. It's unclear how well
         it works on Windows, so it's experimental for now.
-      - NOB_STRIP_PREFIX - string the `nob_` prefixes from non-redefinable names.
+      - NOB_UNSTRIP_PREFIX - do not strip the `nob_` prefixes from non-redefinable names.
       - NOB_NO_ECHO - do not echo the actions various nob functions are doing (like nob_cmd_run(), nob_mkdir_if_not_exists(), etc).
 
    ## Redefinable Macros
@@ -2431,7 +2432,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
     // of the file because NOB_IMPLEMENTATION needs the forward declarations from there. So the
     // solution is to split the header into two parts where the name stripping part is at the
     // end of the file after the NOB_IMPLEMENTATION.
-    #ifdef NOB_STRIP_PREFIX
+    #ifndef NOB_UNSTRIP_PREFIX
         #define TODO NOB_TODO
         #define UNREACHABLE NOB_UNREACHABLE
         #define UNUSED NOB_UNUSED
@@ -2568,11 +2569,16 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-
       3.0.0 (          ) Improve C++ support (by @rexim)
                            - Fix various C++ compilers warnings and complains throughout the code.
                            - Reimplement nob_cmd_append() without taking a pointer to temporary array (some C++ compilers don't like that)
                            - Make default NOB_REBUILD_URSELF() try to recompile with C++ if __cplusplus macro is defined
+                         Strip prefixes by default (by @rexim)
+                           - Ignore NOB_STRIP_PREFIX macro
+                           - Introduce NOB_UNSTRIP_PREFIX macro
+                           BACKWARD INCOMPATIBLE CHANGE!!! If you had code that intentionally didn't enable NOB_STRIP_PREFIX
+                           because all the names from nob.h were causing too many collisions for you, upgrading to 3.0.0 may break it.
+                           In that case you should go and explicitly enable NOB_UNSTRIP_PREFIX where needed after upgrading.
       2.0.1 (2026-01-07) Fix Walk_Entry naming (by @Sinha-Ujjawal)
                          Using single String Builder in nob__walk_dir_opt_impl (by @Sinha-Ujjawal)
                          Add tcc to nob_cc_*() and NOB_REBUILD_URSELF() macros (by @vylsaz)
@@ -2726,8 +2732,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
    Naming Conventions:
 
       - All the user facing names should be prefixed with `nob_` or `NOB_` depending on the case.
-      - The prefixes of non-redefinable names should be strippable with NOB_STRIP_PREFIX (unless
-        explicitly stated otherwise like in case of nob_log).
+      - The prefixes of non-redefinable names should be stripped in NOB_STRIP_PREFIX_GUARD_ section,
+        unless explicitly stated otherwise like in case of nob_log() or nob_rename().
       - Internal functions should be prefixed with `nob__` (double underscore).
 */
 

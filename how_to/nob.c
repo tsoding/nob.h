@@ -1,7 +1,6 @@
 // Makes sure the examples are buildable. Used usually on CI.
 #include "../shared.h"
 #define NOB_IMPLEMENTATION
-#define NOB_STRIP_PREFIX
 #define NOB_EXPERIMENTAL_DELETE_OLD
 #define NOB_WARN_DEPRECATED
 #include "../nob.h"
