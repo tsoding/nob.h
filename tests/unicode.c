@@ -91,6 +91,7 @@ static void test_unicode_utf8_file_operations(void)
 	Nob_Fd fd;
 	Nob_File_Type ft;
 	bool b;
+	Nob_String_Builder sb;
 
 	nob_custom_printf("%s\n", "Testing file operations...");
 	n = NOB_ARRAY_LEN(k_strings);
@@ -114,6 +115,15 @@ static void test_unicode_utf8_file_operations(void)
 
 		b = nob_write_entire_file(k_strings[i], "test", 4);
 		test(b);
+
+		sb.items = NULL;
+		sb.capacity = 0;
+		sb.count = 0;
+		b = nob_read_entire_file(k_strings[i], &sb);
+		test(b);
+		test(sb.count == 4);
+		test(memcmp(sb.items, "test", 4) == 0);
+		NOB_FREE(sb.items);
 
 		b = nob_delete_file(k_strings[i]);
 		test(b);

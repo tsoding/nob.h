@@ -2419,6 +2419,60 @@ NOBDEF bool nob_rename(const char *old_path, const char *new_path)
 
 NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 {
+#ifdef _WIN32
+    bool result;
+    HANDLE file;
+    DWORD chunk_size;
+    size_t mark;
+    wchar_t* wide_path;
+    DWORD err;
+    size_t new_count;
+    BOOL b;
+    DWORD read;
+
+    result = true;
+    file = INVALID_HANDLE_VALUE;
+    chunk_size = 64 * 1024;
+    mark = nob_temp_save();
+    wide_path = nob_unicode_utf8_to_unicode_utf16(path);
+    file = CreateFileW(wide_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    err = GetLastError();
+    nob_temp_rewind(mark);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        nob_log(NOB_ERROR, "Could not open file %s for reading: %s\n", path, nob_win32_error_message(err));
+        nob_return_defer(false);
+    }
+    for (;;)
+    {
+        new_count = sb->count + chunk_size;
+        if (new_count > sb->capacity)
+        {
+            sb->items = NOB_DECLTYPE_CAST(sb->items)NOB_REALLOC(sb->items, new_count);
+            NOB_ASSERT(sb->items != NULL && "Buy more RAM lool!!");
+            sb->capacity = new_count;
+        }
+        b = ReadFile(file, sb->items + sb->count, chunk_size, &read, NULL);
+        if (b == FALSE)
+        {
+            err = GetLastError();
+            nob_log(NOB_ERROR, "Could not read from file %s: %s\n", path, nob_win32_error_message(err));
+            nob_return_defer(false);
+        }
+        sb->count += read;
+        if (read != chunk_size)
+        {
+            break;
+        }
+    }
+defer:
+    if (file != INVALID_HANDLE_VALUE)
+    {
+        b = CloseHandle(file);
+        NOB_ASSERT(b != FALSE);
+    }
+    return result;
+#else
     bool result = true;
 
     FILE *f = fopen(path, "rb");
@@ -2426,11 +2480,7 @@ NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
     long long m = 0;
     if (f == NULL)                 nob_return_defer(false);
     if (fseek(f, 0, SEEK_END) < 0) nob_return_defer(false);
-#ifndef _WIN32
     m = ftell(f);
-#else
-    m = _telli64(_fileno(f));
-#endif
     if (m < 0)                     nob_return_defer(false);
     if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
 
@@ -2452,6 +2502,7 @@ defer:
     if (!result) nob_log(NOB_ERROR, "Could not read file %s: %s", path, strerror(errno));
     if (f) fclose(f);
     return result;
+#endif
 }
 
 NOBDEF int nob_sb_appendf(Nob_String_Builder *sb, const char *fmt, ...)
