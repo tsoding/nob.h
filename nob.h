@@ -1,4 +1,4 @@
-/* nob - v2.0.1 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.0.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -2546,6 +2546,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.0.0 (          )
       2.0.1 (2026-01-07) Fix Walk_Entry naming (by @Sinha-Ujjawal)
                          Using single String Builder in nob__walk_dir_opt_impl (by @Sinha-Ujjawal)
                          Add tcc to nob_cc_*() and NOB_REBUILD_URSELF() macros (by @vylsaz)
