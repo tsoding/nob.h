@@ -2572,7 +2572,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      3.0.0 (          ) Improve C++ support (by @rexim)
+      3.0.0 (2026-01-13) Improve C++ support (by @rexim)
                            - Fix various C++ compilers warnings and complains throughout the code.
                            - Reimplement nob_cmd_append() without taking a pointer to temporary array (some C++ compilers don't like that)
                            - Make default NOB_REBUILD_URSELF() try to recompile with C++ if __cplusplus macro is defined
