@@ -993,6 +993,19 @@ wchar_t* nob_unicode_utf8_to_unicode_utf16(const char* narrow_str)
     return wide_str;
 }
 
+int nob_unicode_utf16_to_unicode_utf8(const wchar_t* wide_str, int wide_len, char* narrow_str, int narrow_capacity)
+{
+    int narrow_len;
+
+    NOB_ASSERT(wide_str);
+    NOB_ASSERT(wide_len >= 1);
+    NOB_ASSERT(narrow_str);
+    NOB_ASSERT(narrow_capacity >= 1);
+
+    narrow_len = WideCharToMultiByte(CP_UTF8, 0, wide_str, wide_len, narrow_str, narrow_capacity, NULL, NULL);
+    return narrow_len;
+}
+
 
 #endif
 
