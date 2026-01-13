@@ -2645,7 +2645,15 @@ NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_pref
 NOBDEF int nob_file_exists(const char *file_path)
 {
 #if _WIN32
-    return GetFileAttributesA(file_path) != INVALID_FILE_ATTRIBUTES;
+    size_t mark;
+    wchar_t* wide_file_path;
+    bool ret;
+
+    mark = nob_temp_save();
+    wide_file_path = nob_unicode_utf8_to_unicode_utf16(file_path);
+    ret = GetFileAttributesW(wide_file_path) != INVALID_FILE_ATTRIBUTES;
+    nob_temp_rewind(mark);
+    return ret;
 #else
     return access(file_path, F_OK) == 0;
 #endif
