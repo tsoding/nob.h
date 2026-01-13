@@ -1503,14 +1503,17 @@ NOBDEF Nob_Fd nob_fd_open_for_read(const char *path)
     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
     saAttr.bInheritHandle = TRUE;
 
-    Nob_Fd result = CreateFile(
-                    path,
+    size_t mark = nob_temp_save();
+    wchar_t* wide_path = nob_unicode_utf8_to_unicode_utf16(path);
+    Nob_Fd result = CreateFileW(
+                    wide_path,
                     GENERIC_READ,
                     0,
                     &saAttr,
                     OPEN_EXISTING,
                     FILE_ATTRIBUTE_READONLY,
                     NULL);
+    nob_temp_rewind(mark);
 
     if (result == INVALID_HANDLE_VALUE) {
         nob_log(NOB_ERROR, "Could not open file %s: %s", path, nob_win32_error_message(GetLastError()));
@@ -1537,8 +1540,10 @@ NOBDEF Nob_Fd nob_fd_open_for_write(const char *path)
     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
     saAttr.bInheritHandle = TRUE;
 
-    Nob_Fd result = CreateFile(
-                    path,                            // name of the write
+    size_t mark = nob_temp_save();
+    wchar_t* wide_path = nob_unicode_utf8_to_unicode_utf16(path);
+    Nob_Fd result = CreateFileW(
+                    wide_path,                       // name of the write
                     GENERIC_WRITE,                   // open for writing
                     0,                               // do not share
                     &saAttr,                         // default security
@@ -1546,6 +1551,7 @@ NOBDEF Nob_Fd nob_fd_open_for_write(const char *path)
                     FILE_ATTRIBUTE_NORMAL,           // normal file
                     NULL                             // no attr. template
                 );
+    nob_temp_rewind(mark);
 
     if (result == INVALID_HANDLE_VALUE) {
         nob_log(NOB_ERROR, "Could not open file %s: %s", path, nob_win32_error_message(GetLastError()));
