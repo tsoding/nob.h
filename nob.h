@@ -164,6 +164,8 @@
 #    include <direct.h>
 #    include <io.h>
 #    include <shellapi.h>
+#    include <ConsoleApi.h>
+#    include <ConsoleApi2.h>
 #else
 #    ifdef __APPLE__
 #        include <mach-o/dyld.h>
@@ -203,8 +205,8 @@
 #endif
 
 #define NOB_UNUSED(value) (void)(value)
-#define NOB_TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
-#define NOB_UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define NOB_TODO(message) do { nob_custom_fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define NOB_UNREACHABLE(message) do { nob_custom_fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
 
 #define NOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 #define NOB_ARRAY_GET(array, index) \
@@ -826,6 +828,151 @@ void nob__cmd_append(Nob_Cmd *cmd, size_t n, ...)
     }
     va_end(args);
 }
+
+
+#if defined _WIN32
+
+WORD nob_unicode_debug_beg(HANDLE win_out)
+{
+#if defined NOB_DEBUG_UNIOCDE
+    BOOL b;
+    CONSOLE_SCREEN_BUFFER_INFO info;
+    WORD attributes;
+
+    b = GetConsoleScreenBufferInfo(win_out, &info);
+    NOB_ASSERT(b != 0);
+    attributes = info.wAttributes;
+    b = SetConsoleTextAttribute(win_out, FOREGROUND_INTENSITY | FOREGROUND_GREEN);
+    NOB_ASSERT(b != 0);
+    return attributes;
+#else
+    (void)win_out;
+    return 0;
+#endif
+}
+
+void nob_unicode_debug_end(HANDLE win_out, WORD attributes)
+{
+#if defined NOB_DEBUG_UNIOCDE
+    BOOL b;
+
+    b = SetConsoleTextAttribute(win_out, attributes);
+    NOB_ASSERT(b != 0);
+#else
+    (void)win_out;
+    (void)attributes;
+#endif
+}
+
+int nob_custom_vfprintf(FILE* stream, const char* format, va_list args)
+{
+    char* narrow_ptr;
+    char narrow_buf[1024];
+    size_t narrow_mark;
+    int narrow_len_a;
+    int narrow_len_b;
+    HANDLE win_out;
+    DWORD file_type;
+    wchar_t* wide_ptr;
+    wchar_t wide_buf[1024];
+    size_t wide_mark;
+    int wide_len_a;
+    DWORD err;
+    int wide_len_b;
+    WORD revert;
+    BOOL b;
+    DWORD written;
+
+    narrow_ptr = narrow_buf;
+    narrow_mark = 0;
+    narrow_len_a = vsnprintf(narrow_buf, NOB_ARRAY_LEN(narrow_buf), format, args);
+    NOB_ASSERT(narrow_len_a >= 0); /* vsnprintf failed, what now? */
+    if(narrow_len_a >= NOB_ARRAY_LEN(narrow_buf))
+    {
+        narrow_mark = nob_temp_save();
+        narrow_ptr = (char*)nob_temp_alloc(narrow_len_a + 1);
+        NOB_ASSERT(narrow_ptr); /* nob_temp_alloc failed, what now? */
+        narrow_len_b = vsnprintf(narrow_ptr, narrow_len_a + 1, format, args);
+        NOB_ASSERT(narrow_len_b == narrow_len_a); /* Second call to vsnprintf produced different result thatn first call, what now? */
+    }
+    NOB_ASSERT(stream == stdout || stream == stderr); /* It is user error to print to stdin or to non-standard stream. */
+    win_out = GetStdHandle(stream == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+    NOB_ASSERT(win_out != INVALID_HANDLE_VALUE); /* GetStdHandle failed, what now? */
+    if(win_out == NULL)
+    {
+        return 0;
+    }
+    file_type = GetFileType(win_out);
+    if(file_type == FILE_TYPE_CHAR)
+    {
+        wide_ptr = wide_buf;
+        wide_mark = 0;
+        wide_len_a = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_ptr, narrow_len_a, wide_buf, NOB_ARRAY_LEN(wide_buf));
+        err = GetLastError();
+        NOB_ASSERT((wide_len_a != 0) || (wide_len_a == 0 && err == ERROR_INSUFFICIENT_BUFFER)); /* MultiByteToWideChar failed, what now? */
+        if(wide_len_a == 0 && err == ERROR_INSUFFICIENT_BUFFER)
+        {
+            wide_len_a = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_ptr, narrow_len_a, NULL, 0);
+            NOB_ASSERT(wide_len_a > NOB_ARRAY_LEN(wide_buf)); /* MultiByteToWideChar failed, what now? */
+            wide_mark = nob_temp_save();
+            wide_ptr = (wchar_t*)nob_temp_alloc(wide_len_a * sizeof(wchar_t));
+            NOB_ASSERT(wide_ptr); /* nob_temp_alloc failed, what now? */
+            wide_len_b = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_ptr, narrow_len_a, wide_ptr, wide_len_a);
+            NOB_ASSERT(wide_len_b == wide_len_a); /* MultiByteToWideChar failed, what now? */
+        }
+        revert = nob_unicode_debug_beg(win_out);
+        b = WriteConsoleW(win_out, wide_ptr, (DWORD)wide_len_a, &written, NULL);
+        nob_unicode_debug_end(win_out, revert);
+        NOB_ASSERT(b != 0); /* WriteConsoleW failed, what now? */
+        NOB_ASSERT(written == (DWORD)wide_len_a); /* WriteConsoleW failed, what now? */
+        if(wide_ptr != wide_buf)
+        {
+            nob_temp_rewind(wide_mark);
+        }
+    }
+    else
+    {
+        b = WriteFile(win_out, narrow_ptr, (DWORD)narrow_len_a, &written, NULL);
+        NOB_ASSERT(b != 0); /* WriteFile failed, what now? */
+        NOB_ASSERT(written == (DWORD)narrow_len_a); /* WriteFile failed, what now? */
+    }
+    if(narrow_ptr != narrow_buf)
+    {
+        nob_temp_rewind(narrow_mark);
+    }
+    return narrow_len_a;
+}
+
+int nob_custom_fprintf(FILE* stream, const char* fmt, ...)
+{
+    va_list args;
+    int len;
+
+    va_start(args, fmt);
+    len = nob_custom_vfprintf(stream, fmt, args);
+    va_end(args);
+    return len;
+}
+
+int nob_custom_printf(const char* fmt, ...)
+{
+    va_list args;
+    int len;
+
+    va_start(args, fmt);
+    len = nob_custom_vfprintf(stdout, fmt, args);
+    va_end(args);
+    return len;
+}
+
+#else
+
+#define nob_custom_vfprintf vfprintf
+#define nob_custom_fprintf fprintf
+#define nob_custom_printf printf
+
+#endif
+
 
 #ifdef _WIN32
 
@@ -1586,42 +1733,42 @@ NOBDEF void nob_default_log_handler(Nob_Log_Level level, const char *fmt, va_lis
 
     switch (level) {
     case NOB_INFO:
-        fprintf(stderr, "[INFO] ");
+        nob_custom_fprintf(stderr, "[INFO] ");
         break;
     case NOB_WARNING:
-        fprintf(stderr, "[WARNING] ");
+        nob_custom_fprintf(stderr, "[WARNING] ");
         break;
     case NOB_ERROR:
-        fprintf(stderr, "[ERROR] ");
+        nob_custom_fprintf(stderr, "[ERROR] ");
         break;
     case NOB_NO_LOGS: return;
     default:
         NOB_UNREACHABLE("Nob_Log_Level");
     }
 
-    vfprintf(stderr, fmt, args);
-    fprintf(stderr, "\n");
+    nob_custom_vfprintf(stderr, fmt, args);
+    nob_custom_fprintf(stderr, "\n");
 }
 
 NOBDEF void nob_cancer_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
 {
     switch (level) {
     case NOB_INFO:
-        fprintf(stderr, "ℹ️ \x1b[36m[INFO]\x1b[0m ");
+        nob_custom_fprintf(stderr, "ℹ️ \x1b[36m[INFO]\x1b[0m ");
         break;
     case NOB_WARNING:
-        fprintf(stderr, "⚠️ \x1b[33m[WARNING]\x1b[0m ");
+        nob_custom_fprintf(stderr, "⚠️ \x1b[33m[WARNING]\x1b[0m ");
         break;
     case NOB_ERROR:
-        fprintf(stderr, "🚨 \x1b[31m[ERROR]\x1b[0m ");
+        nob_custom_fprintf(stderr, "🚨 \x1b[31m[ERROR]\x1b[0m ");
         break;
     case NOB_NO_LOGS: return;
     default:
         NOB_UNREACHABLE("Nob_Log_Level");
     }
 
-    vfprintf(stderr, fmt, args);
-    fprintf(stderr, "\n");
+    nob_custom_vfprintf(stderr, fmt, args);
+    nob_custom_fprintf(stderr, "\n");
 }
 
 NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
@@ -2419,7 +2566,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
             break;
     return nob_temp_strndup(info.name, strlen(info.name));
 #else
-    fprintf(stderr, "%s:%d: TODO: nob_temp_running_executable_path is not implemented for this platform\n", __FILE__, __LINE__);
+    nob_custom_fprintf(stderr, "%s:%d: TODO: nob_temp_running_executable_path is not implemented for this platform\n", __FILE__, __LINE__);
     return nob_temp_strdup("");
 #endif
 }
