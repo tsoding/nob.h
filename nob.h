@@ -535,9 +535,7 @@ typedef struct {
 NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
 
 #define nob_cmd_append(cmd, ...) \
-    nob_da_append_many(cmd, \
-                       ((const char*[]){__VA_ARGS__}), \
-                       (sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*)))
+    nob__cmd_append(cmd, (sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*)), __VA_ARGS__)
 
 // TODO: nob_cmd_extend() evaluates other_cmd twice
 #define nob_cmd_extend(cmd, other_cmd) \
@@ -696,17 +694,29 @@ NOBDEF char *nob_temp_running_executable_path(void);
 //   user defined nob_cc_* macros instead?
 #ifndef NOB_REBUILD_URSELF
 #  if defined(_WIN32)
-#    if defined(__GNUC__)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-o", binary_path, source_path
-#    elif defined(__clang__)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-o", binary_path, source_path
+#    if defined(__clang__)
+#      if defined(__cplusplus)
+#        define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-x", "c++", "-o", binary_path, source_path
+#      else
+#        define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-x", "c", "-o", binary_path, source_path
+#      endif
+#    elif defined(__GNUC__)
+#      if defined(__cplusplus)
+#        define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-x", "c++", "-o", binary_path, source_path
+#      else
+#        define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-x", "c", "-o", binary_path, source_path
+#      endif
 #    elif defined(_MSC_VER)
 #       define NOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", nob_temp_sprintf("/Fe:%s", (binary_path)), source_path
 #    elif defined(__TINYC__)
 #       define NOB_REBUILD_URSELF(binary_path, source_path) "tcc", "-o", binary_path, source_path
 #    endif
 #  else
-#    define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
+#    if defined(__cplusplus)
+#      define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-x", "c++", "-o", binary_path, source_path
+#    else
+#      define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-x", "c", "-o", binary_path, source_path
+#    endif
 #  endif
 #endif
 
@@ -802,6 +812,17 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
+
+void nob__cmd_append(Nob_Cmd *cmd, size_t n, ...)
+{
+    va_list args;
+    va_start(args, n);
+    for (size_t i = 0; i < n; ++i) {
+        const char *arg = va_arg(args, const char *);
+        nob_da_append(cmd, arg);
+    }
+    va_end(args);
+}
 
 #ifdef _WIN32
 
@@ -1067,6 +1088,7 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
     Nob_Fd *opt_fdin  = NULL;
     Nob_Fd *opt_fdout = NULL;
     Nob_Fd *opt_fderr = NULL;
+    Nob_Proc proc = NOB_INVALID_PROC;
 
     size_t max_procs = opt.max_procs > 0 ? opt.max_procs : (size_t) nob_nprocs() + 1;
 
@@ -1098,7 +1120,7 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         if (fderr == NOB_INVALID_FD) nob_return_defer(false);
         opt_fderr = &fderr;
     }
-    Nob_Proc proc = nob__cmd_start_process(*cmd, opt_fdin, opt_fdout, opt_fderr);
+    proc = nob__cmd_start_process(*cmd, opt_fdin, opt_fdout, opt_fderr);
 
     if (opt.async) {
         if (proc == NOB_INVALID_PROC) nob_return_defer(false);
@@ -1670,15 +1692,17 @@ defer:
     bool result = true;
 
     DIR *dir = NULL;
+    size_t mark = 0;
+    struct dirent *ent = NULL;
+    Nob_Walk_Action action = NOB_WALK_CONT;
 
     Nob_File_Type type = nob_get_file_type(sb->items);
     if (type < 0) nob_return_defer(false);
-    Nob_Walk_Action action = NOB_WALK_CONT;
     if (!func((Nob_Walk_Entry) {
         .path = sb->items,
         .type = type,
-        .data = opt.data,
         .level = level,
+        .data = opt.data,
         .action = &action,
     })) nob_return_defer(false);
 
@@ -1691,15 +1715,13 @@ defer:
 
     if (type != NOB_FILE_DIRECTORY) nob_return_defer(true);
 
-    struct dirent *ent = NULL;
-
     dir = opendir(sb->items);
     if (dir == NULL) {
         nob_log(NOB_ERROR, "Could not open directory %s: %s", sb->items, strerror(errno));
         nob_return_defer(false);
     }
 
-    size_t mark = sb->count - 1;
+    mark = sb->count - 1;
     errno = 0;
     ent = readdir(dir);
     while (ent != NULL) {
@@ -1738,7 +1760,7 @@ NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_
 bool nob__read_entire_dir_visit(Nob_Walk_Entry entry)
 {
     if (entry.level == 1) {
-        Nob_File_Paths *children = entry.data;
+        Nob_File_Paths *children = (Nob_File_Paths*)entry.data;
         nob_da_append(children, nob_temp_file_name(entry.path));
     }
     if (entry.level > 1) *entry.action = NOB_WALK_SKIP;
@@ -1907,7 +1929,7 @@ NOBDEF char *nob_temp_strdup(const char *cstr)
 
 NOBDEF char *nob_temp_strndup(const char *s, size_t n)
 {
-    char *r = nob_temp_alloc(n + 1);
+    char *r = (char*)nob_temp_alloc(n + 1);
     NOB_ASSERT(r != NULL && "Extend the size of the temporary allocator");
     memcpy(r, s, n);
     r[n] = '\0';
@@ -2309,11 +2331,11 @@ NOBDEF char *nob_temp_dir_name(const char *path)
     // Stolen from the musl's implementation of dirname.
     // We are implementing our own one because libc vendors cannot agree on whether dirname(3)
     // modifies the path or not.
-    if (!path || !*path) return ".";
+    if (!path || !*path) return nob_temp_strdup(".");
     size_t i = strlen(path) - 1;
-    for (; path[i] == '/'; i--) if (!i) return "/";
-    for (; path[i] != '/'; i--) if (!i) return ".";
-    for (; path[i] == '/'; i--) if (!i) return "/";
+    for (; path[i] == '/'; i--) if (!i) return nob_temp_strdup("/");
+    for (; path[i] != '/'; i--) if (!i) return nob_temp_strdup(".");
+    for (; path[i] == '/'; i--) if (!i) return nob_temp_strdup("/");
     return nob_temp_strndup(path, i + 1);
 #else
     if (!path) path = ""; // Treating NULL as empty.
@@ -2332,7 +2354,7 @@ NOBDEF char *nob_temp_file_name(const char *path)
     // Stolen from the musl's implementation of dirname.
     // We are implementing our own one because libc vendors cannot agree on whether basename(3)
     // modifies the path or not.
-    if (!path || !*path) return ".";
+    if (!path || !*path) return nob_temp_strdup(".");
     char *s = nob_temp_strdup(path);
     size_t i = strlen(s)-1;
     for (; i&&s[i]=='/'; i--) s[i] = 0;
@@ -2368,7 +2390,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 #if defined(__linux__)
     char buf[4096];
     int length = readlink("/proc/self/exe", buf, NOB_ARRAY_LEN(buf));
-    if (length < 0) return "";
+    if (length < 0) return nob_temp_strdup("");
     return nob_temp_strndup(buf, length);
 #elif defined(_WIN32)
     char buf[MAX_PATH];
@@ -2377,14 +2399,14 @@ NOBDEF char *nob_temp_running_executable_path(void)
 #elif defined(__APPLE__)
     char buf[4096];
     uint32_t size = NOB_ARRAY_LEN(buf);
-    if (_NSGetExecutablePath(buf, &size) != 0) return "";
+    if (_NSGetExecutablePath(buf, &size) != 0) return nob_temp_strdup("");
     int length = strlen(buf);
     return nob_temp_strndup(buf, length);
 #elif defined(__FreeBSD__)
     char buf[4096];
     int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
     size_t length = sizeof(buf);
-    if (sysctl(mib, 4, buf, &length, NULL, 0) < 0) return "";
+    if (sysctl(mib, 4, buf, &length, NULL, 0) < 0) return nob_temp_strdup("");
     return nob_temp_strndup(buf, length);
 #elif defined(__HAIKU__)
     int cookie = 0;
@@ -2395,7 +2417,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
     return nob_temp_strndup(info.name, strlen(info.name));
 #else
     fprintf(stderr, "%s:%d: TODO: nob_temp_running_executable_path is not implemented for this platform\n", __FILE__, __LINE__);
-    return "";
+    return nob_temp_strdup("");
 #endif
 }
 
@@ -2546,7 +2568,11 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      3.0.0 (          )
+
+      3.0.0 (          ) Improve C++ support (by @rexim)
+                           - Fix various C++ compilers warnings and complains throughout the code.
+                           - Reimplement nob_cmd_append() without taking a pointer to temporary array (some C++ compilers don't like that)
+                           - Make default NOB_REBUILD_URSELF() try to recompile with C++ if __cplusplus macro is defined
       2.0.1 (2026-01-07) Fix Walk_Entry naming (by @Sinha-Ujjawal)
                          Using single String Builder in nob__walk_dir_opt_impl (by @Sinha-Ujjawal)
                          Add tcc to nob_cc_*() and NOB_REBUILD_URSELF() macros (by @vylsaz)
