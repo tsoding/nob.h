@@ -2562,19 +2562,28 @@ NOBDEF int nob_file_exists(const char *file_path)
 NOBDEF const char *nob_get_current_dir_temp(void)
 {
 #ifdef _WIN32
-    DWORD nBufferLength = GetCurrentDirectory(0, NULL);
-    if (nBufferLength == 0) {
+    DWORD nBufferLengthA;
+    wchar_t* wide_buffer;
+    DWORD nBufferLengthB;
+    char* narrow_buffer;
+
+    nBufferLengthA = GetCurrentDirectoryW(0, NULL);
+    if (nBufferLengthA == 0) {
         nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
 
-    char *buffer = (char*) nob_temp_alloc(nBufferLength);
-    if (GetCurrentDirectory(nBufferLength, buffer) == 0) {
+    wide_buffer = (wchar_t*)nob_temp_alloc(nBufferLengthA * sizeof(wchar_t));
+    nBufferLengthB = GetCurrentDirectoryW(nBufferLengthA, wide_buffer);
+    if (nBufferLengthB == 0) {
         nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
+    NOB_ASSERT(nBufferLengthB + 1 == nBufferLengthA);
 
-    return buffer;
+    narrow_buffer = (char*)nob_temp_alloc(3 * nBufferLengthA);
+    nob_unicode_utf16_to_unicode_utf8(wide_buffer, nBufferLengthA, narrow_buffer, 3 * nBufferLengthA);
+    return narrow_buffer;
 #else
     char *buffer = (char*) nob_temp_alloc(PATH_MAX);
     if (getcwd(buffer, PATH_MAX) == NULL) {
