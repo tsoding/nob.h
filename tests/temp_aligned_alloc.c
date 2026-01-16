@@ -3,7 +3,7 @@
 
 #define trace_temp_alloc(requested_size) \
     (temp_alloc(requested_size), \
-     printf("temp_alloc(%3zu) → temp_size == %3zu\n", requested_size, nob_temp_size))
+     nob_custom_printf("temp_alloc(%3zu) → temp_size == %3zu\n", requested_size, nob_temp_size))
 
 int main(void)
 {
