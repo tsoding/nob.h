@@ -887,7 +887,7 @@ int nob_custom_vfprintf(FILE* stream, const char* format, va_list args)
     narrow_mark = 0;
     narrow_len_a = vsnprintf(narrow_buf, NOB_ARRAY_LEN(narrow_buf), format, args);
     NOB_ASSERT(narrow_len_a >= 0); /* vsnprintf failed, what now? */
-    if(narrow_len_a >= NOB_ARRAY_LEN(narrow_buf))
+    if((size_t)narrow_len_a >= NOB_ARRAY_LEN(narrow_buf))
     {
         narrow_mark = nob_temp_save();
         narrow_ptr = (char*)nob_temp_alloc(narrow_len_a + 1);
@@ -913,7 +913,7 @@ int nob_custom_vfprintf(FILE* stream, const char* format, va_list args)
         if(wide_len_a == 0 && err == ERROR_INSUFFICIENT_BUFFER)
         {
             wide_len_a = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_ptr, narrow_len_a, NULL, 0);
-            NOB_ASSERT(wide_len_a > NOB_ARRAY_LEN(wide_buf)); /* MultiByteToWideChar failed, what now? */
+            NOB_ASSERT((size_t)wide_len_a > NOB_ARRAY_LEN(wide_buf)); /* MultiByteToWideChar failed, what now? */
             wide_mark = nob_temp_save();
             wide_ptr = (wchar_t*)nob_temp_alloc(wide_len_a * sizeof(wchar_t));
             NOB_ASSERT(wide_ptr); /* nob_temp_alloc failed, what now? */
