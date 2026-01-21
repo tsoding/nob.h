@@ -295,11 +295,33 @@ typedef bool (*Nob_Walk_Func)(Nob_Walk_Entry entry);
 typedef struct {
     // User data passed to Nob_Walk_Entry.data
     void *data;
+    // Walk the directory in post-order visiting the leaf files first.
+    bool post_order;
 } Nob_Walk_Dir_Opt;
 
 NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_Opt);
 
 #define nob_walk_dir(root, func, ...) nob_walk_dir_opt((root), (func), (Nob_Walk_Dir_Opt){__VA_ARGS__})
+
+typedef struct {
+    char *name;
+    bool error;
+
+    struct {
+#ifdef _WIN32
+        WIN32_FIND_DATA win32_data;
+        HANDLE win32_hFind;
+        bool win32_init;
+#else
+        DIR *posix_dir;
+        struct dirent *posix_ent;
+#endif // _WIN32
+    } nob__private;
+} Nob_Dir_Entry;
+
+NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir);
+NOBDEF bool nob_dir_entry_next(Nob_Dir_Entry *dir);
+NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
 
 #define nob_return_defer(value) do { result = (value); goto defer; } while(0)
 
@@ -1632,131 +1654,168 @@ NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
     va_end(args);
 }
 
-bool nob__walk_dir_opt_impl(Nob_String_Builder *sb, Nob_Walk_Func func, size_t level, bool *stop, Nob_Walk_Dir_Opt opt)
+NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir)
+{
+    memset(dir, 0, sizeof(*dir));
+#ifdef _WIN32
+    size_t temp_mark = nob_temp_save();
+    char *buffer = nob_temp_sprintf("%s\\*", dir_path);
+    dir->nob__private.win32_hFind = FindFirstFile(buffer, &dir->nob__private.win32_data);
+    nob_temp_rewind(temp_mark);
+
+    if (dir->nob__private.win32_hFind == INVALID_HANDLE_VALUE) {
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", dir_path, nob_win32_error_message(GetLastError()));
+        dir->error = true;
+        return false;
+    }
+#else
+    dir->nob__private.posix_dir = opendir(dir_path);
+    if (dir == NULL) {
+        nob_log(NOB_ERROR, "Could not open directory %s: %s", dir_path, strerror(errno));
+        dir->error = true;
+        return false;
+    }
+#endif // _WIN32
+    return true;
+}
+
+NOBDEF bool nob_dir_entry_next(Nob_Dir_Entry *dir)
 {
 #ifdef _WIN32
-    bool result = true;
-    WIN32_FIND_DATA data;
-    HANDLE hFind = INVALID_HANDLE_VALUE;
-
-    Nob_File_Type type = nob_get_file_type(sb->items);
-    if (type < 0) nob_return_defer(false);
-    Nob_Walk_Action action = NOB_WALK_CONT;
-    if (!func((Nob_Walk_Entry) {
-        .path = sb->items,
-        .type = type,
-        .data = opt.data,
-        .level = level,
-        .action = &action,
-    })) nob_return_defer(false);
-
-    switch (action) {
-    case NOB_WALK_CONT: break;
-    case NOB_WALK_STOP: *stop = true; // fallthrough
-    case NOB_WALK_SKIP: nob_return_defer(true);
-    default: NOB_UNREACHABLE("Nob_Walk_Action");
+    if (!dir->nob__private.win32_init) {
+        dir->nob__private.win32_init = true;
+        dir->name = dir->nob__private.win32_data.cFileName;
+        return true;
     }
 
-    if (type != NOB_FILE_DIRECTORY) nob_return_defer(true);
-
-    {
-        size_t mark = nob_temp_save();
-        char *buffer = nob_temp_sprintf("%s\\*", sb->items);
-        hFind = FindFirstFile(buffer, &data);
-        nob_temp_rewind(mark);
+    if (!FindNextFile(dir->nob__private.win32_hFind, &dir->nob__private.win32_data)) {
+        if (GetLastError() == ERROR_NO_MORE_FILES) return false;
+        nob_log(NOB_ERROR, "Could not read next directory entry: %s", nob_win32_error_message(GetLastError()));
+        dir->error = true;
+        return false;
     }
-
-    if (hFind == INVALID_HANDLE_VALUE) {
-        nob_log(NOB_ERROR, "Could not open directory %s: %s", sb->items, nob_win32_error_message(GetLastError()));
-        nob_return_defer(false);
-    }
-
-    size_t mark = sb->count - 1;
-    for (;;) {
-        if (strcmp(data.cFileName, ".") != 0 && strcmp(data.cFileName, "..") != 0) {
-            sb->count = mark;
-            nob_sb_appendf(sb, "\\%s", data.cFileName);
-            nob_sb_append_null(sb);
-            if (!nob__walk_dir_opt_impl(sb, func, level+1, stop, opt)) nob_return_defer(false);
-            if (*stop) nob_return_defer(true);
-        }
-
-        if (!FindNextFile(hFind, &data)) {
-            if (GetLastError() == ERROR_NO_MORE_FILES) nob_return_defer(true);
-            nob_log(NOB_ERROR, "Could not read directory %s: %s", sb->items, nob_win32_error_message(GetLastError()));
-            nob_return_defer(false);
-        }
-    }
-
-defer:
-    FindClose(hFind);
-    return result;
-#else // POSIX
-    bool result = true;
-
-    DIR *dir = NULL;
-    size_t mark = 0;
-    struct dirent *ent = NULL;
-    Nob_Walk_Action action = NOB_WALK_CONT;
-
-    Nob_File_Type type = nob_get_file_type(sb->items);
-    if (type < 0) nob_return_defer(false);
-    if (!func((Nob_Walk_Entry) {
-        .path = sb->items,
-        .type = type,
-        .level = level,
-        .data = opt.data,
-        .action = &action,
-    })) nob_return_defer(false);
-
-    switch (action) {
-    case NOB_WALK_CONT: break;
-    case NOB_WALK_STOP: *stop = true; // fallthrough
-    case NOB_WALK_SKIP: nob_return_defer(true);
-    default: NOB_UNREACHABLE("Nob_Walk_Action");
-    }
-
-    if (type != NOB_FILE_DIRECTORY) nob_return_defer(true);
-
-    dir = opendir(sb->items);
-    if (dir == NULL) {
-        nob_log(NOB_ERROR, "Could not open directory %s: %s", sb->items, strerror(errno));
-        nob_return_defer(false);
-    }
-
-    mark = sb->count - 1;
+    dir->name = dir->nob__private.win32_data.cFileName;
+#else
     errno = 0;
-    ent = readdir(dir);
-    while (ent != NULL) {
-        if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
-            sb->count = mark;
-            nob_sb_appendf(sb, "/%s", ent->d_name);
-            nob_sb_append_null(sb);
-            if (!nob__walk_dir_opt_impl(sb, func, level+1, stop, opt)) nob_return_defer(false);
-            if (*stop) nob_return_defer(true);
+    dir->nob__private.posix_ent = readdir(dir->nob__private.posix_dir);
+    if (dir->nob__private.posix_ent == NULL) {
+        if (errno == 0) return false;
+        nob_log(NOB_ERROR, "Could not read next directory entry: %s", strerror(errno));
+        dir->error = true;
+        return false;
+    }
+    dir->name = dir->nob__private.posix_ent->d_name;
+#endif // _WIN32
+    return true;
+}
+
+NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir)
+{
+#ifdef _WIN32
+    FindClose(dir.nob__private.win32_hFind);
+#else
+    if (dir.nob__private.posix_dir) closedir(dir.nob__private.posix_dir);
+#endif
+}
+
+// On the moment of entering `nob__walk_dir_opt_impl()`, the `file_path` Nob_String_Builder is expected to be NULL-terminated.
+// So you can freely pass `file_path->items` to functions that expect NULL-terminated file path.
+// On existing `nob__walk_dir_opt_impl()` is expected to restore the original content of `file_path`
+bool nob__walk_dir_opt_impl(Nob_String_Builder *file_path, Nob_Walk_Func func, size_t level, bool *stop, Nob_Walk_Dir_Opt opt)
+{
+    NOB_ASSERT(file_path->count > 0 && "file_path was probably not properly NULL-terminated");
+    bool result = true;
+
+    Nob_Dir_Entry dir = {0};
+    size_t saved_file_path_count = file_path->count;
+    Nob_Walk_Action action = NOB_WALK_CONT;
+
+    Nob_File_Type file_type = nob_get_file_type(file_path->items);
+    if (file_type < 0) nob_return_defer(false);
+
+    // Pre-order walking
+    if (!opt.post_order) {
+        if (!func((Nob_Walk_Entry) {
+            .path = file_path->items,
+            .type = file_type,
+            .level = level,
+            .data = opt.data,
+            .action = &action,
+        })) nob_return_defer(false);
+        switch (action) {
+        case NOB_WALK_CONT: break;
+        case NOB_WALK_STOP: *stop = true; // fallthrough
+        case NOB_WALK_SKIP: nob_return_defer(true);
+        default: NOB_UNREACHABLE("Nob_Walk_Action");
         }
-        ent = readdir(dir);
     }
 
-    if (errno != 0) {
-        nob_log(NOB_ERROR, "Could not read directory %s: %s", sb->items, strerror(errno));
-        nob_return_defer(false);
+    if (file_type == NOB_FILE_DIRECTORY) {
+        if (!nob_dir_entry_open(file_path->items, &dir)) nob_return_defer(false);
+        for (;;) {
+            // Next entry
+            if (!nob_dir_entry_next(&dir)) {
+                if (!dir.error) break;
+                nob_return_defer(false);
+            }
+
+            // Ignore . and ..
+            if (strcmp(dir.name, ".")  == 0) continue;
+            if (strcmp(dir.name, "..") == 0) continue;
+
+            // Prepare the new file_path
+            file_path->count = saved_file_path_count - 1;
+#ifdef _WIN32
+            nob_sb_appendf(file_path, "\\%s", dir.name);
+#else
+            nob_sb_appendf(file_path, "/%s", dir.name);
+#endif // _WIN32
+            nob_sb_append_null(file_path);
+
+            // Recurse
+            if (!nob__walk_dir_opt_impl(file_path, func, level+1, stop, opt)) nob_return_defer(false);
+            if (*stop) nob_return_defer(true);
+        }
+        file_path->count = saved_file_path_count;
+        nob_da_last(file_path) = '\0';
+    }
+
+    // Post-order walking
+    if (opt.post_order) {
+        if (!func((Nob_Walk_Entry) {
+            .path = file_path->items,
+            .type = file_type,
+            .level = level,
+            .data = opt.data,
+            .action = &action,
+        })) nob_return_defer(false);
+        switch (action) {
+        case NOB_WALK_CONT: break;
+        case NOB_WALK_STOP: *stop = true; // fallthrough
+        case NOB_WALK_SKIP: nob_return_defer(true);
+        default: NOB_UNREACHABLE("Nob_Walk_Action");
+        }
     }
 
 defer:
-    if (dir) closedir(dir);
+    // Always reset the file_path back to what it was
+    file_path->count = saved_file_path_count;
+    nob_da_last(file_path) = '\0';
+
+    nob_dir_entry_close(dir);
     return result;
-#endif // _WIN32
 }
 
 NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_Opt opt)
 {
+    Nob_String_Builder file_path = {0};
+
+    nob_sb_appendf(&file_path, "%s", root);
+    nob_sb_append_null(&file_path);
+
     bool stop = false;
-    Nob_String_Builder sb = {0};
-    nob_sb_appendf(&sb, "%s", root);
-    nob_sb_append_null(&sb);
-    bool ok = nob__walk_dir_opt_impl(&sb, func, 0, &stop, opt);
-    free(sb.items);
+    bool ok = nob__walk_dir_opt_impl(&file_path, func, 0, &stop, opt);
+    free(file_path.items);
     return ok;
 }
 
@@ -2494,6 +2553,10 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define write_entire_file nob_write_entire_file
         #define get_file_type nob_get_file_type
         #define delete_file nob_delete_file
+        #define Dir_Entry Nob_Dir_Entry
+        #define dir_entry_open nob_dir_entry_open
+        #define dir_entry_next nob_dir_entry_next
+        #define dir_entry_close nob_dir_entry_close
         #define return_defer nob_return_defer
         #define da_append nob_da_append
         #define da_free nob_da_free
@@ -2587,6 +2650,13 @@ NOBDEF char *nob_temp_running_executable_path(void)
    Revision history:
 
       3.1.0 (          ) Make nob_delete_file() be able to delete empty dir on Windows (by @rexim)
+                         Introduce Directory Entry API - similar to POSIX dirent but with names that don't collide
+                           - Nob_Dir_Entry
+                           - nob_dir_entry_open()
+                           - nob_dir_entry_next()
+                           - nob_dir_entry_close()
+                         Rewrite Directory Walking API using Directory Entry API
+                         Introduce .post_order parameter to Nob_Walk_Dir_Opt which walks the directories in post order starting from leaf files
       3.0.0 (2026-01-13) Improve C++ support (by @rexim)
                            - Fix various C++ compilers warnings and complains throughout the code.
                            - Reimplement nob_cmd_append() without taking a pointer to temporary array (some C++ compilers don't like that)
@@ -2753,7 +2823,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
       - All the user facing names should be prefixed with `nob_` or `NOB_` depending on the case.
       - The prefixes of non-redefinable names should be stripped in NOB_STRIP_PREFIX_GUARD_ section,
         unless explicitly stated otherwise like in case of nob_log() or nob_rename().
-      - Internal functions should be prefixed with `nob__` (double underscore).
+      - Internal names should be prefixed with `nob__` (double underscore).
 */
 
 /*
