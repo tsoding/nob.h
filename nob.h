@@ -1,4 +1,4 @@
-/* nob - v3.0.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.1.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -2572,6 +2572,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.1.0 (          )
       3.0.0 (2026-01-13) Improve C++ support (by @rexim)
                            - Fix various C++ compilers warnings and complains throughout the code.
                            - Reimplement nob_cmd_append() without taking a pointer to temporary array (some C++ compilers don't like that)
