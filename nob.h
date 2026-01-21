@@ -2651,7 +2651,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      3.1.0 (          ) Make nob_delete_file() be able to delete empty dir on Windows (by @rexim)
+      3.1.0 (2026-01-22) Make nob_delete_file() be able to delete empty dir on Windows (by @rexim)
                          Introduce Directory Entry API - similar to POSIX dirent but with names that don't collide
                            - Nob_Dir_Entry
                            - nob_dir_entry_open()
