@@ -12,9 +12,8 @@ int main(void)
     if (!nob_read_entire_dir(".", &children)) return 1;
     nob_log(INFO, "Tests:");
     for (size_t i = 0; i < children.count; ++i) {
-        if (*children.items[i] != '.') {
-            nob_log(INFO, "    %s", children.items[i]);
-        }
+        if (*children.items[i] == '.') continue;
+        nob_log(INFO, "    %s", children.items[i]);
     }
     return 0;
 }

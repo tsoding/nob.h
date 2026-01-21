@@ -1819,21 +1819,16 @@ NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_
     return ok;
 }
 
-bool nob__read_entire_dir_visit(Nob_Walk_Entry entry)
-{
-    if (entry.level == 1) {
-        Nob_File_Paths *children = (Nob_File_Paths*)entry.data;
-        nob_da_append(children, nob_temp_file_name(entry.path));
-    }
-    if (entry.level > 1) *entry.action = NOB_WALK_SKIP;
-    return true;
-}
-
 NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
 {
-    nob_da_append(children, ".");
-    nob_da_append(children, "..");
-    return nob_walk_dir(parent, nob__read_entire_dir_visit, .data = children);
+    bool result = true;
+    Nob_Dir_Entry dir = {0};
+    if (!nob_dir_entry_open(parent, &dir)) nob_return_defer(false);
+    while (nob_dir_entry_next(&dir)) nob_da_append(children, nob_temp_strdup(dir.name));
+    if (dir.error) nob_return_defer(false);
+defer:
+    nob_dir_entry_close(dir);
+    return result;
 }
 
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size)
@@ -2657,6 +2652,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
                            - nob_dir_entry_close()
                          Rewrite Directory Walking API using Directory Entry API
                          Introduce .post_order parameter to Nob_Walk_Dir_Opt which walks the directories in post order starting from leaf files
+                         Rewrite nob_read_entire_dir() using Directory Entry API
       3.0.0 (2026-01-13) Improve C++ support (by @rexim)
                            - Fix various C++ compilers warnings and complains throughout the code.
                            - Reimplement nob_cmd_append() without taking a pointer to temporary array (some C++ compilers don't like that)
