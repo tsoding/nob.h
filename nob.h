@@ -1842,9 +1842,23 @@ NOBDEF bool nob_delete_file(const char *path)
     nob_log(NOB_INFO, "deleting %s", path);
 #endif // NOB_NO_ECHO
 #ifdef _WIN32
-    if (!DeleteFileA(path)) {
-        nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
-        return false;
+    Nob_File_Type type = nob_get_file_type(path);
+    switch (type) {
+    case NOB_FILE_DIRECTORY:
+        if (!RemoveDirectoryA(path)) {
+            nob_log(NOB_ERROR, "Could not delete directory %s: %s", path, nob_win32_error_message(GetLastError()));
+            return false;
+        }
+        break;
+    case NOB_FILE_REGULAR:
+    case NOB_FILE_SYMLINK:
+    case NOB_FILE_OTHER:
+        if (!DeleteFileA(path)) {
+            nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
+            return false;
+        }
+        break;
+    default: NOB_UNREACHABLE("Nob_File_Type");
     }
     return true;
 #else
@@ -2572,7 +2586,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      3.1.0 (          )
+      3.1.0 (          ) Make nob_delete_file() be able to delete empty dir on Windows (by @rexim)
       3.0.0 (2026-01-13) Improve C++ support (by @rexim)
                            - Fix various C++ compilers warnings and complains throughout the code.
                            - Reimplement nob_cmd_append() without taking a pointer to temporary array (some C++ compilers don't like that)
