@@ -319,7 +319,15 @@ typedef struct {
     } nob__private;
 } Nob_Dir_Entry;
 
+// nob_dir_entry_open() - open the directory entry for iteration.
+// RETURN:
+//   true  - Sucess.
+//   false - Error. I will be logged automatically with nob_log().
 NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir);
+// nob_dir_entry_next() - acquire the next file in the directory.
+// RETURN:
+//   true - Successfully acquired the next file.
+//   false - Either failure or no more files to iterate. In case of failure dir->error is set to true.
 NOBDEF bool nob_dir_entry_next(Nob_Dir_Entry *dir);
 NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
 
