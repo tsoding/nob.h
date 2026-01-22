@@ -30,6 +30,17 @@ const char *test_names[] = {
 };
 #define test_names_count ARRAY_LEN(test_names)
 
+bool delete_walk_entry(Walk_Entry entry)
+{
+    return delete_file(entry.path);
+}
+
+// TODO: we eventually should make this part of nob.h
+bool delete_directory_recursively(const char *dir_path)
+{
+    return walk_dir(dir_path, delete_walk_entry, .post_order = true);
+}
+
 bool build_and_run_test(Cmd *cmd, const char *test_name, bool record)
 {
     size_t mark = temp_save();
@@ -43,6 +54,9 @@ bool build_and_run_test(Cmd *cmd, const char *test_name, bool record)
     if (!cmd_run(cmd)) return false;
 
     const char *test_cwd_path = temp_sprintf("%s%s%s.cwd", BUILD_FOLDER, TESTS_FOLDER, test_name);
+    if (file_exists(test_cwd_path)) {
+        if (!delete_directory_recursively(test_cwd_path)) return false;
+    }
     if (!mkdir_if_not_exists(test_cwd_path)) return false;
     if (!set_current_dir(test_cwd_path)) return false;
     cmd_append(cmd, temp_sprintf("../%s", test_name));
@@ -63,14 +77,14 @@ bool build_and_run_test(Cmd *cmd, const char *test_name, bool record)
     } else {
         cmd_append(cmd, "diff");
         cmd_append(cmd, "-u");
-        cmd_append(cmd, src_stdout_path);
         cmd_append(cmd, dst_stdout_path);
+        cmd_append(cmd, src_stdout_path);
         if (!cmd_run(cmd)) return false;
 
         cmd_append(cmd, "diff");
         cmd_append(cmd, "-u");
-        cmd_append(cmd, src_stderr_path);
         cmd_append(cmd, dst_stderr_path);
+        cmd_append(cmd, src_stderr_path);
         if (!cmd_run(cmd)) return false;
     }
 #endif // _WIN32
@@ -91,17 +105,38 @@ typedef struct {
     Command *items;
     size_t count;
     size_t capacity;
+
+    bool picked;
+    const char *picked_name;
+    const char *picked_at_file;
+    int picked_at_line;
 } Commands;
 
-bool command(const char *arg, Commands *commands, const char *name, const char *signature, const char *description)
+void commands_reset(Commands *commands)
 {
+    commands->count = 0;
+    commands->picked = false;
+}
+
+#define command(arg, commands, name, signature, description) command_loc(__FILE__, __LINE__, (arg), (commands), (name), (signature), (description))
+bool command_loc(const char *file, int line, const char *arg, Commands *commands, const char *name, const char *signature, const char *description)
+{
+    if (commands->picked) {
+        fprintf(stderr, "%s:%d: ASSERTION FAILED: the branch for command `%s` fell through.\n", commands->picked_at_file, commands->picked_at_line, commands->picked_name);
+        fprintf(stderr, "%s:%d: NOTE: the execution proceeded to here, but the command was already picked.\n", file, line);
+        abort();
+    }
     Command command = {
         .name = name,
         .signature = signature,
         .description = description,
     };
     da_append(commands, command);
-    return strcmp(arg, name) == 0;
+    commands->picked_name    = name;
+    commands->picked_at_line = line;
+    commands->picked_at_file = file;
+    commands->picked         = (strcmp(arg, name) == 0);
+    return commands->picked;
 }
 
 void print_available_commands(Commands commands)
@@ -134,6 +169,8 @@ int main(int argc, char **argv)
 
     Commands commands = {0};
 
+    commands_reset(&commands);
+
     if (command(command_name, &commands, "test", "[test_names...]", "Run the tests checking their expected output")) {
         if (!mkdir_if_not_exists(BUILD_FOLDER)) return 1;
         if (!mkdir_if_not_exists(BUILD_FOLDER TESTS_FOLDER)) return 1;
@@ -149,6 +186,7 @@ int main(int argc, char **argv)
             const char *test_name = shift(argv, argc);
             if (!build_and_run_test(&cmd, test_name, false)) return 1;
         }
+
         return 0;
     }
 
