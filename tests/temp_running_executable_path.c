@@ -3,6 +3,6 @@
 
 int main(void)
 {
-    nob_log(INFO, "%s", temp_running_executable_path());
+    nob_log(INFO, "%s", temp_file_name(temp_running_executable_path()));
     return 0;
 }

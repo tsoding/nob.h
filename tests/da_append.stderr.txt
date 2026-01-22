@@ -1,0 +1,10 @@
+[INFO] count = 1, capacity = 4
+[INFO] count = 2, capacity = 4
+[INFO] count = 3, capacity = 4
+[INFO] count = 4, capacity = 4
+[INFO] count = 5, capacity = 8
+[INFO] count = 6, capacity = 8
+[INFO] count = 7, capacity = 8
+[INFO] count = 8, capacity = 8
+[INFO] count = 9, capacity = 16
+[INFO] count = 10, capacity = 16
