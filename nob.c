@@ -63,14 +63,14 @@ bool build_and_run_test(Cmd *cmd, const char *test_name, bool record)
     } else {
         cmd_append(cmd, "diff");
         cmd_append(cmd, "-u");
-        cmd_append(cmd, src_stdout_path);
         cmd_append(cmd, dst_stdout_path);
+        cmd_append(cmd, src_stdout_path);
         if (!cmd_run(cmd)) return false;
 
         cmd_append(cmd, "diff");
         cmd_append(cmd, "-u");
-        cmd_append(cmd, src_stderr_path);
         cmd_append(cmd, dst_stderr_path);
+        cmd_append(cmd, src_stderr_path);
         if (!cmd_run(cmd)) return false;
     }
 #endif // _WIN32
