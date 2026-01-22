@@ -1,0 +1,1 @@
+[INFO] /home/rexim/Programming/tsoding/nob.h/build/tests/temp_running_executable_path

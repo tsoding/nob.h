@@ -1,0 +1,27 @@
+[INFO] temp_dir_name:
+[INFO]     / => /
+[INFO]     /home/rexim => /home
+[INFO]     /home/rexim/ => /home
+[INFO]     /home/rexim//// => /home
+[INFO]     /home/rexim/file.txt => /home/rexim
+[INFO]      => .
+[INFO]     . => .
+[INFO]     (null) => .
+[INFO] temp_file_name:
+[INFO]     / => /
+[INFO]     /home/rexim => rexim
+[INFO]     /home/rexim/ => rexim
+[INFO]     /home/rexim//// => rexim
+[INFO]     /home/rexim/file.txt => file.txt
+[INFO]      => .
+[INFO]     . => .
+[INFO]     (null) => .
+[INFO] temp_file_ext:
+[INFO]     / => (null)
+[INFO]     /home/rexim => (null)
+[INFO]     /home/rexim/ => (null)
+[INFO]     /home/rexim//// => (null)
+[INFO]     /home/rexim/file.txt => .txt
+[INFO]      => .
+[INFO]     . => .
+[INFO]     (null) => .

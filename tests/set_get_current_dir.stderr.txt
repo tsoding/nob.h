@@ -1,0 +1,3 @@
+[INFO] Current Dir: /home/rexim/Programming/tsoding/nob.h/build/tests/set_get_current_dir.cwd
+[INFO] Setting Current Dir to /
+[INFO] Current Dir: /

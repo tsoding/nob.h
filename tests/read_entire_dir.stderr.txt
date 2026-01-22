@@ -1,0 +1,4 @@
+[INFO] Tests:
+[INFO]     bar.txt
+[INFO]     foo.txt
+[INFO]     baz.txt

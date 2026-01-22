@@ -1,0 +1,2 @@
+[INFO] CMD: cc -Wall -Wextra -o print_args print_args.c
+[INFO] CMD: ./print_args foo bar 'Hello, world' '"Hello, world"' '"\` %$*@'

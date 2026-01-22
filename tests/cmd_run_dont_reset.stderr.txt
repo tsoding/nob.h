@@ -1,0 +1,10 @@
+[INFO] CMD: cc -Wall -Wextra -o empty empty.c
+[INFO] Reset:
+[INFO] CMD: cc -Wall -Wextra -o empty empty.c
+[INFO] Don't Reset:
+[INFO]   cc
+[INFO]   -Wall
+[INFO]   -Wextra
+[INFO]   -o
+[INFO]   empty
+[INFO]   empty.c
