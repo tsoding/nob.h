@@ -30,6 +30,17 @@ const char *test_names[] = {
 };
 #define test_names_count ARRAY_LEN(test_names)
 
+bool delete_walk_entry(Walk_Entry entry)
+{
+    return delete_file(entry.path);
+}
+
+// TODO: we eventually should make this part of nob.h
+bool delete_directory_recursively(const char *dir_path)
+{
+    return walk_dir(dir_path, delete_walk_entry, .post_order = true);
+}
+
 bool build_and_run_test(Cmd *cmd, const char *test_name, bool record)
 {
     size_t mark = temp_save();
@@ -43,6 +54,9 @@ bool build_and_run_test(Cmd *cmd, const char *test_name, bool record)
     if (!cmd_run(cmd)) return false;
 
     const char *test_cwd_path = temp_sprintf("%s%s%s.cwd", BUILD_FOLDER, TESTS_FOLDER, test_name);
+    if (file_exists(test_cwd_path)) {
+        if (!delete_directory_recursively(test_cwd_path)) return false;
+    }
     if (!mkdir_if_not_exists(test_cwd_path)) return false;
     if (!set_current_dir(test_cwd_path)) return false;
     cmd_append(cmd, temp_sprintf("../%s", test_name));
