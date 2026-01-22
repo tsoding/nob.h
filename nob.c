@@ -105,17 +105,38 @@ typedef struct {
     Command *items;
     size_t count;
     size_t capacity;
+
+    bool picked;
+    const char *picked_name;
+    const char *picked_at_file;
+    int picked_at_line;
 } Commands;
 
-bool command(const char *arg, Commands *commands, const char *name, const char *signature, const char *description)
+void commands_reset(Commands *commands)
 {
+    commands->count = 0;
+    commands->picked = false;
+}
+
+#define command(arg, commands, name, signature, description) command_loc(__FILE__, __LINE__, (arg), (commands), (name), (signature), (description))
+bool command_loc(const char *file, int line, const char *arg, Commands *commands, const char *name, const char *signature, const char *description)
+{
+    if (commands->picked) {
+        fprintf(stderr, "%s:%d: ASSERTION FAILED: the branch for command `%s` fell through.\n", commands->picked_at_file, commands->picked_at_line, commands->picked_name);
+        fprintf(stderr, "%s:%d: NOTE: the execution proceeded to here, but the command was already picked.\n", file, line);
+        abort();
+    }
     Command command = {
         .name = name,
         .signature = signature,
         .description = description,
     };
     da_append(commands, command);
-    return strcmp(arg, name) == 0;
+    commands->picked_name    = name;
+    commands->picked_at_line = line;
+    commands->picked_at_file = file;
+    commands->picked         = (strcmp(arg, name) == 0);
+    return commands->picked;
 }
 
 void print_available_commands(Commands commands)
@@ -148,6 +169,8 @@ int main(int argc, char **argv)
 
     Commands commands = {0};
 
+    commands_reset(&commands);
+
     if (command(command_name, &commands, "test", "[test_names...]", "Run the tests checking their expected output")) {
         if (!mkdir_if_not_exists(BUILD_FOLDER)) return 1;
         if (!mkdir_if_not_exists(BUILD_FOLDER TESTS_FOLDER)) return 1;
@@ -163,6 +186,7 @@ int main(int argc, char **argv)
             const char *test_name = shift(argv, argc);
             if (!build_and_run_test(&cmd, test_name, false)) return 1;
         }
+
         return 0;
     }
 
