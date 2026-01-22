@@ -51,6 +51,8 @@ bool build_and_run_test(Cmd *cmd, const char *test_name, bool record)
     if (!cmd_run(cmd, .stdout_path = test_stdout_path, .stderr_path = test_stderr_path)) return false;
     if (!set_current_dir("../../../")) return false;
 
+    // TODO: implement record/replay testing for windows
+#ifndef _WIN32
     const char *src_stdout_path = temp_sprintf("%s%s.stdout.txt", BUILD_FOLDER TESTS_FOLDER, test_name);
     const char *src_stderr_path = temp_sprintf("%s%s.stderr.txt", BUILD_FOLDER TESTS_FOLDER, test_name);
     const char *dst_stdout_path = temp_sprintf("%s%s.stdout.txt", TESTS_FOLDER, test_name);
@@ -71,6 +73,7 @@ bool build_and_run_test(Cmd *cmd, const char *test_name, bool record)
         cmd_append(cmd, dst_stderr_path);
         if (!cmd_run(cmd)) return false;
     }
+#endif // _WIN32
 
     nob_log(INFO, "--- %s finished ---", bin_path);
 
