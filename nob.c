@@ -94,8 +94,8 @@ bool command(const char *arg, Commands *commands, const char *name, const char *
 {
     Command command = {
         .name = name,
-        .description = description,
         .signature = signature,
+        .description = description,
     };
     da_append(commands, command);
     return strcmp(arg, name) == 0;
