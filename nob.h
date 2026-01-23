@@ -156,14 +156,14 @@
 
 #ifdef _WIN32
 #    define WIN32_LEAN_AND_MEAN
-#    define _WINUSER_
-#    define _WINGDI_
+#    define NOGDI
 #    define _IMM_
 #    define _WINCON_
 #    include <windows.h>
 #    include <direct.h>
 #    include <io.h>
 #    include <shellapi.h>
+#    include <shlwapi.h>
 #else
 #    ifdef __APPLE__
 #        include <mach-o/dyld.h>
@@ -177,6 +177,7 @@
 #    include <unistd.h>
 #    include <fcntl.h>
 #    include <dirent.h>
+#    include <fnmatch.h>
 #endif
 
 #ifdef __HAIKU__
@@ -254,10 +255,12 @@ typedef enum {
 NOBDEF bool nob_mkdir_if_not_exists(const char *path);
 NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path);
 NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
-NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
+// nob_filepath_match() reports whether name matches the shell pattern.
+// For Windows, it uses PathMatchSpecW(); for others, it uses fnmatch().
+NOBDEF bool nob_filepath_match(const char *pattern, const char *name);
 
 typedef enum {
     // If the current file is a directory go inside of it.
@@ -329,6 +332,17 @@ NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir);
 //   false - Either failure or no more files to iterate. In case of failure dir->error is set to true.
 NOBDEF bool nob_dir_entry_next(Nob_Dir_Entry *dir);
 NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
+
+typedef struct {
+    // Read dir recursively no matter how deep it is
+    bool recursively;
+    // Filter results by nob_filepath_match()
+    const char *wildcard;
+} Nob_Read_Entire_Dir_Opt;
+
+NOBDEF bool nob_read_entire_dir_opt(const char *parent, Nob_File_Paths *children, Nob_Read_Entire_Dir_Opt opt);
+
+#define nob_read_entire_dir(parent, children, ...) nob_read_entire_dir_opt((parent), (children), (Nob_Read_Entire_Dir_Opt){__VA_ARGS__})
 
 #define nob_return_defer(value) do { result = (value); goto defer; } while(0)
 
@@ -1826,15 +1840,84 @@ NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_
     return ok;
 }
 
-NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
+bool nob__read_entire_dir_visit_recursively(Nob_Walk_Entry entry)
+{
+    Nob_File_Paths *children = (Nob_File_Paths*)entry.data;
+    if (entry.type != NOB_FILE_DIRECTORY) {
+        nob_da_append(children, nob_temp_strdup(entry.path));
+    }
+    return true;
+}
+
+bool nob__read_entire_dir_visit(Nob_Walk_Entry entry)
+{
+    if (entry.level == 1) {
+        Nob_File_Paths *children = (Nob_File_Paths*)entry.data;
+        nob_da_append(children, nob_temp_file_name(entry.path));
+    }
+    if (entry.level > 1) *entry.action = NOB_WALK_SKIP;
+    return true;
+}
+
+NOBDEF bool nob_read_entire_dir_opt(const char *parent, Nob_File_Paths *children, Nob_Read_Entire_Dir_Opt opt)
 {
     bool result = true;
-    Nob_Dir_Entry dir = {0};
-    if (!nob_dir_entry_open(parent, &dir)) nob_return_defer(false);
-    while (nob_dir_entry_next(&dir)) nob_da_append(children, nob_temp_strdup(dir.name));
-    if (dir.error) nob_return_defer(false);
+    Nob_File_Paths paths = {0};
+
+    if (opt.recursively) {
+        if (!nob_walk_dir(parent, nob__read_entire_dir_visit_recursively, &paths, .post_order= true)) {
+            nob_return_defer(false);
+        }
+    } else {
+        if (!nob_walk_dir(parent, nob__read_entire_dir_visit, &paths, .post_order= true)) {
+            nob_return_defer(false);
+        }
+    }
+
+    if (opt.wildcard) {
+        Nob_File_Paths filtered = {0};
+        nob_da_foreach(const char *, path, &paths) {
+            if (nob_filepath_match(opt.wildcard, *path)) {
+                nob_da_append(&filtered, nob_temp_strdup(*path));
+            }
+        }
+        nob_da_free(paths);
+        paths = filtered;
+    }
+
 defer:
-    nob_dir_entry_close(dir);
+    nob_da_append_many(children, paths.items, paths.count);
+    nob_da_free(paths);
+    return result;
+}
+
+NOBDEF bool nob_filepath_match(const char *pattern, const char *name)
+{
+    bool result = true;
+
+    #ifdef _WIN32
+    // https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-pathmatchspecw
+    // https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/mbstowcs-s-mbstowcs-s-l
+    wchar_t pszFile[MAX_PATH], pszSpec[MAX_PATH];
+    size_t pszFileSize, pszSpecSize;
+    if (mbstowcs_s(&pszSpecSize, pszSpec, MAX_PATH, pattern, strlen(pattern) + 1)) {
+        nob_log(NOB_ERROR, "Could not converts \"%s\" to wide characters: %s", pattern, nob_win32_error_message(GetLastError()));
+        nob_return_defer(false);
+    }
+    if (mbstowcs_s(&pszFileSize, pszFile, MAX_PATH, name, strlen(name) + 1)) {
+        nob_log(NOB_ERROR, "Could not converts \"%s\" to wide characters: %s", name, nob_win32_error_message(GetLastError()));
+        nob_return_defer(false);
+    }
+    if (!PathMatchSpecW((LPCWSTR)pszFile, (LPCWSTR)pszSpec)) {
+        nob_return_defer(false);
+    }
+    #else
+    if (fnmatch(pattern, name, FNM_PATHNAME)) {
+        nob_return_defer(false);
+    }
+    #endif
+
+defer:
     return result;
 }
 
@@ -2542,7 +2625,9 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define mkdir_if_not_exists nob_mkdir_if_not_exists
         #define copy_file nob_copy_file
         #define copy_directory_recursively nob_copy_directory_recursively
+        #define Read_Entire_Dir_Opt Nob_Read_Entire_Dir_Opt
         #define read_entire_dir nob_read_entire_dir
+        #define filepath_match nob_filepath_match
         #define WALK_CONT NOB_WALK_CONT
         #define WALK_SKIP NOB_WALK_SKIP
         #define WALK_STOP NOB_WALK_STOP
