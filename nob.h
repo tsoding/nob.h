@@ -1457,7 +1457,7 @@ NOBDEF Nob_Fd nob_fd_open_for_read(const char *path)
     Nob_Fd result = CreateFileW(
                     wide_path,
                     GENERIC_READ,
-                    0,
+                    FILE_SHARE_READ | FILE_SHARE_DELETE,
                     &saAttr,
                     OPEN_EXISTING,
                     FILE_ATTRIBUTE_READONLY,
@@ -2223,7 +2223,7 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
 #ifdef _WIN32
     size_t mark = nob_temp_save();
     wchar_t *wide_output_path = nob__unicode_utf8_to_unicode_utf16_temp(output_path);
-    HANDLE output_path_fd = CreateFileW(wide_output_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+    HANDLE output_path_fd = CreateFileW(wide_output_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
     nob_temp_rewind(mark);
     if (output_path_fd == INVALID_HANDLE_VALUE) {
         // NOTE: if output does not exist it 100% must be rebuilt
@@ -2243,7 +2243,7 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
         const char *input_path = input_paths[i];
         mark = nob_temp_save();
         wchar_t *wide_input_path = nob__unicode_utf8_to_unicode_utf16_temp(input_path);
-        HANDLE input_path_fd = CreateFileW(wide_input_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+        HANDLE input_path_fd = CreateFileW(wide_input_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
         nob_temp_rewind(mark);
         if (input_path_fd == INVALID_HANDLE_VALUE) {
             // NOTE: non-existing input is an error cause it is needed for building in the first place
