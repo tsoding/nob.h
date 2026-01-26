@@ -1,6 +1,5 @@
-#define NOB_IMPLEMENTATION
 #define NOB_DA_INIT_CAP 4
-#include "nob.h"
+#include "shared.h"
 
 typedef struct {
     int *items;
@@ -13,7 +12,7 @@ int main(void)
     Numbers xs = {0};
     for (int x = 0; x < 10; ++x) {
         da_append(&xs, x);
-        nob_log(INFO, "count = %zu, capacity = %zu", xs.count, xs.capacity);
+        printf("count = %zu, capacity = %zu\n", xs.count, xs.capacity);
     }
     return 0;
 }

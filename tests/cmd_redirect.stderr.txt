@@ -1,3 +1,0 @@
-[INFO] CMD: cc -Wall -Wextra -o ./echo ./echo.c
-[INFO] CMD: ./echo 'Hello, World'
-[INFO] OK

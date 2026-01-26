@@ -1,5 +1,4 @@
-#define NOB_IMPLEMENTATION
-#include "nob.h"
+#include "shared.h"
 
 int main()
 {
@@ -16,7 +15,7 @@ int main()
         // `x` here is a pointer to the current element. You can get its index by taking a difference
         // between `x` and the start of the array which is `x.items`.
         size_t index = x - xs.items;
-        nob_log(INFO, "%zu: %d", index, *x);
+        printf("%zu: %d\n", index, *x);
     }
     return 0;
 }

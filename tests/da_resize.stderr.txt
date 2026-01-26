@@ -1,3 +1,0 @@
-[INFO] count = 3, capacity = 4
-[INFO] count = 1, capacity = 4
-[INFO] count = 10, capacity = 16

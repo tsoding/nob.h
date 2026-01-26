@@ -1,5 +1,4 @@
-#define NOB_IMPLEMENTATION
-#include "nob.h"
+#include "shared.h"
 
 Cmd cmd = {0};
 Chain chain = {0};
@@ -74,22 +73,11 @@ const char *hex_src =
     "    return 0;\n"
     "}\n";
 
-bool build_tool_async(const char *bin_path, const char *src_path, const char *src)
-{
-    if (!write_entire_file(src_path, src, strlen(src))) return 1;
-
-    nob_cc(&cmd);
-    nob_cc_flags(&cmd);
-    nob_cc_output(&cmd, bin_path);
-    nob_cc_inputs(&cmd, src_path);
-    return cmd_run(&cmd, .async = &procs);
-}
-
 int main(void)
 {
-    if (!build_tool_async("./hello", "hello.c", hello_src)) return 1;
-    if (!build_tool_async("./rot13", "rot13.c", rot13_src)) return 1;
-    if (!build_tool_async("./hex", "hex.c", hex_src)) return 1;
+    if (!build_tool(&cmd, &procs, "./hello", "hello.c", hello_src)) return 1;
+    if (!build_tool(&cmd, &procs, "./rot13", "rot13.c", rot13_src)) return 1;
+    if (!build_tool(&cmd, &procs, "./hex", "hex.c", hex_src)) return 1;
     if (!procs_flush(&procs)) return 1;
 
     if (!chain_begin(&chain)) return 1;

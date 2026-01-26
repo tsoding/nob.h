@@ -1,2 +1,0 @@
-[INFO] Setting Current Dir to /
-[INFO] Current Dir: /

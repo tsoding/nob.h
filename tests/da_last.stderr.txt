@@ -1,6 +1,0 @@
-[INFO] da_last:
-[INFO] 17
-[INFO] 16
-[INFO] 15
-[INFO] 14
-[INFO] 13

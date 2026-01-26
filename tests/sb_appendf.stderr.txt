@@ -1,2 +1,0 @@
-[INFO] count = 0, capacity = 0, items = ""
-[INFO] count = 10, capacity = 16, items = "Hello, 69."

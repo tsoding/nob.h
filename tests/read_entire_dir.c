@@ -1,6 +1,4 @@
 #include "shared.h"
-#define NOB_IMPLEMENTATION
-#include "nob.h"
 
 int compar_paths(const void *a, const void *b)
 {
@@ -18,10 +16,10 @@ int main(void)
     Nob_File_Paths children = {0};
     if (!nob_read_entire_dir(".", &children)) return 1;
     qsort(children.items, children.count, sizeof(*children.items), compar_paths);
-    nob_log(INFO, "Tests:");
+    printf("Tests:\n");
     for (size_t i = 0; i < children.count; ++i) {
         if (*children.items[i] == '.') continue;
-        nob_log(INFO, "    %s", children.items[i]);
+        printf("    %s\n", children.items[i]);
     }
     return 0;
 }

@@ -1,6 +1,0 @@
-[INFO] CMD: cc -Wall -Wextra -o ./hello hello.c
-[INFO] CMD: cc -Wall -Wextra -o ./rot13 rot13.c
-[INFO] CMD: cc -Wall -Wextra -o ./hex hex.c
-[INFO] CMD: ./hello
-[INFO] CMD: ./rot13
-[INFO] CMD: ./hex
