@@ -886,6 +886,24 @@ wchar_t* nob__unicode_utf8_to_unicode_utf16_temp(const char* narrow_str)
     return wide_str;
 }
 
+int nob__unicode_utf16_to_unicode_utf8(const wchar_t* wide_str, int wide_len, char* narrow_str, int narrow_capacity)
+{
+    int narrow_len;
+    DWORD err;
+
+    NOB_ASSERT(wide_str);
+    NOB_ASSERT(wide_len >= 1);
+    NOB_ASSERT(narrow_str);
+    NOB_ASSERT(narrow_capacity >= 1);
+
+    narrow_len = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_str, wide_len, narrow_str, narrow_capacity, NULL, NULL);
+    if (narrow_len == 0) {
+        err = GetLastError();
+        (void)err;
+    }
+    return narrow_len;
+}
+
 
 #endif // _WIN32
 
