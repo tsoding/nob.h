@@ -1,4 +1,4 @@
-/* nob - v3.1.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.2.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -2651,6 +2651,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.2.0 (          )
       3.1.0 (2026-01-22) Make nob_delete_file() be able to delete empty dir on Windows (by @rexim)
                          Introduce Directory Entry API - similar to POSIX dirent but with names that don't collide
                            - Nob_Dir_Entry
