@@ -2653,9 +2653,21 @@ NOBDEF char *nob_temp_running_executable_path(void)
     if (length < 0) return nob_temp_strdup("");
     return nob_temp_strndup(buf, length);
 #elif defined(_WIN32)
-    char buf[MAX_PATH];
-    int length = GetModuleFileNameA(NULL, buf, MAX_PATH);
-    return nob_temp_strndup(buf, length);
+    wchar_t wide_buf[4096]; /* in reality max path len is 64 kB, meaning 32 thousand UTF-16 code units */
+    char narrow_buf[nob__worst_case_utf16_to_utf8(NOB_ARRAY_LEN(wide_buf))];
+    DWORD wide_len;
+    DWORD err;
+    wide_len = GetModuleFileNameW(NULL, wide_buf, NOB_ARRAY_LEN(wide_buf));
+    if (wide_len == 0) {
+        err = GetLastError();
+        (void)err;
+        return NULL;
+    }
+    if (!(wide_len < NOB_ARRAY_LEN(wide_buf))) {
+        NOB_TODO("Increase wide_buf size.");
+    }
+    int narrow_len = nob__unicode_utf16_to_unicode_utf8(wide_buf, wide_len + 1, narrow_buf, NOB_ARRAY_LEN(narrow_buf)) - 1;
+    return nob_temp_strndup(narrow_buf, narrow_len);
 #elif defined(__APPLE__)
     char buf[4096];
     uint32_t size = NOB_ARRAY_LEN(buf);
