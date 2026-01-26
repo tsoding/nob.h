@@ -102,8 +102,14 @@ static void test_unicode_utf8_file_operations(void)
 		test(memcmp(sb.items, "test", 4) == 0);
 		NOB_FREE(sb.items);
 
+		b = nob_file_exists(k_strings[i]);
+		test(b);
+
 		b = nob_delete_file(k_strings[i]);
 		test(b);
+
+		b = nob_file_exists(k_strings[i]);
+		test(!b);
 	}
 }
 
