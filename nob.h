@@ -2009,7 +2009,10 @@ defer:
 NOBDEF Nob_File_Type nob_get_file_type(const char *path)
 {
 #ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path);
+    size_t mark = nob_temp_save();
+    wchar_t *wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+    DWORD attr = GetFileAttributesW(wide_path);
+    nob_temp_rewind(mark);
     if (attr == INVALID_FILE_ATTRIBUTES) {
         nob_log(NOB_ERROR, "Could not get file attributes of %s: %s", path, nob_win32_error_message(GetLastError()));
         return -1;

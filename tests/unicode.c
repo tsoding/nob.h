@@ -66,6 +66,7 @@ static void test_unicode_utf8_file_operations(void)
 	int n;
 	int i;
 	Nob_Fd fd;
+	Nob_File_Type ft;
 	bool b;
 
 	nob_log(NOB_INFO, "%s", "Testing file operations...");
@@ -79,6 +80,9 @@ static void test_unicode_utf8_file_operations(void)
 		fd = nob_fd_open_for_read(k_strings[i]);
 		test(fd != NOB_INVALID_FD);
 		nob_fd_close(fd);
+
+		ft = nob_get_file_type(k_strings[i]);
+		test(ft == NOB_FILE_REGULAR);
 
 		b = nob_rename(k_strings[i], k_strings[(i + 1) % NOB_ARRAY_LEN(k_strings)]);
 		test(b);
