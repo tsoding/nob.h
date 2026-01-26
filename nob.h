@@ -937,31 +937,32 @@ int nob__unicode_utf16_to_unicode_utf8(const wchar_t* wide_str, int wide_len, ch
 #endif // NOB_WIN32_ERR_MSG_SIZE
 
 NOBDEF char *nob_win32_error_message(DWORD err) {
-    static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
-    DWORD errMsgSize = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, LANG_USER_DEFAULT, win32ErrMsg,
+    static wchar_t wide_win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
+    static char narrow_win32ErrMsg[nob__worst_case_utf16_to_utf8(NOB_ARRAY_LEN(wide_win32ErrMsg))] = {0};
+    DWORD errMsgSize = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, LANG_USER_DEFAULT, wide_win32ErrMsg,
                                       NOB_WIN32_ERR_MSG_SIZE, NULL);
 
     if (errMsgSize == 0) {
         if (GetLastError() != ERROR_MR_MID_NOT_FOUND) {
-            if (sprintf(win32ErrMsg, "Could not get error message for 0x%lX", err) > 0) {
-                return (char *)&win32ErrMsg;
+            if (sprintf(narrow_win32ErrMsg, "Could not get error message for 0x%lX", err) > 0) {
+                return (char *)&narrow_win32ErrMsg;
             } else {
                 return NULL;
             }
         } else {
-            if (sprintf(win32ErrMsg, "Invalid Windows Error code (0x%lX)", err) > 0) {
-                return (char *)&win32ErrMsg;
+            if (sprintf(narrow_win32ErrMsg, "Invalid Windows Error code (0x%lX)", err) > 0) {
+                return (char *)&narrow_win32ErrMsg;
             } else {
                 return NULL;
             }
         }
     }
-
-    while (errMsgSize > 1 && isspace(win32ErrMsg[errMsgSize - 1])) {
-        win32ErrMsg[--errMsgSize] = '\0';
+    errMsgSize = nob__unicode_utf16_to_unicode_utf8(wide_win32ErrMsg, errMsgSize + 1, narrow_win32ErrMsg, NOB_ARRAY_LEN(narrow_win32ErrMsg)) - 1;
+    while (errMsgSize > 1 && isspace(narrow_win32ErrMsg[errMsgSize - 1])) {
+        narrow_win32ErrMsg[--errMsgSize] = '\0';
     }
 
-    return win32ErrMsg;
+    return narrow_win32ErrMsg;
 }
 
 #endif // _WIN32
