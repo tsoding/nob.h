@@ -1017,11 +1017,21 @@ NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path)
     nob_log(NOB_INFO, "copying %s -> %s", src_path, dst_path);
 #endif // NOB_NO_ECHO
 #ifdef _WIN32
-    if (!CopyFile(src_path, dst_path, FALSE)) {
+    bool ret;
+    size_t mark;
+    wchar_t* wide_src_path;
+    wchar_t* wide_dst_path;
+
+    ret = true;
+    mark = nob_temp_save();
+    wide_src_path = nob__unicode_utf8_to_unicode_utf16_temp(src_path);
+    wide_dst_path = nob__unicode_utf8_to_unicode_utf16_temp(dst_path);
+    if (!CopyFileW(wide_src_path, wide_dst_path, FALSE)) {
         nob_log(NOB_ERROR, "Could not copy file: %s", nob_win32_error_message(GetLastError()));
-        return false;
+        ret = false;
     }
-    return true;
+    nob_temp_rewind(mark);
+    return ret;
 #else
     int src_fd = -1;
     int dst_fd = -1;
