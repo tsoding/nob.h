@@ -2221,9 +2221,10 @@ NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv)
 NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count)
 {
 #ifdef _WIN32
-    BOOL bSuccess;
-
-    HANDLE output_path_fd = CreateFile(output_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+    size_t mark = nob_temp_save();
+    wchar_t *wide_output_path = nob__unicode_utf8_to_unicode_utf16_temp(output_path);
+    HANDLE output_path_fd = CreateFileW(wide_output_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+    nob_temp_rewind(mark);
     if (output_path_fd == INVALID_HANDLE_VALUE) {
         // NOTE: if output does not exist it 100% must be rebuilt
         if (GetLastError() == ERROR_FILE_NOT_FOUND) return 1;
@@ -2231,7 +2232,7 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
         return -1;
     }
     FILETIME output_path_time;
-    bSuccess = GetFileTime(output_path_fd, NULL, NULL, &output_path_time);
+    BOOL bSuccess = GetFileTime(output_path_fd, NULL, NULL, &output_path_time);
     CloseHandle(output_path_fd);
     if (!bSuccess) {
         nob_log(NOB_ERROR, "Could not get time of %s: %s", output_path, nob_win32_error_message(GetLastError()));
@@ -2240,7 +2241,10 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
 
     for (size_t i = 0; i < input_paths_count; ++i) {
         const char *input_path = input_paths[i];
-        HANDLE input_path_fd = CreateFile(input_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+        mark = nob_temp_save();
+        wchar_t *wide_input_path = nob__unicode_utf8_to_unicode_utf16_temp(input_path);
+        HANDLE input_path_fd = CreateFileW(wide_input_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+        nob_temp_rewind(mark);
         if (input_path_fd == INVALID_HANDLE_VALUE) {
             // NOTE: non-existing input is an error cause it is needed for building in the first place
             nob_log(NOB_ERROR, "Could not open file %s: %s", input_path, nob_win32_error_message(GetLastError()));
