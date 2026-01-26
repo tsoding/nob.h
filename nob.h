@@ -858,6 +858,40 @@ void nob__cmd_append(Nob_Cmd *cmd, size_t n, ...)
 
 #ifdef _WIN32
 
+
+wchar_t* nob__unicode_utf8_to_unicode_utf16_temp(const char* narrow_str)
+{
+    int wide_len_a;
+    DWORD err;
+    int wide_len_b;
+    wchar_t* wide_str;
+
+    NOB_ASSERT(narrow_str);
+    wide_len_a = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_str, -1, NULL, 0);
+    if (wide_len_a == 0) {
+        err = GetLastError();
+        (void)err;
+        return NULL;
+    }
+    NOB_ASSERT(wide_len_a >= 1);
+    wide_str = (wchar_t*)nob_temp_alloc(wide_len_a * sizeof(wchar_t));
+    NOB_ASSERT(wide_str);
+    wide_len_b = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_str, -1, wide_str, wide_len_a);
+    if (wide_len_b == 0) {
+        err = GetLastError();
+        (void)err;
+        return NULL;
+    }
+    NOB_ASSERT(wide_len_b == wide_len_a);
+    return wide_str;
+}
+
+
+#endif // _WIN32
+
+
+#ifdef _WIN32
+
 // Base on https://stackoverflow.com/a/75644008
 // > .NET Core uses 4096 * sizeof(WCHAR) buffer on stack for FormatMessageW call. And...thats it.
 // >
