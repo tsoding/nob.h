@@ -313,13 +313,20 @@ Given the rules above, we need to allcoate 3 char for each 1 wchar_t in order to
 #define nob__worst_case_utf16_to_utf8(count) (3 * (count))
 #endif // _WIN32
 
+#ifdef _WIN32
+typedef struct {
+    WIN32_FIND_DATAW win_find_data;
+    char utf8_file_name[nob__worst_case_utf16_to_utf8(MAX_PATH)];
+} nob__win32_find_dataw;
+#endif // _WIN32
+
 typedef struct {
     char *name;
     bool error;
 
     struct {
 #ifdef _WIN32
-        WIN32_FIND_DATA win32_data;
+        nob__win32_find_dataw find_data;
         HANDLE win32_hFind;
         bool win32_init;
 #else
@@ -1742,8 +1749,9 @@ NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir)
     memset(dir, 0, sizeof(*dir));
 #ifdef _WIN32
     size_t temp_mark = nob_temp_save();
-    char *buffer = nob_temp_sprintf("%s\\*", dir_path);
-    dir->nob__private.win32_hFind = FindFirstFile(buffer, &dir->nob__private.win32_data);
+    char *narrow_path = nob_temp_sprintf("%s\\*", dir_path);
+    wchar_t *wide_path = nob__unicode_utf8_to_unicode_utf16_temp(narrow_path);
+    dir->nob__private.win32_hFind = FindFirstFileW(wide_path, &dir->nob__private.find_data.win_find_data);
     nob_temp_rewind(temp_mark);
 
     if (dir->nob__private.win32_hFind == INVALID_HANDLE_VALUE) {
@@ -1751,6 +1759,12 @@ NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir)
         dir->error = true;
         return false;
     }
+
+    const wchar_t *wide_name = dir->nob__private.find_data.win_find_data.cFileName;
+    char *narrow_name = dir->nob__private.find_data.utf8_file_name;
+    int narrow_cap = NOB_ARRAY_LEN(dir->nob__private.find_data.utf8_file_name);
+    int narrow_len = nob__unicode_utf16_to_unicode_utf8(wide_name, (int)wcslen(wide_name) + 1, narrow_name, narrow_cap) - 1;
+    (void)narrow_len;
 #else
     dir->nob__private.posix_dir = opendir(dir_path);
     if (dir == NULL) {
@@ -1767,17 +1781,22 @@ NOBDEF bool nob_dir_entry_next(Nob_Dir_Entry *dir)
 #ifdef _WIN32
     if (!dir->nob__private.win32_init) {
         dir->nob__private.win32_init = true;
-        dir->name = dir->nob__private.win32_data.cFileName;
+        dir->name = dir->nob__private.find_data.utf8_file_name;
         return true;
     }
 
-    if (!FindNextFile(dir->nob__private.win32_hFind, &dir->nob__private.win32_data)) {
+    if (!FindNextFileW(dir->nob__private.win32_hFind, &dir->nob__private.find_data.win_find_data)) {
         if (GetLastError() == ERROR_NO_MORE_FILES) return false;
         nob_log(NOB_ERROR, "Could not read next directory entry: %s", nob_win32_error_message(GetLastError()));
         dir->error = true;
         return false;
     }
-    dir->name = dir->nob__private.win32_data.cFileName;
+    const wchar_t *wide_name = dir->nob__private.find_data.win_find_data.cFileName;
+    char *narrow_name = dir->nob__private.find_data.utf8_file_name;
+    int narrow_cap = NOB_ARRAY_LEN(dir->nob__private.find_data.utf8_file_name);
+    int narrow_len = nob__unicode_utf16_to_unicode_utf8(wide_name, (int)wcslen(wide_name) + 1, narrow_name, narrow_cap);
+    (void)narrow_len;
+    dir->name = narrow_name;
 #else
     errno = 0;
     dir->nob__private.posix_ent = readdir(dir->nob__private.posix_dir);
