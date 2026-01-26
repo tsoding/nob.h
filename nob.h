@@ -2037,21 +2037,34 @@ NOBDEF bool nob_delete_file(const char *path)
     nob_log(NOB_INFO, "deleting %s", path);
 #endif // NOB_NO_ECHO
 #ifdef _WIN32
+    bool ret;
+    size_t mark;
+    wchar_t *wide_path;
     Nob_File_Type type = nob_get_file_type(path);
     switch (type) {
     case NOB_FILE_DIRECTORY:
-        if (!RemoveDirectoryA(path)) {
+        ret = true;
+        mark = nob_temp_save();
+        wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+        if (!RemoveDirectoryW(wide_path)) {
             nob_log(NOB_ERROR, "Could not delete directory %s: %s", path, nob_win32_error_message(GetLastError()));
-            return false;
+            ret = false;
         }
+        nob_temp_rewind(mark);
+        return ret;
         break;
     case NOB_FILE_REGULAR:
     case NOB_FILE_SYMLINK:
     case NOB_FILE_OTHER:
-        if (!DeleteFileA(path)) {
+        ret = true;
+        mark = nob_temp_save();
+        wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+        if (!DeleteFileW(wide_path)) {
             nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
-            return false;
+            ret = false;
         }
+        nob_temp_rewind(mark);
+        return ret;
         break;
     default: NOB_UNREACHABLE("Nob_File_Type");
     }
