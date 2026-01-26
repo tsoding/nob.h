@@ -302,6 +302,17 @@ NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_
 
 #define nob_walk_dir(root, func, ...) nob_walk_dir_opt((root), (func), (Nob_Walk_Dir_Opt){__VA_ARGS__})
 
+#ifdef _WIN32
+/*
+UTF-16 is variable length encoding. Every code point could be encoded by 1 or 2 UTF-16 code units. Every UTF-16 code units is two bytes.
+UTF-8 is variable length encoding. Every code point could be encoded by 1, 2, 3 or 4 UTF-8 code units. Every UTF-8 code units is one byte.
+In the worst case, single UTF-16 code unit code point could be encoded by 3 UTF-8 code units. Code points from U+0800 to U+FFFF. Meaning from 1 wchar_t to 3 char.
+In the worst case, doble UTF-16 code unit code point could be encoded by 4 UTF-8 code units. Code points from U+010000 to U+10FFFF. Meaning from 2 wchar_t to 4 char.
+Given the rules above, we need to allcoate 3 char for each 1 wchar_t in order to be able to represent any sequecne of any code points.
+*/
+#define nob__worst_case_utf16_to_utf8(count) (3 * (count))
+#endif // _WIN32
+
 typedef struct {
     char *name;
     bool error;
