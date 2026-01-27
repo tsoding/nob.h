@@ -164,6 +164,8 @@
 #    include <direct.h>
 #    include <io.h>
 #    include <shellapi.h>
+#    include <ConsoleApi.h>
+#    include <ConsoleApi2.h>
 #else
 #    ifdef __APPLE__
 #        include <mach-o/dyld.h>
@@ -202,8 +204,8 @@
 #endif
 
 #define NOB_UNUSED(value) (void)(value)
-#define NOB_TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
-#define NOB_UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define NOB_TODO(message) do { nob__fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define NOB_UNREACHABLE(message) do { nob__fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
 
 #define NOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 #define NOB_ARRAY_GET(array, index) \
@@ -302,13 +304,31 @@ NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_
 
 #define nob_walk_dir(root, func, ...) nob_walk_dir_opt((root), (func), (Nob_Walk_Dir_Opt){__VA_ARGS__})
 
+#ifdef _WIN32
+/*
+UTF-16 is variable length encoding. Every code point could be encoded by 1 or 2 UTF-16 code units. Every UTF-16 code units is two bytes.
+UTF-8 is variable length encoding. Every code point could be encoded by 1, 2, 3 or 4 UTF-8 code units. Every UTF-8 code units is one byte.
+In the worst case, single UTF-16 code unit code point could be encoded by 3 UTF-8 code units. Code points from U+0800 to U+FFFF. Meaning from 1 wchar_t to 3 char.
+In the worst case, doble UTF-16 code unit code point could be encoded by 4 UTF-8 code units. Code points from U+010000 to U+10FFFF. Meaning from 2 wchar_t to 4 char.
+Given the rules above, we need to allcoate 3 char for each 1 wchar_t in order to be able to represent any sequecne of any code points.
+*/
+#define nob__worst_case_utf16_to_utf8(count) (3 * (count))
+#endif // _WIN32
+
+#ifdef _WIN32
+typedef struct {
+    WIN32_FIND_DATAW win_find_data;
+    char utf8_file_name[nob__worst_case_utf16_to_utf8(MAX_PATH)];
+} nob__win32_find_dataw;
+#endif // _WIN32
+
 typedef struct {
     char *name;
     bool error;
 
     struct {
 #ifdef _WIN32
-        WIN32_FIND_DATA win32_data;
+        nob__win32_find_dataw find_data;
         HANDLE win32_hFind;
         bool win32_init;
 #else
@@ -856,6 +876,196 @@ void nob__cmd_append(Nob_Cmd *cmd, size_t n, ...)
     va_end(args);
 }
 
+
+#ifdef _WIN32
+
+
+WORD nob__unicode_debug_beg(HANDLE win_out)
+{
+#ifdef NOB_DEBUG_UNIOCDE
+    BOOL b;
+    CONSOLE_SCREEN_BUFFER_INFO info;
+    WORD attributes;
+
+    b = GetConsoleScreenBufferInfo(win_out, &info);
+    NOB_ASSERT(b != 0);
+    attributes = info.wAttributes;
+    b = SetConsoleTextAttribute(win_out, FOREGROUND_INTENSITY | FOREGROUND_GREEN);
+    NOB_ASSERT(b != 0);
+    return attributes;
+#else
+    (void)win_out;
+    return 0;
+#endif
+}
+
+void nob__unicode_debug_end(HANDLE win_out, WORD attributes)
+{
+#ifdef NOB_DEBUG_UNIOCDE
+    BOOL b;
+
+    b = SetConsoleTextAttribute(win_out, attributes);
+    NOB_ASSERT(b != 0);
+#else
+    (void)win_out;
+    (void)attributes;
+#endif
+}
+
+int nob__vfprintf(FILE *stream, const char *format, va_list args)
+{
+    char *narrow_ptr;
+    char narrow_buf[1024];
+    size_t narrow_mark;
+    int narrow_len_a;
+    int narrow_len_b;
+    HANDLE win_out;
+    DWORD file_type;
+    wchar_t *wide_ptr;
+    wchar_t wide_buf[1024];
+    size_t wide_mark;
+    int wide_len_a;
+    DWORD err;
+    int wide_len_b;
+    WORD revert;
+    BOOL b;
+    DWORD written;
+
+    narrow_ptr = narrow_buf;
+    narrow_mark = 0;
+    narrow_len_a = vsnprintf(narrow_buf, NOB_ARRAY_LEN(narrow_buf), format, args);
+    NOB_ASSERT(narrow_len_a >= 0); /* vsnprintf failed, what now? */
+    if (narrow_len_a >= NOB_ARRAY_LEN(narrow_buf)) {
+        narrow_mark = nob_temp_save();
+        narrow_ptr = (char*)nob_temp_alloc(narrow_len_a + 1);
+        NOB_ASSERT(narrow_ptr); /* nob_temp_alloc failed, what now? */
+        narrow_len_b = vsnprintf(narrow_ptr, narrow_len_a + 1, format, args);
+        NOB_ASSERT(narrow_len_b == narrow_len_a); /* Second call to vsnprintf produced different result thatn first call, what now? */
+    }
+    NOB_ASSERT(stream == stdout || stream == stderr); /* It is user error to print to stdin or to non-standard stream. */
+    win_out = GetStdHandle(stream == stdout ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+    NOB_ASSERT(win_out != INVALID_HANDLE_VALUE); /* GetStdHandle failed, what now? */
+    if (win_out == NULL) {
+        return 0;
+    }
+    file_type = GetFileType(win_out);
+    if (file_type == FILE_TYPE_CHAR) {
+        wide_ptr = wide_buf;
+        wide_mark = 0;
+        wide_len_a = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_ptr, narrow_len_a, wide_buf, NOB_ARRAY_LEN(wide_buf));
+        err = GetLastError();
+        NOB_ASSERT((wide_len_a != 0) || (wide_len_a == 0 && err == ERROR_INSUFFICIENT_BUFFER)); /* MultiByteToWideChar failed, what now? */
+        if (wide_len_a == 0 && err == ERROR_INSUFFICIENT_BUFFER) {
+            wide_len_a = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_ptr, narrow_len_a, NULL, 0);
+            NOB_ASSERT(wide_len_a > NOB_ARRAY_LEN(wide_buf)); /* MultiByteToWideChar failed, what now? */
+            wide_mark = nob_temp_save();
+            wide_ptr = (wchar_t*)nob_temp_alloc(wide_len_a * sizeof(wchar_t));
+            NOB_ASSERT(wide_ptr); /* nob_temp_alloc failed, what now? */
+            wide_len_b = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_ptr, narrow_len_a, wide_ptr, wide_len_a);
+            NOB_ASSERT(wide_len_b == wide_len_a); /* MultiByteToWideChar failed, what now? */
+        }
+        revert = nob__unicode_debug_beg(win_out);
+        b = WriteConsoleW(win_out, wide_ptr, (DWORD)wide_len_a, &written, NULL);
+        nob__unicode_debug_end(win_out, revert);
+        NOB_ASSERT(b != 0); /* WriteConsoleW failed, what now? */
+        NOB_ASSERT(written == (DWORD)wide_len_a); /* WriteConsoleW failed, what now? */
+        if (wide_ptr != wide_buf) {
+            nob_temp_rewind(wide_mark);
+        }
+    } else {
+        b = WriteFile(win_out, narrow_ptr, (DWORD)narrow_len_a, &written, NULL);
+        NOB_ASSERT(b != 0); /* WriteFile failed, what now? */
+        NOB_ASSERT(written == (DWORD)narrow_len_a); /* WriteFile failed, what now? */
+    }
+    if (narrow_ptr != narrow_buf) {
+        nob_temp_rewind(narrow_mark);
+    }
+    return narrow_len_a;
+}
+
+int nob__fprintf(FILE *stream, const char *fmt, ...)
+{
+    va_list args;
+    int len;
+
+    va_start(args, fmt);
+    len = nob__vfprintf(stream, fmt, args);
+    va_end(args);
+    return len;
+}
+
+int nob__printf(const char *fmt, ...)
+{
+    va_list args;
+    int len;
+
+    va_start(args, fmt);
+    len = nob__vfprintf(stdout, fmt, args);
+    va_end(args);
+    return len;
+}
+
+#else
+
+#define nob__vfprintf vfprintf
+#define nob__fprintf fprintf
+#define nob__printf printf
+
+#endif // _WIN32
+
+
+#ifdef _WIN32
+
+
+wchar_t* nob__unicode_utf8_to_unicode_utf16_temp(const char* narrow_str)
+{
+    int wide_len_a;
+    DWORD err;
+    int wide_len_b;
+    wchar_t* wide_str;
+
+    NOB_ASSERT(narrow_str);
+    wide_len_a = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_str, -1, NULL, 0);
+    if (wide_len_a == 0) {
+        err = GetLastError();
+        (void)err;
+        return NULL;
+    }
+    NOB_ASSERT(wide_len_a >= 1);
+    wide_str = (wchar_t*)nob_temp_alloc(wide_len_a * sizeof(wchar_t));
+    NOB_ASSERT(wide_str);
+    wide_len_b = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, narrow_str, -1, wide_str, wide_len_a);
+    if (wide_len_b == 0) {
+        err = GetLastError();
+        (void)err;
+        return NULL;
+    }
+    NOB_ASSERT(wide_len_b == wide_len_a);
+    return wide_str;
+}
+
+int nob__unicode_utf16_to_unicode_utf8(const wchar_t* wide_str, int wide_len, char* narrow_str, int narrow_capacity)
+{
+    int narrow_len;
+    DWORD err;
+
+    NOB_ASSERT(wide_str);
+    NOB_ASSERT(wide_len >= 1);
+    NOB_ASSERT(narrow_str);
+    NOB_ASSERT(narrow_capacity >= 1);
+
+    narrow_len = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_str, wide_len, narrow_str, narrow_capacity, NULL, NULL);
+    if (narrow_len == 0) {
+        err = GetLastError();
+        (void)err;
+    }
+    return narrow_len;
+}
+
+
+#endif // _WIN32
+
+
 #ifdef _WIN32
 
 // Base on https://stackoverflow.com/a/75644008
@@ -867,31 +1077,32 @@ void nob__cmd_append(Nob_Cmd *cmd, size_t n, ...)
 #endif // NOB_WIN32_ERR_MSG_SIZE
 
 NOBDEF char *nob_win32_error_message(DWORD err) {
-    static char win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
-    DWORD errMsgSize = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, LANG_USER_DEFAULT, win32ErrMsg,
+    static wchar_t wide_win32ErrMsg[NOB_WIN32_ERR_MSG_SIZE] = {0};
+    static char narrow_win32ErrMsg[nob__worst_case_utf16_to_utf8(NOB_ARRAY_LEN(wide_win32ErrMsg))] = {0};
+    DWORD errMsgSize = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err, LANG_USER_DEFAULT, wide_win32ErrMsg,
                                       NOB_WIN32_ERR_MSG_SIZE, NULL);
 
     if (errMsgSize == 0) {
         if (GetLastError() != ERROR_MR_MID_NOT_FOUND) {
-            if (sprintf(win32ErrMsg, "Could not get error message for 0x%lX", err) > 0) {
-                return (char *)&win32ErrMsg;
+            if (sprintf(narrow_win32ErrMsg, "Could not get error message for 0x%lX", err) > 0) {
+                return (char *)&narrow_win32ErrMsg;
             } else {
                 return NULL;
             }
         } else {
-            if (sprintf(win32ErrMsg, "Invalid Windows Error code (0x%lX)", err) > 0) {
-                return (char *)&win32ErrMsg;
+            if (sprintf(narrow_win32ErrMsg, "Invalid Windows Error code (0x%lX)", err) > 0) {
+                return (char *)&narrow_win32ErrMsg;
             } else {
                 return NULL;
             }
         }
     }
-
-    while (errMsgSize > 1 && isspace(win32ErrMsg[errMsgSize - 1])) {
-        win32ErrMsg[--errMsgSize] = '\0';
+    errMsgSize = nob__unicode_utf16_to_unicode_utf8(wide_win32ErrMsg, errMsgSize + 1, narrow_win32ErrMsg, NOB_ARRAY_LEN(narrow_win32ErrMsg)) - 1;
+    while (errMsgSize > 1 && isspace(narrow_win32ErrMsg[errMsgSize - 1])) {
+        narrow_win32ErrMsg[--errMsgSize] = '\0';
     }
 
-    return win32ErrMsg;
+    return narrow_win32ErrMsg;
 }
 
 #endif // _WIN32
@@ -956,10 +1167,42 @@ static char nob_temp[NOB_TEMP_CAPACITY] = {0};
 NOBDEF bool nob_mkdir_if_not_exists(const char *path)
 {
 #ifdef _WIN32
-    int result = _mkdir(path);
+    size_t mark;
+    wchar_t *wide_path;
+    BOOL b;
+    DWORD err;
+
+    mark = nob_temp_save();
+    wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+    b = CreateDirectoryW(wide_path, NULL);
+    err = GetLastError();
+    nob_temp_rewind(mark);
+    if(b != 0)
+    {
+      #ifndef NOB_NO_ECHO
+      nob_log(NOB_INFO, "created directory `%s`", path);
+      #endif // NOB_NO_ECHO
+      return true;
+    }
+    else if(b == 0 && err == ERROR_ALREADY_EXISTS)
+    {
+        #ifndef NOB_NO_ECHO
+        nob_log(NOB_INFO, "directory `%s` already exists", path);
+        #endif // NOB_NO_ECHO
+        return true;
+    }
+    else if(b == 0 && err == ERROR_PATH_NOT_FOUND)
+    {
+        NOB_TODO("One or more intermediate directories do not exist; this function will only create the final directory in the path.");
+        return false;
+    }
+    else
+    {
+        nob_log(NOB_ERROR, "Could not create directory: %s", nob_win32_error_message(err));
+        return false;
+    }
 #else
     int result = mkdir(path, 0755);
-#endif
     if (result < 0) {
         if (errno == EEXIST) {
 #ifndef NOB_NO_ECHO
@@ -975,6 +1218,7 @@ NOBDEF bool nob_mkdir_if_not_exists(const char *path)
     nob_log(NOB_INFO, "created directory `%s`", path);
 #endif // NOB_NO_ECHO
     return true;
+#endif // _WIN32
 }
 
 NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path)
@@ -983,11 +1227,21 @@ NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path)
     nob_log(NOB_INFO, "copying %s -> %s", src_path, dst_path);
 #endif // NOB_NO_ECHO
 #ifdef _WIN32
-    if (!CopyFile(src_path, dst_path, FALSE)) {
+    bool ret;
+    size_t mark;
+    wchar_t* wide_src_path;
+    wchar_t* wide_dst_path;
+
+    ret = true;
+    mark = nob_temp_save();
+    wide_src_path = nob__unicode_utf8_to_unicode_utf16_temp(src_path);
+    wide_dst_path = nob__unicode_utf8_to_unicode_utf16_temp(dst_path);
+    if (!CopyFileW(wide_src_path, wide_dst_path, FALSE)) {
         nob_log(NOB_ERROR, "Could not copy file: %s", nob_win32_error_message(GetLastError()));
-        return false;
+        ret = false;
     }
-    return true;
+    nob_temp_rewind(mark);
+    return ret;
 #else
     int src_fd = -1;
     int dst_fd = -1;
@@ -1216,9 +1470,9 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 #ifdef _WIN32
     // https://docs.microsoft.com/en-us/windows/win32/procthread/creating-a-child-process-with-redirected-input-and-output
 
-    STARTUPINFO siStartInfo;
+    STARTUPINFOW siStartInfo;
     ZeroMemory(&siStartInfo, sizeof(siStartInfo));
-    siStartInfo.cb = sizeof(STARTUPINFO);
+    siStartInfo.cb = sizeof(siStartInfo);
     // NOTE: theoretically setting NULL to std handles should not be a problem
     // https://docs.microsoft.com/en-us/windows/console/getstdhandle?redirectedfrom=MSDN#attachdetach-behavior
     // TODO: check for errors in GetStdHandle
@@ -1233,7 +1487,10 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
     Nob_String_Builder quoted = {0};
     nob__win32_cmd_quote(cmd, &quoted);
     nob_sb_append_null(&quoted);
-    BOOL bSuccess = CreateProcessA(NULL, quoted.items, NULL, NULL, TRUE, 0, NULL, NULL, &siStartInfo, &piProcInfo);
+    size_t mark = nob_temp_save();
+    wchar_t* wide_command_line = nob__unicode_utf8_to_unicode_utf16_temp(quoted.items);
+    BOOL bSuccess = CreateProcessW(NULL, wide_command_line, NULL, NULL, TRUE, 0, NULL, NULL, &siStartInfo, &piProcInfo);
+    nob_temp_rewind(mark);
     nob_sb_free(quoted);
 
     if (!bSuccess) {
@@ -1336,14 +1593,17 @@ NOBDEF Nob_Fd nob_fd_open_for_read(const char *path)
     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
     saAttr.bInheritHandle = TRUE;
 
-    Nob_Fd result = CreateFile(
-                    path,
+    size_t mark = nob_temp_save();
+    wchar_t *wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+    Nob_Fd result = CreateFileW(
+                    wide_path,
                     GENERIC_READ,
-                    0,
+                    FILE_SHARE_READ | FILE_SHARE_DELETE,
                     &saAttr,
                     OPEN_EXISTING,
                     FILE_ATTRIBUTE_READONLY,
                     NULL);
+    nob_temp_rewind(mark);
 
     if (result == INVALID_HANDLE_VALUE) {
         nob_log(NOB_ERROR, "Could not open file %s: %s", path, nob_win32_error_message(GetLastError()));
@@ -1370,8 +1630,10 @@ NOBDEF Nob_Fd nob_fd_open_for_write(const char *path)
     saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
     saAttr.bInheritHandle = TRUE;
 
-    Nob_Fd result = CreateFile(
-                    path,                            // name of the write
+    size_t mark = nob_temp_save();
+    wchar_t *wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+    Nob_Fd result = CreateFileW(
+                    wide_path,                       // name of the write
                     GENERIC_WRITE,                   // open for writing
                     0,                               // do not share
                     &saAttr,                         // default security
@@ -1379,6 +1641,7 @@ NOBDEF Nob_Fd nob_fd_open_for_write(const char *path)
                     FILE_ATTRIBUTE_NORMAL,           // normal file
                     NULL                             // no attr. template
                 );
+    nob_temp_rewind(mark);
 
     if (result == INVALID_HANDLE_VALUE) {
         nob_log(NOB_ERROR, "Could not open file %s: %s", path, nob_win32_error_message(GetLastError()));
@@ -1615,42 +1878,42 @@ NOBDEF void nob_default_log_handler(Nob_Log_Level level, const char *fmt, va_lis
 
     switch (level) {
     case NOB_INFO:
-        fprintf(stderr, "[INFO] ");
+        nob__fprintf(stderr, "[INFO] ");
         break;
     case NOB_WARNING:
-        fprintf(stderr, "[WARNING] ");
+        nob__fprintf(stderr, "[WARNING] ");
         break;
     case NOB_ERROR:
-        fprintf(stderr, "[ERROR] ");
+        nob__fprintf(stderr, "[ERROR] ");
         break;
     case NOB_NO_LOGS: return;
     default:
         NOB_UNREACHABLE("Nob_Log_Level");
     }
 
-    vfprintf(stderr, fmt, args);
-    fprintf(stderr, "\n");
+    nob__vfprintf(stderr, fmt, args);
+    nob__fprintf(stderr, "\n");
 }
 
 NOBDEF void nob_cancer_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
 {
     switch (level) {
     case NOB_INFO:
-        fprintf(stderr, "ℹ️ \x1b[36m[INFO]\x1b[0m ");
+        nob__fprintf(stderr, "ℹ️ \x1b[36m[INFO]\x1b[0m ");
         break;
     case NOB_WARNING:
-        fprintf(stderr, "⚠️ \x1b[33m[WARNING]\x1b[0m ");
+        nob__fprintf(stderr, "⚠️ \x1b[33m[WARNING]\x1b[0m ");
         break;
     case NOB_ERROR:
-        fprintf(stderr, "🚨 \x1b[31m[ERROR]\x1b[0m ");
+        nob__fprintf(stderr, "🚨 \x1b[31m[ERROR]\x1b[0m ");
         break;
     case NOB_NO_LOGS: return;
     default:
         NOB_UNREACHABLE("Nob_Log_Level");
     }
 
-    vfprintf(stderr, fmt, args);
-    fprintf(stderr, "\n");
+    nob__vfprintf(stderr, fmt, args);
+    nob__fprintf(stderr, "\n");
 }
 
 NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...)
@@ -1666,8 +1929,9 @@ NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir)
     memset(dir, 0, sizeof(*dir));
 #ifdef _WIN32
     size_t temp_mark = nob_temp_save();
-    char *buffer = nob_temp_sprintf("%s\\*", dir_path);
-    dir->nob__private.win32_hFind = FindFirstFile(buffer, &dir->nob__private.win32_data);
+    char *narrow_path = nob_temp_sprintf("%s\\*", dir_path);
+    wchar_t *wide_path = nob__unicode_utf8_to_unicode_utf16_temp(narrow_path);
+    dir->nob__private.win32_hFind = FindFirstFileW(wide_path, &dir->nob__private.find_data.win_find_data);
     nob_temp_rewind(temp_mark);
 
     if (dir->nob__private.win32_hFind == INVALID_HANDLE_VALUE) {
@@ -1675,6 +1939,12 @@ NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir)
         dir->error = true;
         return false;
     }
+
+    const wchar_t *wide_name = dir->nob__private.find_data.win_find_data.cFileName;
+    char *narrow_name = dir->nob__private.find_data.utf8_file_name;
+    int narrow_cap = NOB_ARRAY_LEN(dir->nob__private.find_data.utf8_file_name);
+    int narrow_len = nob__unicode_utf16_to_unicode_utf8(wide_name, (int)wcslen(wide_name) + 1, narrow_name, narrow_cap) - 1;
+    (void)narrow_len;
 #else
     dir->nob__private.posix_dir = opendir(dir_path);
     if (dir == NULL) {
@@ -1691,17 +1961,22 @@ NOBDEF bool nob_dir_entry_next(Nob_Dir_Entry *dir)
 #ifdef _WIN32
     if (!dir->nob__private.win32_init) {
         dir->nob__private.win32_init = true;
-        dir->name = dir->nob__private.win32_data.cFileName;
+        dir->name = dir->nob__private.find_data.utf8_file_name;
         return true;
     }
 
-    if (!FindNextFile(dir->nob__private.win32_hFind, &dir->nob__private.win32_data)) {
+    if (!FindNextFileW(dir->nob__private.win32_hFind, &dir->nob__private.find_data.win_find_data)) {
         if (GetLastError() == ERROR_NO_MORE_FILES) return false;
         nob_log(NOB_ERROR, "Could not read next directory entry: %s", nob_win32_error_message(GetLastError()));
         dir->error = true;
         return false;
     }
-    dir->name = dir->nob__private.win32_data.cFileName;
+    const wchar_t *wide_name = dir->nob__private.find_data.win_find_data.cFileName;
+    char *narrow_name = dir->nob__private.find_data.utf8_file_name;
+    int narrow_cap = NOB_ARRAY_LEN(dir->nob__private.find_data.utf8_file_name);
+    int narrow_len = nob__unicode_utf16_to_unicode_utf8(wide_name, (int)wcslen(wide_name) + 1, narrow_name, narrow_cap);
+    (void)narrow_len;
+    dir->name = narrow_name;
 #else
     errno = 0;
     dir->nob__private.posix_ent = readdir(dir->nob__private.posix_dir);
@@ -1840,6 +2115,42 @@ defer:
 
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size)
 {
+#ifdef _WIN32
+    bool result;
+    HANDLE file;
+    size_t mark;
+    wchar_t *wide_path;
+    DWORD err;
+    BOOL b;
+    DWORD written;
+
+    result = true;
+    file = INVALID_HANDLE_VALUE;
+    mark = nob_temp_save();
+    wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+    file = CreateFileW(wide_path, GENERIC_WRITE, FILE_SHARE_DELETE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    err = GetLastError();
+    nob_temp_rewind(mark);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        nob_log(NOB_ERROR, "Could not open file %s for writing: %s\n", path, nob_win32_error_message(err));
+        nob_return_defer(false);
+    }
+    b = WriteFile(file, data, (DWORD)size, &written, NULL);
+    if (!(b != FALSE && written == (DWORD)size))
+    {
+        err = GetLastError();
+        nob_log(NOB_ERROR, "Could not write into file %s: %s\n", path, nob_win32_error_message(err));
+        nob_return_defer(false);
+    }
+defer:
+    if (file != INVALID_HANDLE_VALUE)
+    {
+        b = CloseHandle(file);
+        NOB_ASSERT(b != FALSE);
+    }
+    return result;
+#else
     bool result = true;
 
     const char *buf = NULL;
@@ -1869,12 +2180,16 @@ NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t siz
 defer:
     if (f) fclose(f);
     return result;
+#endif // _WIN32
 }
 
 NOBDEF Nob_File_Type nob_get_file_type(const char *path)
 {
 #ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path);
+    size_t mark = nob_temp_save();
+    wchar_t *wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+    DWORD attr = GetFileAttributesW(wide_path);
+    nob_temp_rewind(mark);
     if (attr == INVALID_FILE_ATTRIBUTES) {
         nob_log(NOB_ERROR, "Could not get file attributes of %s: %s", path, nob_win32_error_message(GetLastError()));
         return -1;
@@ -1903,21 +2218,34 @@ NOBDEF bool nob_delete_file(const char *path)
     nob_log(NOB_INFO, "deleting %s", path);
 #endif // NOB_NO_ECHO
 #ifdef _WIN32
+    bool ret;
+    size_t mark;
+    wchar_t *wide_path;
     Nob_File_Type type = nob_get_file_type(path);
     switch (type) {
     case NOB_FILE_DIRECTORY:
-        if (!RemoveDirectoryA(path)) {
+        ret = true;
+        mark = nob_temp_save();
+        wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+        if (!RemoveDirectoryW(wide_path)) {
             nob_log(NOB_ERROR, "Could not delete directory %s: %s", path, nob_win32_error_message(GetLastError()));
-            return false;
+            ret = false;
         }
+        nob_temp_rewind(mark);
+        return ret;
         break;
     case NOB_FILE_REGULAR:
     case NOB_FILE_SYMLINK:
     case NOB_FILE_OTHER:
-        if (!DeleteFileA(path)) {
+        ret = true;
+        mark = nob_temp_save();
+        wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+        if (!DeleteFileW(wide_path)) {
             nob_log(NOB_ERROR, "Could not delete file %s: %s", path, nob_win32_error_message(GetLastError()));
-            return false;
+            ret = false;
         }
+        nob_temp_rewind(mark);
+        return ret;
         break;
     default: NOB_UNREACHABLE("Nob_File_Type");
     }
@@ -2074,9 +2402,10 @@ NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv)
 NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count)
 {
 #ifdef _WIN32
-    BOOL bSuccess;
-
-    HANDLE output_path_fd = CreateFile(output_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+    size_t mark = nob_temp_save();
+    wchar_t *wide_output_path = nob__unicode_utf8_to_unicode_utf16_temp(output_path);
+    HANDLE output_path_fd = CreateFileW(wide_output_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+    nob_temp_rewind(mark);
     if (output_path_fd == INVALID_HANDLE_VALUE) {
         // NOTE: if output does not exist it 100% must be rebuilt
         if (GetLastError() == ERROR_FILE_NOT_FOUND) return 1;
@@ -2084,7 +2413,7 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
         return -1;
     }
     FILETIME output_path_time;
-    bSuccess = GetFileTime(output_path_fd, NULL, NULL, &output_path_time);
+    BOOL bSuccess = GetFileTime(output_path_fd, NULL, NULL, &output_path_time);
     CloseHandle(output_path_fd);
     if (!bSuccess) {
         nob_log(NOB_ERROR, "Could not get time of %s: %s", output_path, nob_win32_error_message(GetLastError()));
@@ -2093,7 +2422,10 @@ NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, 
 
     for (size_t i = 0; i < input_paths_count; ++i) {
         const char *input_path = input_paths[i];
-        HANDLE input_path_fd = CreateFile(input_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+        mark = nob_temp_save();
+        wchar_t *wide_input_path = nob__unicode_utf8_to_unicode_utf16_temp(input_path);
+        HANDLE input_path_fd = CreateFileW(wide_input_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+        nob_temp_rewind(mark);
         if (input_path_fd == INVALID_HANDLE_VALUE) {
             // NOTE: non-existing input is an error cause it is needed for building in the first place
             nob_log(NOB_ERROR, "Could not open file %s: %s", input_path, nob_win32_error_message(GetLastError()));
@@ -2163,21 +2495,86 @@ NOBDEF bool nob_rename(const char *old_path, const char *new_path)
     nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
 #endif // NOB_NO_ECHO
 #ifdef _WIN32
-    if (!MoveFileEx(old_path, new_path, MOVEFILE_REPLACE_EXISTING)) {
+    bool ret;
+    size_t mark;
+    wchar_t *wide_old_path;
+    wchar_t *wide_new_path;
+
+    ret = true;
+    mark = nob_temp_save();
+    wide_old_path = nob__unicode_utf8_to_unicode_utf16_temp(old_path);
+    wide_new_path = nob__unicode_utf8_to_unicode_utf16_temp(new_path);
+    if (!MoveFileExW(wide_old_path, wide_new_path, MOVEFILE_REPLACE_EXISTING)) {
         nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, nob_win32_error_message(GetLastError()));
-        return false;
+        ret = false;
     }
+    nob_temp_rewind(mark);
+    return ret;
 #else
     if (rename(old_path, new_path) < 0) {
         nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, strerror(errno));
         return false;
     }
-#endif // _WIN32
     return true;
+#endif // _WIN32
 }
 
 NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 {
+#ifdef _WIN32
+    bool result;
+    HANDLE file;
+    DWORD chunk_size;
+    size_t mark;
+    wchar_t *wide_path;
+    DWORD err;
+    size_t new_count;
+    BOOL b;
+    DWORD read;
+
+    result = true;
+    file = INVALID_HANDLE_VALUE;
+    chunk_size = 64 * 1024;
+    mark = nob_temp_save();
+    wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+    file = CreateFileW(wide_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    err = GetLastError();
+    nob_temp_rewind(mark);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        nob_log(NOB_ERROR, "Could not open file %s for reading: %s\n", path, nob_win32_error_message(err));
+        nob_return_defer(false);
+    }
+    for (;;)
+    {
+        new_count = sb->count + chunk_size;
+        if (new_count > sb->capacity)
+        {
+            sb->items = NOB_DECLTYPE_CAST(sb->items)NOB_REALLOC(sb->items, 2 * new_count);
+            NOB_ASSERT(sb->items != NULL && "Buy more RAM lool!!");
+            sb->capacity = new_count;
+        }
+        b = ReadFile(file, sb->items + sb->count, chunk_size, &read, NULL);
+        if (b == FALSE)
+        {
+            err = GetLastError();
+            nob_log(NOB_ERROR, "Could not read from file %s: %s\n", path, nob_win32_error_message(err));
+            nob_return_defer(false);
+        }
+        sb->count += read;
+        if (read != chunk_size)
+        {
+            break;
+        }
+    }
+defer:
+    if (file != INVALID_HANDLE_VALUE)
+    {
+        b = CloseHandle(file);
+        NOB_ASSERT(b != FALSE);
+    }
+    return result;
+#else
     bool result = true;
 
     FILE *f = fopen(path, "rb");
@@ -2185,11 +2582,7 @@ NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
     long long m = 0;
     if (f == NULL)                 nob_return_defer(false);
     if (fseek(f, 0, SEEK_END) < 0) nob_return_defer(false);
-#ifndef _WIN32
     m = ftell(f);
-#else
-    m = _telli64(_fileno(f));
-#endif
     if (m < 0)                     nob_return_defer(false);
     if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
 
@@ -2211,6 +2604,7 @@ defer:
     if (!result) nob_log(NOB_ERROR, "Could not read file %s: %s", path, strerror(errno));
     if (f) fclose(f);
     return result;
+#endif // _WIN32
 }
 
 NOBDEF int nob_sb_appendf(Nob_String_Builder *sb, const char *fmt, ...)
@@ -2353,28 +2747,47 @@ NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_pref
 NOBDEF int nob_file_exists(const char *file_path)
 {
 #if _WIN32
-    return GetFileAttributesA(file_path) != INVALID_FILE_ATTRIBUTES;
+    size_t mark;
+    wchar_t *wide_file_path;
+    bool ret;
+
+    mark = nob_temp_save();
+    wide_file_path = nob__unicode_utf8_to_unicode_utf16_temp(file_path);
+    ret = GetFileAttributesW(wide_file_path) != INVALID_FILE_ATTRIBUTES;
+    nob_temp_rewind(mark);
+    return ret;
 #else
     return access(file_path, F_OK) == 0;
-#endif
+#endif // _WIN32
 }
 
 NOBDEF const char *nob_get_current_dir_temp(void)
 {
 #ifdef _WIN32
-    DWORD nBufferLength = GetCurrentDirectory(0, NULL);
-    if (nBufferLength == 0) {
+    DWORD nBufferLengthA;
+    wchar_t *wide_buffer;
+    DWORD nBufferLengthB;
+    char *narrow_buffer;
+    int narrow_len;
+
+    nBufferLengthA = GetCurrentDirectoryW(0, NULL);
+    if (nBufferLengthA == 0) {
         nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
 
-    char *buffer = (char*) nob_temp_alloc(nBufferLength);
-    if (GetCurrentDirectory(nBufferLength, buffer) == 0) {
+    wide_buffer = (wchar_t*)nob_temp_alloc(nBufferLengthA * sizeof(wchar_t));
+    nBufferLengthB = GetCurrentDirectoryW(nBufferLengthA, wide_buffer);
+    if (nBufferLengthB == 0) {
         nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
+    NOB_ASSERT(nBufferLengthB == nBufferLengthA - 1);
 
-    return buffer;
+    narrow_buffer = (char*)nob_temp_alloc(nob__worst_case_utf16_to_utf8(nBufferLengthA));
+    narrow_len = nob__unicode_utf16_to_unicode_utf8(wide_buffer, nBufferLengthA, narrow_buffer, nob__worst_case_utf16_to_utf8(nBufferLengthA)) - 1;
+    (void)narrow_len;
+    return narrow_buffer;
 #else
     char *buffer = (char*) nob_temp_alloc(PATH_MAX);
     if (getcwd(buffer, PATH_MAX) == NULL) {
@@ -2389,11 +2802,19 @@ NOBDEF const char *nob_get_current_dir_temp(void)
 NOBDEF bool nob_set_current_dir(const char *path)
 {
 #ifdef _WIN32
-    if (!SetCurrentDirectory(path)) {
+    bool ret;
+    size_t mark;
+    wchar_t *wide_path;
+
+    ret = true;
+    mark = nob_temp_save();
+    wide_path = nob__unicode_utf8_to_unicode_utf16_temp(path);
+    if (!SetCurrentDirectoryW(wide_path)) {
         nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, nob_win32_error_message(GetLastError()));
-        return false;
+        ret = false;
     }
-    return true;
+    nob_temp_rewind(mark);
+    return ret;
 #else
     if (chdir(path) < 0) {
         nob_log(NOB_ERROR, "could not set current directory to %s: %s", path, strerror(errno));
@@ -2471,9 +2892,21 @@ NOBDEF char *nob_temp_running_executable_path(void)
     if (length < 0) return nob_temp_strdup("");
     return nob_temp_strndup(buf, length);
 #elif defined(_WIN32)
-    char buf[MAX_PATH];
-    int length = GetModuleFileNameA(NULL, buf, MAX_PATH);
-    return nob_temp_strndup(buf, length);
+    wchar_t wide_buf[4096]; /* in reality max path len is 64 kB, meaning 32 thousand UTF-16 code units */
+    char narrow_buf[nob__worst_case_utf16_to_utf8(NOB_ARRAY_LEN(wide_buf))];
+    DWORD wide_len;
+    DWORD err;
+    wide_len = GetModuleFileNameW(NULL, wide_buf, NOB_ARRAY_LEN(wide_buf));
+    if (wide_len == 0) {
+        err = GetLastError();
+        (void)err;
+        return NULL;
+    }
+    if (!(wide_len < NOB_ARRAY_LEN(wide_buf))) {
+        NOB_TODO("Increase wide_buf size.");
+    }
+    int narrow_len = nob__unicode_utf16_to_unicode_utf8(wide_buf, wide_len + 1, narrow_buf, NOB_ARRAY_LEN(narrow_buf)) - 1;
+    return nob_temp_strndup(narrow_buf, narrow_len);
 #elif defined(__APPLE__)
     char buf[4096];
     uint32_t size = NOB_ARRAY_LEN(buf);
@@ -2494,7 +2927,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
             break;
     return nob_temp_strndup(info.name, strlen(info.name));
 #else
-    fprintf(stderr, "%s:%d: TODO: nob_temp_running_executable_path is not implemented for this platform\n", __FILE__, __LINE__);
+    nob__fprintf(stderr, "%s:%d: TODO: nob_temp_running_executable_path is not implemented for this platform\n", __FILE__, __LINE__);
     return nob_temp_strdup("");
 #endif
 }
