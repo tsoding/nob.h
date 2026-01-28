@@ -315,7 +315,7 @@ typedef struct {
         DIR *posix_dir;
         struct dirent *posix_ent;
 #endif // _WIN32
-    } nob__private;
+    } nob__private; // TODO: we don't have solid conventions regarding private struct fields
 } Nob_Dir_Entry;
 
 // nob_dir_entry_open() - open the directory entry for iteration.
@@ -643,10 +643,13 @@ typedef struct {
 // use it as a C string.
 NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
 
+NOBDEF void nob__cmd_append(Nob_Cmd *cmd, size_t n, ...);
 #define nob_cmd_append(cmd, ...) \
     nob__cmd_append(cmd, (sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*)), __VA_ARGS__)
 
 // TODO: nob_cmd_extend() evaluates other_cmd twice
+// It can be fixed by turning nob_cmd_extend() call into a statement.
+// But that may break backward compatibility of the API.
 #define nob_cmd_extend(cmd, other_cmd) \
     nob_da_append_many(cmd, (other_cmd)->items, (other_cmd)->count)
 
@@ -753,7 +756,7 @@ NOBDEF char *nob_temp_file_name(const char *path);
 NOBDEF char *nob_temp_file_ext(const char *path);
 NOBDEF char *nob_temp_running_executable_path(void);
 
-// TODO: we should probably document somewhere all the compiler we support
+// TODO: we should probably document somewhere all the compilers we support
 
 // The nob_cc_* macros try to abstract away the specific compiler.
 // They are verify basic and not particularly flexible, but you can redefine them if you need to
@@ -922,7 +925,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 
-void nob__cmd_append(Nob_Cmd *cmd, size_t n, ...)
+NOBDEF void nob__cmd_append(Nob_Cmd *cmd, size_t n, ...)
 {
     va_list args;
     va_start(args, n);
@@ -2907,6 +2910,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+                         Fix the implicit declaration error when nob is included as a header (by @ysoftware)
       3.2.0 (2026-01-28) Introduce Chain API
                            - Nob_Chain
                            - Nob_Chain_Begin_Opt
@@ -3092,12 +3096,16 @@ NOBDEF char *nob_temp_running_executable_path(void)
       - Breaking backward compatibility in a MINOR release should be considered a bug and
         should be promptly fixed in the next PATCH release.
 
-   Naming Conventions:
+   API conventions:
 
-      - All the user facing names should be prefixed with `nob_` or `NOB_` depending on the case.
+      - All the user facing names should be prefixed with `nob_`, `NOB_`, or `Nob_` depending on the case.
       - The prefixes of non-redefinable names should be stripped in NOB_STRIP_PREFIX_GUARD_ section,
         unless explicitly stated otherwise like in case of nob_log() or nob_rename().
-      - Internal names should be prefixed with `nob__` (double underscore).
+      - Internal (private) names should be prefixed with `nob__` (double underscore). The user code is discouraged
+        from using such names since they are allowed to be broken in a backward incompatible way even in PATCH
+        releases. (This is why they are internal)
+      - If a public macro uses an private function internally such function must be forward declared in the NOB_H_
+        section.
 */
 
 /*
