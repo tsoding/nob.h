@@ -1,20 +1,9 @@
 #include "shared.h"
-#define NOBDEF static inline
-#define NOB_IMPLEMENTATION
-#define NOB_EXPERIMENTAL_DELETE_OLD
-#define NOB_WARN_DEPRECATED
-#include "nob.h"
-#undef rename                   // Testing for backward compatibility after v1.20.6
 
 const char *test_names[] = {
-    "minimal_log_level",
     "nob_sv_end_with",
-    "set_get_current_dir",
     "cmd_redirect",
     "cmd_args_passing",
-#ifdef _WIN32
-    "win32_error",
-#endif //_WIN32
     "read_entire_dir",
     "da_resize",
     "da_last",
@@ -27,6 +16,7 @@ const char *test_names[] = {
     "temp_running_executable_path",
     "no_echo",
     "cmd_run_dont_reset",
+    "chain",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
@@ -41,58 +31,74 @@ bool delete_directory_recursively(const char *dir_path)
     return walk_dir(dir_path, delete_walk_entry, .post_order = true);
 }
 
-bool build_and_run_test(Cmd *cmd, const char *test_name, bool record)
+bool build_and_run_test(const char *test_name, bool record)
 {
-    size_t mark = temp_save();
-
-    const char *bin_path = temp_sprintf("%s%s", BUILD_FOLDER TESTS_FOLDER, test_name);
-    const char *src_path = temp_sprintf("%s%s.c", TESTS_FOLDER, test_name);
-    nob_cc(cmd);
-    nob_cc_flags(cmd);
-    nob_cc_output(cmd, bin_path);
-    nob_cc_inputs(cmd, src_path);
-    if (!cmd_run(cmd)) return false;
-
-    const char *test_cwd_path = temp_sprintf("%s%s%s.cwd", BUILD_FOLDER, TESTS_FOLDER, test_name);
-    if (file_exists(test_cwd_path)) {
-        if (!delete_directory_recursively(test_cwd_path)) return false;
-    }
-    if (!mkdir_if_not_exists(test_cwd_path)) return false;
-    if (!set_current_dir(test_cwd_path)) return false;
-    cmd_append(cmd, temp_sprintf("../%s", test_name));
+    bool result = true;
+    Cmd cmd = {0};
+    String_Builder src = {0};
+    String_Builder dst = {0};
+    String_View src_sv = {0};
+    String_View dst_sv = {0};
+#ifdef _WIN32
+    const char *src_stdout_path  = temp_sprintf("%s%s.win32.stdout.txt", BUILD_FOLDER TESTS_FOLDER, test_name);
+    const char *dst_stdout_path  = temp_sprintf("%s%s.win32.stdout.txt", TESTS_FOLDER, test_name);
+    const char *test_stdout_path = temp_sprintf("../%s.win32.stdout.txt", test_name);
+#else
+    const char *src_stdout_path  = temp_sprintf("%s%s.stdout.txt", BUILD_FOLDER TESTS_FOLDER, test_name);
+    const char *dst_stdout_path  = temp_sprintf("%s%s.stdout.txt", TESTS_FOLDER, test_name);
     const char *test_stdout_path = temp_sprintf("../%s.stdout.txt", test_name);
-    const char *test_stderr_path = temp_sprintf("../%s.stderr.txt", test_name);
-    if (!cmd_run(cmd, .stdout_path = test_stdout_path, .stderr_path = test_stderr_path)) return false;
-    if (!set_current_dir("../../../")) return false;
+#endif // _WIN32
+    const char *bin_path         = temp_sprintf("%s%s", BUILD_FOLDER TESTS_FOLDER, test_name);
+    const char *src_path         = temp_sprintf("%s%s.c", TESTS_FOLDER, test_name);
+    const char *test_cwd_path    = temp_sprintf("%s%s%s.cwd", BUILD_FOLDER, TESTS_FOLDER, test_name);
+
+    nob_cc(&cmd);
+    nob_cc_flags(&cmd);
+    nob_cc_output(&cmd, bin_path);
+    nob_cc_inputs(&cmd, src_path);
+    if (!cmd_run(&cmd)) return_defer(false);
+
+    if (file_exists(test_cwd_path)) {
+        if (!delete_directory_recursively(test_cwd_path)) return_defer(false);
+    }
+    if (!mkdir_if_not_exists(test_cwd_path)) return_defer(false);
+    if (!set_current_dir(test_cwd_path)) return_defer(false);
+#ifdef _WIN32
+    cmd_append(&cmd, temp_sprintf("../%s.exe", test_name));
+#else
+    cmd_append(&cmd, temp_sprintf("../%s", test_name));
+#endif // _WIN32
+    if (!cmd_run(&cmd, .stdout_path = test_stdout_path)) return_defer(false);
+    if (!set_current_dir("../../../")) return_defer(false);
 
     // TODO: implement record/replay testing for windows
-#ifndef _WIN32
-    const char *src_stdout_path = temp_sprintf("%s%s.stdout.txt", BUILD_FOLDER TESTS_FOLDER, test_name);
-    const char *src_stderr_path = temp_sprintf("%s%s.stderr.txt", BUILD_FOLDER TESTS_FOLDER, test_name);
-    const char *dst_stdout_path = temp_sprintf("%s%s.stdout.txt", TESTS_FOLDER, test_name);
-    const char *dst_stderr_path = temp_sprintf("%s%s.stderr.txt", TESTS_FOLDER, test_name);
     if (record) {
-        if (!copy_file(src_stdout_path, dst_stdout_path)) return 1;
-        if (!copy_file(src_stderr_path, dst_stderr_path)) return 1;
+        if (!copy_file(src_stdout_path, dst_stdout_path)) return_defer(false);
     } else {
-        cmd_append(cmd, "diff");
-        cmd_append(cmd, "-u");
-        cmd_append(cmd, dst_stdout_path);
-        cmd_append(cmd, src_stdout_path);
-        if (!cmd_run(cmd)) return false;
+        // TODO: it would be cool to have a portable diff utility in here.
+        if (!read_entire_file(src_stdout_path, &src)) return_defer(false);
+        if (!read_entire_file(dst_stdout_path, &dst)) return_defer(false);
 
-        cmd_append(cmd, "diff");
-        cmd_append(cmd, "-u");
-        cmd_append(cmd, dst_stderr_path);
-        cmd_append(cmd, src_stderr_path);
-        if (!cmd_run(cmd)) return false;
+        src_sv = sb_to_sv(src);
+        dst_sv = sb_to_sv(dst);
+
+        if (!sv_eq(src_sv, dst_sv)) {
+            nob_log(ERROR, "UNEXPECTED OUTPUT!");
+            nob_log(ERROR, "EXPECTED:");
+            fprintf(stderr, SV_Fmt, SV_Arg(dst_sv));
+            nob_log(ERROR, "ACTUAL:");
+            fprintf(stderr, SV_Fmt, SV_Arg(src_sv));
+            return_defer(false);
+        }
     }
-#endif // _WIN32
 
     nob_log(INFO, "--- %s finished ---", bin_path);
 
-    temp_rewind(mark);
-    return true;
+defer:
+    free(dst.items);
+    free(src.items);
+    free(cmd.items);
+    return result;
 }
 
 typedef struct {
@@ -157,8 +163,6 @@ void print_available_commands(Commands commands)
 
 int main(int argc, char **argv)
 {
-    set_log_handler(cancer_log_handler);
-
     GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
 
     Cmd cmd = {0};
@@ -175,17 +179,22 @@ int main(int argc, char **argv)
         if (!mkdir_if_not_exists(BUILD_FOLDER)) return 1;
         if (!mkdir_if_not_exists(BUILD_FOLDER TESTS_FOLDER)) return 1;
 
+        size_t failed_count = 0;
         if (argc <= 0) {
             for (size_t i = 0; i < test_names_count; ++i) {
-                if (!build_and_run_test(&cmd, test_names[i], false)) return 1;
+                size_t mark = temp_save();
+                if (!build_and_run_test(test_names[i], false)) failed_count += 1;
+                temp_rewind(mark);
             }
-            return 0;
+        } else {
+            while (argc > 0) {
+                size_t mark = temp_save();
+                const char *test_name = shift(argv, argc);
+                if (!build_and_run_test(test_name, false)) failed_count += 1;
+                temp_rewind(mark);
+            }
         }
-
-        while (argc > 0) {
-            const char *test_name = shift(argv, argc);
-            if (!build_and_run_test(&cmd, test_name, false)) return 1;
-        }
+        if (failed_count > 0) return 1;
 
         return 0;
     }
@@ -194,17 +203,23 @@ int main(int argc, char **argv)
         if (!mkdir_if_not_exists(BUILD_FOLDER)) return 1;
         if (!mkdir_if_not_exists(BUILD_FOLDER TESTS_FOLDER)) return 1;
 
+        size_t failed_count = 0;
         if (argc <= 0) {
             for (size_t i = 0; i < test_names_count; ++i) {
-                if (!build_and_run_test(&cmd, test_names[i], true)) return 1;
+                size_t mark = temp_save();
+                if (!build_and_run_test(test_names[i], true)) failed_count += 1;
+                temp_rewind(mark);
             }
-            return 0;
+        } else {
+            while (argc > 0) {
+                size_t mark = temp_save();
+                const char *test_name = shift(argv, argc);
+                if (!build_and_run_test(test_name, true)) failed_count += 1;
+                temp_rewind(mark);
+            }
         }
+        if (failed_count > 0) return 1;
 
-        while (argc > 0) {
-            const char *test_name = shift(argv, argc);
-            if (!build_and_run_test(&cmd, test_name, true)) return 1;
-        }
         return 0;
     }
 

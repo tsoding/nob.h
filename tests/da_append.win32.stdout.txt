@@ -1,0 +1,10 @@
+count = 1, capacity = 4
+count = 2, capacity = 4
+count = 3, capacity = 4
+count = 4, capacity = 4
+count = 5, capacity = 8
+count = 6, capacity = 8
+count = 7, capacity = 8
+count = 8, capacity = 8
+count = 9, capacity = 16
+count = 10, capacity = 16

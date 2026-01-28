@@ -1,1 +1,0 @@
-[INFO] temp_running_executable_path

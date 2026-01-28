@@ -1,6 +1,0 @@
-[INFO] Info Test Message
-[WARNING] Warning Test Message
-[ERROR] Error Test Message
-[WARNING] Warning Test Message
-[ERROR] Error Test Message
-[ERROR] Error Test Message

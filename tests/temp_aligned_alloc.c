@@ -1,5 +1,4 @@
-#define NOB_IMPLEMENTATION
-#include "nob.h"
+#include "shared.h"
 
 #define trace_temp_alloc(requested_size) \
     (temp_alloc(requested_size), \

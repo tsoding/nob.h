@@ -1,4 +1,4 @@
-/* nob - v3.1.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.2.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -411,6 +411,11 @@ NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
 // ```
 #define nob_da_foreach(Type, it, da) for (Type *it = (da)->items; it < (da)->items + (da)->count; ++it)
 
+// The Fixed Array append. `items` fields must be a fixed size array. Its size determines the capacity.
+#define nob_fa_append(fa, item) \
+    (NOB_ASSERT((fa)->count < NOB_ARRAY_LEN((fa)->items)), \
+     (fa)->items[(fa)->count++] = (item))
+
 typedef struct {
     char *items;
     size_t count;
@@ -471,6 +476,13 @@ NOBDEF Nob_Fd nob_fd_open_for_write(const char *path);
 NOBDEF void nob_fd_close(Nob_Fd fd);
 
 typedef struct {
+    Nob_Fd read;
+    Nob_Fd write;
+} Nob_Pipe;
+
+NOBDEF bool nob_pipe_create(Nob_Pipe *pp);
+
+typedef struct {
     Nob_Proc *items;
     size_t count;
     size_t capacity;
@@ -518,6 +530,71 @@ typedef struct {
 
 // Run the command with options.
 NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt);
+
+// Command Chains (in Shell Scripting they are know as Pipes)
+//
+// Usage:
+// ```c
+// Nob_Cmd cmd = {0};
+// Nob_Chain chain = {0};
+// if (!nob_chain_begin(&chain)) return 1;
+// {
+//     nob_cmd_append(&cmd, "echo", "Hello, World");
+//     if (!nob_chain_cmd(&chain, &cmd)) return 1;
+//
+//     nob_cmd_append(&cmd, "rev");
+//     if (!nob_chain_cmd(&chain, &cmd)) return 1;
+//
+//     nob_cmd_append(&cmd, "xxd");
+//     if (!nob_chain_cmd(&chain, &cmd)) return 1;
+// }
+// if (!nob_chain_end(&chain)) return 1;
+// ```
+//
+// The above is equivalent to a shell command:
+//
+// ```sh
+// echo "Hello, World" | rev | xxd
+// ```
+//
+// After nob_chain_end() the Nob_Chain struct can be reused again.
+//
+// The fields of the Nob_Chain struct contain the intermediate state of the Command
+// Chain that is being built with the nob_chain_cmd() calls and generally have no
+// particular use for the user.
+//
+// The only memory dynamically allocated within Nob_Chain belongs to the .cmd field.
+// So if you want to clean it all up you can just do free(chain.cmd.items).
+typedef struct {
+    // The file descriptor of the output of the previous command. Will be used as the input for the next command.
+    Nob_Fd fdin;
+    // The command from the last nob_chain_cmd() call.
+    Nob_Cmd cmd;
+    // The value of the optional .err2out parameter from the last nob_chain_cmd() call.
+    bool err2out;
+} Nob_Chain;
+
+typedef struct {
+    const char *stdin_path;
+} Nob_Chain_Begin_Opt;
+#define nob_chain_begin(chain, ...) nob_chain_begin_opt((chain), (Nob_Chain_Begin_Opt) { __VA_ARGS__ })
+NOBDEF bool nob_chain_begin_opt(Nob_Chain *chain, Nob_Chain_Begin_Opt opt);
+
+typedef struct {
+    bool err2out;
+    bool dont_reset;
+} Nob_Chain_Cmd_Opt;
+#define nob_chain_cmd(chain, cmd, ...) nob_chain_cmd_opt((chain), (cmd), (Nob_Chain_Cmd_Opt) { __VA_ARGS__ })
+NOBDEF bool nob_chain_cmd_opt(Nob_Chain *chain, Nob_Cmd *cmd, Nob_Chain_Cmd_Opt opt);
+
+typedef struct {
+    Nob_Procs *async;
+    size_t max_procs;
+    const char *stdout_path;
+    const char *stderr_path;
+} Nob_Chain_End_Opt;
+#define nob_chain_end(chain, ...) nob_chain_end_opt((chain), (Nob_Chain_End_Opt) { __VA_ARGS__ })
+NOBDEF bool nob_chain_end_opt(Nob_Chain *chain, Nob_Chain_End_Opt opt);
 
 // Get amount of processors on the machine.
 NOBDEF int nob_nprocs(void);
@@ -1169,6 +1246,143 @@ defer:
     return result;
 }
 
+NOBDEF bool nob_chain_begin_opt(Nob_Chain *chain, Nob_Chain_Begin_Opt opt)
+{
+    chain->cmd.count = 0;
+    chain->err2out = false;
+    chain->fdin = NOB_INVALID_FD;
+    if (opt.stdin_path) {
+        chain->fdin = nob_fd_open_for_read(opt.stdin_path);
+        if (chain->fdin == NOB_INVALID_FD) return false;
+    }
+    return true;
+}
+
+NOBDEF bool nob_chain_cmd_opt(Nob_Chain *chain, Nob_Cmd *cmd, Nob_Chain_Cmd_Opt opt)
+{
+    bool result = true;
+    Nob_Pipe pp = {0};
+    struct {
+        Nob_Fd items[5]; // should be no more than 3, but we allocate 5 just in case
+        size_t count;
+    } fds = {0};
+
+    NOB_ASSERT(cmd->count > 0);
+
+    if (chain->cmd.count != 0) { // not first cmd in the chain
+        Nob_Fd *pfdin = NULL;
+        if (chain->fdin != NOB_INVALID_FD) {
+            nob_fa_append(&fds, chain->fdin);
+            pfdin = &chain->fdin;
+        }
+        if (!nob_pipe_create(&pp)) nob_return_defer(false);
+        nob_fa_append(&fds, pp.write);
+        Nob_Fd *pfdout = &pp.write;
+        Nob_Fd *pfderr = chain->err2out ? pfdout : NULL;
+
+        Nob_Proc proc = nob__cmd_start_process(chain->cmd, pfdin, pfdout, pfderr);
+        chain->cmd.count = 0;
+        if (proc == NOB_INVALID_PROC) {
+            nob_fa_append(&fds, pp.read);
+            nob_return_defer(false);
+        }
+        chain->fdin = pp.read;
+    }
+
+    nob_da_append_many(&chain->cmd, cmd->items, cmd->count);
+    chain->err2out = opt.err2out;
+
+defer:
+    for (size_t i = 0; i < fds.count; ++i) {
+        nob_fd_close(fds.items[i]);
+    }
+    if (!opt.dont_reset) cmd->count = 0;
+    return result;
+}
+
+static Nob_Fd nob__fd_stdout(void)
+{
+#ifdef _WIN32
+    return GetStdHandle(STD_OUTPUT_HANDLE);
+#else
+    return STDOUT_FILENO;
+#endif // _WIN32
+}
+
+NOBDEF bool nob_chain_end_opt(Nob_Chain *chain, Nob_Chain_End_Opt opt)
+{
+    bool result = true;
+
+    Nob_Fd *pfdin = NULL;
+    struct {
+        Nob_Fd items[5]; // should be no more than 3, but we allocate 5 just in case
+        size_t count;
+    } fds = {0};
+
+    if (chain->fdin != NOB_INVALID_FD) {
+        nob_fa_append(&fds, chain->fdin);
+        pfdin = &chain->fdin;
+    }
+
+    if (chain->cmd.count != 0) { // Non-empty chain case
+        size_t max_procs = opt.max_procs > 0 ? opt.max_procs : (size_t) nob_nprocs() + 1;
+
+        if (opt.async && max_procs > 0) {
+            while (opt.async->count >= max_procs) {
+                for (size_t i = 0; i < opt.async->count; ++i) {
+                    int ret = nob__proc_wait_async(opt.async->items[i], 1);
+                    if (ret < 0) nob_return_defer(false);
+                    if (ret) {
+                        nob_da_remove_unordered(opt.async, i);
+                        break;
+                    }
+                }
+            }
+        }
+
+        Nob_Fd fdout = nob__fd_stdout();
+        if (opt.stdout_path) {
+            fdout = nob_fd_open_for_write(opt.stdout_path);
+            if (fdout == NOB_INVALID_FD) nob_return_defer(false);
+            nob_fa_append(&fds, fdout);
+        }
+
+        Nob_Fd fderr = 0;
+        Nob_Fd *pfderr = NULL;
+        if (chain->err2out) pfderr = &fdout;
+        if (opt.stderr_path) {
+            if (pfderr == NULL) {
+                fderr = nob_fd_open_for_write(opt.stderr_path);
+                if (fderr == NOB_INVALID_FD) nob_return_defer(false);
+                nob_fa_append(&fds, fderr);
+                pfderr = &fderr;
+            } else {
+                // There was err2out set for the last command.
+                // All the stderr will go to stdout.
+                // So the stderr file is going to be empty.
+                NOB_ASSERT(chain->err2out);
+                if (!nob_write_entire_file(opt.stderr_path, NULL, 0)) nob_return_defer(false);
+            }
+        }
+
+        Nob_Proc proc = nob__cmd_start_process(chain->cmd, pfdin, &fdout, pfderr);
+        chain->cmd.count = 0;
+
+        if (opt.async) {
+            if (proc == NOB_INVALID_PROC) nob_return_defer(false);
+            nob_da_append(opt.async, proc);
+        } else {
+            if (!nob_proc_wait(proc)) nob_return_defer(false);
+        }
+    }
+
+defer:
+    for (size_t i = 0; i < fds.count; ++i) {
+        nob_fd_close(fds.items[i]);
+    }
+    return result;
+}
+
 // The maximum time span representable is 584 years.
 NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void)
 {
@@ -1395,6 +1609,35 @@ NOBDEF void nob_fd_close(Nob_Fd fd)
     CloseHandle(fd);
 #else
     close(fd);
+#endif // _WIN32
+}
+
+NOBDEF bool nob_pipe_create(Nob_Pipe *pp)
+{
+#ifdef _WIN32
+    // https://docs.microsoft.com/en-us/windows/win32/ProcThread/creating-a-child-process-with-redirected-input-and-output
+
+    SECURITY_ATTRIBUTES saAttr = {0};
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle = TRUE;
+
+    if (!CreatePipe(&pp->read, &pp->write, &saAttr, 0)) {
+        nob_log(NOB_ERROR, "Could not create pipe: %s", nob_win32_error_message(GetLastError()));
+        return false;
+    }
+
+    return true;
+#else
+    int pipefd[2];
+    if (pipe(pipefd) < 0) {
+        nob_log(NOB_ERROR, "Could not create pipe: %s\n", strerror(errno));
+        return false;
+    }
+
+    pp->read  = pipefd[0];
+    pp->write = pipefd[1];
+
+    return true;
 #endif // _WIN32
 }
 
@@ -2568,6 +2811,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define da_last nob_da_last
         #define da_remove_unordered nob_da_remove_unordered
         #define da_foreach nob_da_foreach
+        #define fa_append nob_fa_append
         #define swap nob_swap
         #define String_Builder Nob_String_Builder
         #define read_entire_file nob_read_entire_file
@@ -2581,6 +2825,18 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define Proc Nob_Proc
         #define INVALID_PROC NOB_INVALID_PROC
         #define Fd Nob_Fd
+        #define Pipe Nob_Pipe
+        #define pipe_create nob_pipe_create
+        #define Chain Nob_Chain
+        #define Chain_Begin_Opt Nob_Chain_Begin_Opt
+        #define chain_begin nob_chain_begin
+        #define chain_begin_opt nob_chain_begin_opt
+        #define Chain_Cmd_Opt Nob_Chain_Cmd_Opt
+        #define chain_cmd nob_chain_cmd
+        #define chain_cmd_opt nob_chain_cmd_opt
+        #define Chain_End_Opt Nob_Chain_End_Opt
+        #define chain_end nob_chain_end
+        #define chain_end_opt nob_chain_end_opt
         #define INVALID_FD NOB_INVALID_FD
         #define fd_open_for_read nob_fd_open_for_read
         #define fd_open_for_write nob_fd_open_for_write
@@ -2651,6 +2907,21 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.2.0 (2026-01-28) Introduce Chain API
+                           - Nob_Chain
+                           - Nob_Chain_Begin_Opt
+                           - nob_chain_begin()
+                           - nob_chain_begin_opt()
+                           - Nob_Chain_Cmd_Opt
+                           - nob_chain_cmd()
+                           - nob_chain_cmd_opt()
+                           - Nob_Chain_End_Opt
+                           - nob_chain_end()
+                           - nob_chain_end_opt()
+                         Introduce some auxiliary things that were used in Chain API implementation, but might be useful outside of it:
+                           - Nob_Pipe
+                           - nob_pipe_create()
+                           - nob_fa_append()
       3.1.0 (2026-01-22) Make nob_delete_file() be able to delete empty dir on Windows (by @rexim)
                          Introduce Directory Entry API - similar to POSIX dirent but with names that don't collide
                            - Nob_Dir_Entry

@@ -5,8 +5,8 @@
 #define SHARED_H_
 
 // Folder must end with forward slash /
-#define BUILD_FOLDER "build/"
-#define TESTS_FOLDER "tests/"
+#define BUILD_FOLDER "./build/"
+#define TESTS_FOLDER "./tests/"
 
 // TODO: we should test on C++ compilers too
 
@@ -32,6 +32,31 @@
     #endif
 #endif // __cplusplus
 
+#define NOBDEF static inline
+#define NOB_IMPLEMENTATION
+#define NOB_EXPERIMENTAL_DELETE_OLD
+#define NOB_WARN_DEPRECATED
+#define NOB_STRIP_PREFIX        // Testing for backward compatibility after v3.0.0
+#include "nob.h"
+#undef rename                   // Testing for backward compatibility after v1.20.6
 
+// Utility that tests use to build the tools they need
+bool build_tool(Cmd *cmd, Procs *procs, const char *bin_path, const char *src_path, const char *src)
+{
+    if (!write_entire_file(src_path, src, strlen(src))) return 1;
+
+    nob_cc(cmd);
+    nob_cc_flags(cmd);
+    nob_cc_output(cmd, bin_path);
+    nob_cc_inputs(cmd, src_path);
+    return cmd_run(
+        cmd,
+        .async = procs,
+        // To make sure no compiler output pollutes the test output.
+        // This is needed specifically for cl.exe cause it has
+        // a tendency to output compiled source files to stdout.
+        .stdout_path = temp_sprintf("%s.comp.txt", bin_path), 
+    );
+}
 
 #endif // SHARED_H_
