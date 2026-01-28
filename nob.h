@@ -907,6 +907,7 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 
 #endif // _WIN32
 
+void nob__cmd_append(Nob_Cmd *cmd, size_t n, ...);
 #endif // NOB_H_
 
 #ifdef NOB_IMPLEMENTATION
