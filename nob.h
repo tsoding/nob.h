@@ -2907,7 +2907,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      3.2.0 (          ) Introduce Chain API
+      3.2.0 (2026-01-28) Introduce Chain API
                            - Nob_Chain
                            - Nob_Chain_Begin_Opt
                            - nob_chain_begin()
