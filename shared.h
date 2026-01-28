@@ -55,7 +55,7 @@ bool build_tool(Cmd *cmd, Procs *procs, const char *bin_path, const char *src_pa
         // To make sure no compiler output pollutes the test output.
         // This is needed specifically for cl.exe cause it has
         // a tendency to output compiled source files to stdout.
-        .stdout_path = temp_sprintf("%s.comp.txt", bin_path), 
+        .stdout_path = temp_sprintf("%s.comp.txt", bin_path),
     );
 }
 
