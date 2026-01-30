@@ -9,6 +9,9 @@ int compar_paths(const void *a, const void *b)
 
 int main(void)
 {
+    Nob_File_Paths empty = {0};
+    if (nob_read_entire_dir("", &empty)) return 1; // test invalid path
+
     if (!write_entire_file("foo.txt", NULL, 0)) return 1;
     if (!write_entire_file("bar.txt", NULL, 0)) return 1;
     if (!write_entire_file("baz.txt", NULL, 0)) return 1;
