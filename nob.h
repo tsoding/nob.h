@@ -1923,7 +1923,7 @@ NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir)
     }
 #else
     dir->nob__private.posix_dir = opendir(dir_path);
-    if (dir == NULL) {
+    if (dir->nob__private.posix_dir == NULL) {
         nob_log(NOB_ERROR, "Could not open directory %s: %s", dir_path, strerror(errno));
         dir->error = true;
         return false;
