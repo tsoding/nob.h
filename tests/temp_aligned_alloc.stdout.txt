@@ -1,0 +1,12 @@
+temp_alloc(  0) → temp_size ==   0
+temp_alloc(  2) → temp_size ==   8
+temp_alloc(  3) → temp_size ==  16
+temp_alloc(  5) → temp_size ==  24
+temp_alloc(  7) → temp_size ==  32
+temp_alloc( 11) → temp_size ==  48
+temp_alloc( 13) → temp_size ==  64
+temp_alloc( 11) → temp_size ==  80
+temp_alloc(  7) → temp_size ==  88
+temp_alloc(  5) → temp_size ==  96
+temp_alloc(  3) → temp_size == 104
+temp_alloc(  2) → temp_size == 112

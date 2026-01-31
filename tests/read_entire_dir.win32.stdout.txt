@@ -1,0 +1,4 @@
+Tests:
+    bar.txt
+    baz.txt
+    foo.txt

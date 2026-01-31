@@ -1,6 +1,4 @@
-#define NOB_IMPLEMENTATION
-#define NOB_STRIP_PREFIX
-#include "nob.h"
+#include "shared.h"
 
 int main(void)
 {
@@ -21,17 +19,17 @@ int main(void)
         NULL,
     };
 
-    nob_log(INFO, "temp_dir_name:");
+    printf("temp_dir_name:\n");
     for (size_t i = 0; i < ARRAY_LEN(paths); ++i) {
-        nob_log(INFO, "    %s => %s", paths[i], temp_dir_name(paths[i]));
+        printf("    %s => %s\n", paths[i], temp_dir_name(paths[i]));
     }
-    nob_log(INFO, "temp_file_name:");
+    printf("temp_file_name:\n");
     for (size_t i = 0; i < ARRAY_LEN(paths); ++i) {
-        nob_log(INFO, "    %s => %s", paths[i], temp_file_name(paths[i]));
+        printf("    %s => %s\n", paths[i], temp_file_name(paths[i]));
     }
-    nob_log(INFO, "temp_file_ext:");
+    printf("temp_file_ext:\n");
     for (size_t i = 0; i < ARRAY_LEN(paths); ++i) {
-        nob_log(INFO, "    %s => %s", paths[i], temp_file_ext(paths[i]));
+        printf("    %s => %s\n", paths[i], temp_file_ext(paths[i]));
     }
     return 0;
 }

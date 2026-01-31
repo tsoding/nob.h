@@ -1,6 +1,4 @@
-#define NOB_IMPLEMENTATION
-#define NOB_STRIP_PREFIX
-#include "nob.h"
+#include "shared.h"
 
 int main(void)
 {
@@ -15,13 +13,7 @@ int main(void)
         "    }\n"
         "    return 0;\n"
         "}\n";
-    if (!write_entire_file("print_args.c", print_args_src, strlen(print_args_src))) return 1;
-
-    nob_cc(&cmd);
-    nob_cc_flags(&cmd);
-    nob_cc_output(&cmd, "print_args");
-    nob_cc_inputs(&cmd, "print_args.c");
-    if (!cmd_run(&cmd)) return 1;
+    if (!build_tool(&cmd, NULL, "print_args", "print_args.c", print_args_src)) return 1;
 
     cmd_append(&cmd, "./print_args");
     cmd_append(&cmd, "foo");
