@@ -100,6 +100,20 @@
 
 #ifndef NOB_H_
 #define NOB_H_
+
+/*
+    This is useful cause clang likes to pretent to be gcc sometimes, and sometimes it also pretends to be MSVC.
+*/
+# if defined(__clang__)
+#                       define COMPILER_CLANG
+# elif defined(_MSC_VER)
+#                       define COMPILER_MSVC
+# elif defined(__TINYC__)
+#                       define COMPILER_TINYC
+# elif defined(__GNUC__)
+#                       define COMPILER_GCC
+# endif
+
 #ifdef _WIN32
 #    ifndef _CRT_SECURE_NO_WARNINGS
 #        define _CRT_SECURE_NO_WARNINGS (1)
@@ -756,21 +770,19 @@ NOBDEF char *nob_temp_file_name(const char *path);
 NOBDEF char *nob_temp_file_ext(const char *path);
 NOBDEF char *nob_temp_running_executable_path(void);
 
-// TODO: we should probably document somewhere all the compilers we support
-
 // The nob_cc_* macros try to abstract away the specific compiler.
 // They are verify basic and not particularly flexible, but you can redefine them if you need to
 // or not use them at all and create your own abstraction on top of Nob_Cmd.
 
 #ifndef nob_cc
 #  if _WIN32
-#    if defined(__GNUC__) && defined(__clang__)
+#    if   defined(COMPILER_CLANG)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "clang")
-#    elif defined(__GNUC__) && !defined(__clang__)
+#    elif defined(COMPILER_GCC)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "gcc")
-#    elif defined(_MSC_VER)
+#    elif defined(COMPILER_MSVC)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "cl.exe")
-#    elif defined(__TINYC__)
+#    elif defined(COMPILER_TINYC)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "tcc")
 #    endif
 #  else
@@ -779,7 +791,7 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #endif // nob_cc
 
 #ifndef nob_cc_flags
-#  if defined(_MSC_VER) && !defined(__clang__)
+#  if defined(COMPILER_MSVC)
 #    define nob_cc_flags(cmd) nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS")
 #  else
 #    define nob_cc_flags(cmd) nob_cmd_append(cmd, "-Wall", "-Wextra")
@@ -787,7 +799,7 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #endif // nob_cc_flags
 
 #ifndef nob_cc_output
-#  if defined(_MSC_VER) && !defined(__clang__)
+#  if defined(COMPILER_MSVC)
 #    define nob_cc_output(cmd, output_path) nob_cmd_append(cmd, nob_temp_sprintf("/Fe:%s", (output_path)), nob_temp_sprintf("/Fo:%s", (output_path)))
 #  else
 #    define nob_cc_output(cmd, output_path) nob_cmd_append(cmd, "-o", (output_path))
