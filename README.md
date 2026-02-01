@@ -16,7 +16,7 @@ Right now I'm actively using nob in a variety of my C projects at [https://githu
 
 ## It's likely Not Suitable for Your Project
 
-If you are using [cmake](https://cmake.org/) with tons of modules to manage and find tons of dependencies you probably don't want to use this tool. (But in that case I personally think you have much bigger problem than a build system). NoBuild is more like writting shell scripts but in C.
+If you are using [cmake](https://cmake.org/) with tons of modules to manage and find tons of dependencies you probably don't want to use this tool. (But in that case I personally think you have much bigger problem than a build system). NoBuild is more like writing shell scripts but in C.
 
 ## Advantages of NoBuild
 
