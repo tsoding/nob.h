@@ -520,6 +520,8 @@ typedef struct {
     size_t max_procs;
     // Do not reset the command after execution.
     bool dont_reset;
+    // Expand environment variables
+    bool expand_envvars;
     // Redirect stdin to file
     const char *stdin_path;
     // Redirect stdout to file
@@ -1215,6 +1217,45 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
                 }
             }
         }
+    }
+
+    if (opt.expand_envvars) {
+        Nob_Cmd tmp_cmd = {0};
+
+        for (size_t i = 0; i < cmd->count; ++i) {
+            const char* arg = cmd->items[i];
+
+            if (arg[0] != '$') {
+                nob_da_append(&tmp_cmd, arg);
+                continue;
+            }
+
+            const char* var_name = arg + 1; // skip $
+            const char* var_val = getenv(var_name);
+
+            // TODO: maybe better to crash here?
+            if (var_val == NULL) continue;
+
+#ifndef NOB_NO_ECHO
+            nob_log(NOB_INFO, "expanding $%s=%s", var_name, var_val);
+#endif
+
+            Nob_String_View sv = nob_sv_from_cstr(var_val);
+            while (sv.count > 0) {
+                size_t temp_mark = nob_temp_save();
+
+                // will not work for escaped spaces i.e. '\ ' because of execvp
+                Nob_String_View a = nob_sv_chop_by_delim(&sv, ' ');
+                nob_da_append(&tmp_cmd, nob_temp_sv_to_cstr(a));
+                nob_temp_rewind(temp_mark);
+            }
+        }
+
+        nob_da_free(*cmd);
+
+        cmd->items = tmp_cmd.items;
+        cmd->count = tmp_cmd.count;
+        cmd->capacity = tmp_cmd.capacity;
     }
 
     if (opt.stdin_path) {
