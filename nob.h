@@ -2074,6 +2074,7 @@ NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_
 
 NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
 {
+    if (strlen(parent) == 0) return false;
     bool result = true;
     Nob_Dir_Entry dir = {0};
     if (!nob_dir_entry_open(parent, &dir)) nob_return_defer(false);
