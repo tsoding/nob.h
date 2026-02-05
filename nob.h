@@ -175,6 +175,7 @@
 #    include <sys/wait.h>
 #    include <sys/stat.h>
 #    include <unistd.h>
+#    include <utime.h>
 #    include <fcntl.h>
 #    include <dirent.h>
 #endif
@@ -258,6 +259,7 @@ NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
+NOBDEF bool nob_touch_file(const char *path);
 
 typedef enum {
     // If the current file is a directory go inside of it.
@@ -2176,6 +2178,47 @@ NOBDEF bool nob_delete_file(const char *path)
     if (remove(path) < 0) {
         nob_log(NOB_ERROR, "Could not delete file %s: %s", path, strerror(errno));
         return false;
+    }
+    return true;
+#endif // _WIN32
+}
+
+NOBDEF bool nob_touch_file(const char *path)
+{
+    nob_log(NOB_INFO, "touching %s", path);
+#ifdef _WIN32
+    HANDLE FileHandle = CreateFile(path, FILE_WRITE_ATTRIBUTES, 0, 0, OPEN_ALWAYS, 0, 0);
+    if (FileHandle == INVALID_HANDLE_VALUE) {
+        nob_log(NOB_ERROR, "Could not touch file %s: %s", path, nob_win32_error_message(GetLastError()));
+        return false;
+    }
+
+    FILETIME Now;
+    GetSystemTimeAsFileTime(&Now);
+
+    if (!SetFileTime(FileHandle, NULL, NULL, &Now)) {
+        nob_log(NOB_ERROR, "Could not touch file %s: %s", path, nob_win32_error_message(GetLastError()));
+        CloseHandle(FileHandle);
+        return false;
+    }
+
+    CloseHandle(FileHandle);
+    return true;
+#else
+    if (utime(path, NULL) == -1) {
+        if (errno != ENOENT) {
+            nob_log(NOB_ERROR, "Could not touch file %s: %s", path, strerror(errno));
+            return false;
+        } else {
+            int fd = creat(path, 0644);
+            if (fd == -1) {
+                nob_log(NOB_ERROR, "Could not touch file %s: %s", path, strerror(errno));
+                return false;
+            } else {
+                close(fd);
+                return true;
+            }
+        }
     }
     return true;
 #endif // _WIN32
