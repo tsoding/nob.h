@@ -1,4 +1,4 @@
-/* nob - v3.2.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.2.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -2910,7 +2910,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-                         Fix the implicit declaration error when nob is included as a header (by @ysoftware)
+      3.2.1 (2026-01-29) Fix the implicit declaration error when nob is included as a header (by @ysoftware)
       3.2.0 (2026-01-28) Introduce Chain API
                            - Nob_Chain
                            - Nob_Chain_Begin_Opt
