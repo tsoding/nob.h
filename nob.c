@@ -164,7 +164,13 @@ void print_available_commands(Commands commands)
 
 int main(int argc, char **argv)
 {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif // _WIN32
+
     GO_REBUILD_URSELF_PLUS(argc, argv, "nob.h", "shared.h");
+
+    set_log_handler(cancer_log_handler);
 
     Cmd cmd = {0};
 
