@@ -2092,7 +2092,6 @@ NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t siz
 {
     bool result = true;
 
-    const char *buf = NULL;
     FILE *f = fopen(path, "wb");
     if (f == NULL) {
         nob_log(NOB_ERROR, "Could not open file %s for writing: %s\n", path, strerror(errno));
@@ -2105,15 +2104,10 @@ NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t siz
     //     ^
     //     data
 
-    buf = (const char*)data;
-    while (size > 0) {
-        size_t n = fwrite(buf, 1, size, f);
-        if (ferror(f)) {
-            nob_log(NOB_ERROR, "Could not write into file %s: %s\n", path, strerror(errno));
-            nob_return_defer(false);
-        }
-        size -= n;
-        buf  += n;
+    size_t n = fwrite(data, 1, size, f);
+    if (n < size) {
+        nob_log(NOB_ERROR, "Could not write into file %s: %s\n", path, strerror(errno));
+        nob_return_defer(false);
     }
 
 defer:
@@ -2452,7 +2446,6 @@ NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 
     fread(sb->items + sb->count, m, 1, f);
     if (ferror(f)) {
-        // TODO: Afaik, ferror does not set errno. So the error reporting in defer is not correct in this case.
         nob_return_defer(false);
     }
     sb->count = new_count;
