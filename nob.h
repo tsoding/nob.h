@@ -1697,7 +1697,9 @@ NOBDEF bool nob_proc_wait(Nob_Proc proc)
 #else
     for (;;) {
         int wstatus = 0;
-        if (waitpid(proc, &wstatus, 0) < 0) {
+        int r = waitpid(proc, &wstatus, 0);
+        if (r < 0) {
+            if (r == -1 && errno == EINTR) continue; // continue if host process is interrupted
             nob_log(NOB_ERROR, "could not wait on command (pid %d): %s", proc, strerror(errno));
             return false;
         }
