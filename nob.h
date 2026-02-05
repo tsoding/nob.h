@@ -1,4 +1,4 @@
-/* nob - v3.2.1 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.2.2 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -1923,7 +1923,7 @@ NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir)
     }
 #else
     dir->nob__private.posix_dir = opendir(dir_path);
-    if (dir == NULL) {
+    if (dir->nob__private.posix_dir == NULL) {
         nob_log(NOB_ERROR, "Could not open directory %s: %s", dir_path, strerror(errno));
         dir->error = true;
         return false;
@@ -2074,6 +2074,10 @@ NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_
 
 NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
 {
+    if (strlen(parent) == 0) {
+        nob_log(NOB_ERROR, "Cannot read empty path");
+        return false;
+    }
     bool result = true;
     Nob_Dir_Entry dir = {0};
     if (!nob_dir_entry_open(parent, &dir)) nob_return_defer(false);
@@ -2910,6 +2914,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.2.2 (2026-02-06) Fix read_entire_dir crash on empty path (by @ysoftware)
       3.2.1 (2026-01-29) Fix the implicit declaration error when nob is included as a header (by @ysoftware)
       3.2.0 (2026-01-28) Introduce Chain API
                            - Nob_Chain
