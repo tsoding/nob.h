@@ -3,7 +3,7 @@
 
 bool visit(Nob_Walk_Entry entry)
 {
-    if (entry.type == FILE_DIRECTORY && entry.level) {
+    if (entry.type == FILE_DIRECTORY && entry.level == 1) {
         Cmd *cmd = (Cmd*)entry.data;
         size_t mark = temp_save();
             if (!set_current_dir(entry.path)) return 1;
