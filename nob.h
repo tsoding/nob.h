@@ -114,9 +114,24 @@
 #define NOBDEF
 #endif /* NOBDEF */
 
+#if defined(__GNUC__) || defined(__clang__)
+    #define NOB_CRASH() __builtin_trap()
+#elif _MSC_VER
+    #define NOB_CRASH() __debugbreak()
+#else
+    #define NOB_CRASH() (*(volatile int *)0 = 0)
+#endif
+
 #ifndef NOB_ASSERT
-#include <assert.h>
-#define NOB_ASSERT assert
+#ifndef NDEBUG
+#define NOB_ASSERT(expr)                                                                \
+    (!(expr)                                                                            \
+        ? fprintf(stderr, "%s:%d: assertion `%s` failed\n", __FILE__, __LINE__, #expr), \
+          NOB_CRASH()                                                                   \
+        : (void)0)
+#else
+#define NOB_ASSERT(expr) ((void)0)
+#endif /* NDEBUG */
 #endif /* NOB_ASSERT */
 
 #ifndef NOB_REALLOC
