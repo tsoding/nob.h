@@ -3,7 +3,7 @@
 
 bool count_files(Nob_Walk_Entry entry)
 {
-    size_t *count = entry.data;
+    size_t *count = (size_t*)entry.data;
     nob_log(INFO, "%*s%s", (int)entry.level*2, "", entry.path);
     if (entry.type == FILE_REGULAR) *count += 1;
     return true;
