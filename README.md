@@ -16,7 +16,7 @@ Right now I'm actively using nob in a variety of my C projects at [https://githu
 
 ## It's likely Not Suitable for Your Project
 
-If you are using [cmake](https://cmake.org/) with tons of modules to manage and find tons of dependencies you probably don't want to use this tool. (But in that case I personally think you have much bigger problem than a build system). NoBuild is more like writting shell scripts but in C.
+If you are using [cmake](https://cmake.org/) with tons of modules to manage and find tons of dependencies you probably don't want to use this tool. (But in that case I personally think you have much bigger problem than a build system). NoBuild is more like writing shell scripts but in C.
 
 ## Advantages of NoBuild
 
@@ -45,7 +45,10 @@ The only file you need from here is [nob.h](https://raw.githubusercontent.com/ts
 This is obviously applicable not only to C. You can implement the same kind of approach for other languages (apart from the languages that support this natively, of course). Here is few examples in the wild:
 
 - C++ - [https://github.com/zhiayang/nabs](https://github.com/zhiayang/nabs)
-- Java - [https://gitlab.com/NikaDev/arris](https://gitlab.com/NikaDev/arris)
+- Java
+  - [https://gitlab.com/NikaDev/arris](https://gitlab.com/NikaDev/arris)
+  - [https://codeberg.org/ptrace/job](https://codeberg.org/ptrace/job)
+- Fortran - [https://codeberg.org/shascilowicz/fob.f90](https://codeberg.org/shascilowicz/fob.f90)
 - ...
 
 *Feel free to contribute more*

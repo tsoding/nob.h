@@ -1,6 +1,4 @@
-#define NOB_IMPLEMENTATION
-#define NOB_STRIP_PREFIX
-#include "nob.h"
+#include "shared.h"
 
 #define trace_temp_alloc(requested_size) \
     (temp_alloc(requested_size), \
