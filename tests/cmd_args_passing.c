@@ -18,6 +18,8 @@ int main(void)
     cmd_append(&cmd, "./print_args");
     cmd_append(&cmd, "foo");
     cmd_append(&cmd, "bar");
+    cmd_append(&cmd, "");
+    cmd_append(&cmd, NULL);
     cmd_append(&cmd, "Hello, world");
     cmd_append(&cmd, "\"Hello, world\"");
     cmd_append(&cmd, "\"\\` %$*@");
