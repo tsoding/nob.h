@@ -1,3 +1,4 @@
+-- sv_end_with --
 sv_end_with("./example.exe", "./example.exe") => true
 sv_end_with("./example.exe", ".exe") => true
 sv_end_with("./example.exe", "e") => true
@@ -6,3 +7,6 @@ sv_end_with("", "") => true
 sv_end_with("./example.exe", ".png") => false
 sv_end_with("./example.exe", "/path/to/example.exe") => false
 sv_end_with("", ".obj") => false
+-- sv_chop_prefix --
+sv = "hello world", prefix = "foo", result = false
+sv = " world", prefix = "hello", result = true

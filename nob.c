@@ -1,7 +1,7 @@
 #include "shared.h"
 
 const char *test_names[] = {
-    "nob_sv_end_with",
+    "nob_string_view",
     "cmd_redirect",
     "cmd_args_passing",
     "read_entire_dir",
