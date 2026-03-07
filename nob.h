@@ -1,4 +1,4 @@
-/* nob - v3.2.2 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.3.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -882,6 +882,9 @@ NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv);
 
 NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim);
 NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n);
+// If `sv` starts with `prefix` chops off the prefix and returns true.
+// Otherwise, leaves `sv` unmodified and returns false.
+NOBDEF bool nob_sv_chop_prefix(Nob_String_View *sv, Nob_String_View prefix);
 NOBDEF Nob_String_View nob_sv_trim(Nob_String_View sv);
 NOBDEF Nob_String_View nob_sv_trim_left(Nob_String_View sv);
 NOBDEF Nob_String_View nob_sv_trim_right(Nob_String_View sv);
@@ -2514,6 +2517,15 @@ NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim)
     return result;
 }
 
+NOBDEF bool nob_sv_chop_prefix(Nob_String_View *sv, Nob_String_View prefix)
+{
+    if (nob_sv_starts_with(*sv, prefix)) {
+        nob_sv_chop_left(sv, prefix.count);
+        return true;
+    }
+    return false;
+}
+
 NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n)
 {
     if (n > sv->count) {
@@ -2894,6 +2906,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define String_View Nob_String_View
         #define temp_sv_to_cstr nob_temp_sv_to_cstr
         #define sv_chop_by_delim nob_sv_chop_by_delim
+        #define sv_chop_prefix nob_sv_chop_prefix
         #define sv_chop_left nob_sv_chop_left
         #define sv_trim nob_sv_trim
         #define sv_trim_left nob_sv_trim_left
@@ -2914,6 +2927,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.3.0 (2026-03-07) Add nob_sv_chop_prefix() (by @rexim)
       3.2.2 (2026-02-06) Fix read_entire_dir crash on empty path (by @ysoftware)
       3.2.1 (2026-01-29) Fix the implicit declaration error when nob is included as a header (by @ysoftware)
       3.2.0 (2026-01-28) Introduce Chain API
