@@ -1,4 +1,4 @@
-/* nob - v3.3.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.4.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -380,6 +380,8 @@ NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
         (da)->count = (new_size);       \
     } while (0)
 
+#define nob_da_pop(da) (da)->items[(NOB_ASSERT((da)->count > 0), --(da)->count)]
+#define nob_da_first(da) (da)->items[(NOB_ASSERT((da)->count > 0), 0)]
 #define nob_da_last(da) (da)->items[(NOB_ASSERT((da)->count > 0), (da)->count-1)]
 #define nob_da_remove_unordered(da, i)               \
     do {                                             \
@@ -880,6 +882,7 @@ typedef struct {
 
 NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv);
 
+NOBDEF Nob_String_View nob_sv_chop_while(Nob_String_View *sv, int (*p)(int x));
 NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim);
 NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n);
 // If `sv` starts with `prefix` chops off the prefix and returns true.
@@ -2497,6 +2500,20 @@ NOBDEF void nob_sb_pad_align(Nob_String_Builder *sb, size_t size)
     }
 }
 
+NOBDEF Nob_String_View nob_sv_chop_while(Nob_String_View *sv, int (*p)(int x))
+{
+    size_t i = 0;
+    while (i < sv->count && p(sv->data[i])) {
+        i += 1;
+    }
+
+    Nob_String_View result = nob_sv_from_parts(sv->data, i);
+    sv->count -= i;
+    sv->data  += i;
+
+    return result;
+}
+
 NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim)
 {
     size_t i = 0;
@@ -2828,6 +2845,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define da_resize nob_da_resize
         #define da_reserve nob_da_reserve
         #define da_last nob_da_last
+        #define da_first nob_da_first
+        #define da_pop nob_da_pop
         #define da_remove_unordered nob_da_remove_unordered
         #define da_foreach nob_da_foreach
         #define fa_append nob_fa_append
@@ -2906,6 +2925,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define String_View Nob_String_View
         #define temp_sv_to_cstr nob_temp_sv_to_cstr
         #define sv_chop_by_delim nob_sv_chop_by_delim
+        #define sv_chop_while nob_sv_chop_while
         #define sv_chop_prefix nob_sv_chop_prefix
         #define sv_chop_left nob_sv_chop_left
         #define sv_trim nob_sv_trim
@@ -2927,6 +2947,9 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.4.0 (2026-03-12) Add nob_da_first() (by @rexim)
+                         Add nob_da_pop() (by @rexim)
+                         Add nob_sv_chop_while() (by @rexim)
       3.3.0 (2026-03-07) Add nob_sv_chop_prefix() (by @rexim)
       3.2.2 (2026-02-06) Fix read_entire_dir crash on empty path (by @ysoftware)
       3.2.1 (2026-01-29) Fix the implicit declaration error when nob is included as a header (by @ysoftware)
