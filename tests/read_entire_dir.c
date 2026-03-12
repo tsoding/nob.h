@@ -22,7 +22,7 @@ int main(void)
     Nob_File_Paths empty = {0};
 
     error_counter = 0;
-    nob_log_handler *saved_log_hander = get_log_handler();
+    Nob_Log_Handler *saved_log_hander = get_log_handler();
     set_log_handler(error_counting_log_handler);
     {
         bool ok = nob_read_entire_dir("", &empty);
