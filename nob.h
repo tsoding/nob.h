@@ -1,4 +1,4 @@
-/* nob - v3.4.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.5.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -219,13 +219,16 @@ typedef enum {
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 extern Nob_Log_Level nob_minimal_log_level;
 
-typedef void (nob_log_handler)(Nob_Log_Level level, const char *fmt, va_list args);
+typedef void (Nob_Log_Handler)(Nob_Log_Level level, const char *fmt, va_list args);
+NOB_DEPRECATED("Uncapitalized nob_log_handler type is deprecated. Use Nob_Log_Handler instead. It's just when we were releasing the log handler feature we forgot that we had a convention that all the types must be capitalized like that. Sorry about it!")
+typedef Nob_Log_Handler nob_log_handler;
 
-NOBDEF void nob_set_log_handler(nob_log_handler *handler);
-NOBDEF nob_log_handler *nob_get_log_handler(void);
+NOBDEF void nob_set_log_handler(Nob_Log_Handler *handler);
+NOBDEF Nob_Log_Handler *nob_get_log_handler(void);
 
-NOBDEF nob_log_handler nob_default_log_handler;
-NOBDEF nob_log_handler nob_cancer_log_handler;
+NOBDEF Nob_Log_Handler nob_default_log_handler;
+NOBDEF Nob_Log_Handler nob_cancer_log_handler;
+NOBDEF Nob_Log_Handler nob_null_log_handler;
 
 NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
 
@@ -1849,14 +1852,14 @@ NOBDEF bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect r
     return nob_proc_wait(p);
 }
 
-static nob_log_handler *nob__log_handler = &nob_default_log_handler;
+static Nob_Log_Handler *nob__log_handler = &nob_default_log_handler;
 
-NOBDEF void nob_set_log_handler(nob_log_handler *handler)
+NOBDEF void nob_set_log_handler(Nob_Log_Handler *handler)
 {
     nob__log_handler = handler;
 }
 
-NOBDEF nob_log_handler *nob_get_log_handler(void)
+NOBDEF Nob_Log_Handler *nob_get_log_handler(void)
 {
     return nob__log_handler;
 }
@@ -1882,6 +1885,13 @@ NOBDEF void nob_default_log_handler(Nob_Log_Level level, const char *fmt, va_lis
 
     vfprintf(stderr, fmt, args);
     fprintf(stderr, "\n");
+}
+
+NOBDEF void nob_null_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
+{
+    NOB_UNUSED(level);
+    NOB_UNUSED(fmt);
+    NOB_UNUSED(args);
 }
 
 NOBDEF void nob_cancer_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
@@ -2801,8 +2811,10 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define Log_Level Nob_Log_Level
         #define minimal_log_level nob_minimal_log_level
         #define log_handler nob_log_handler
+        #define Log_Handler Nob_Log_Handler
         #define set_log_handler nob_set_log_handler
         #define get_log_handler nob_get_log_handler
+        #define null_log_handler nob_null_log_handler
         #define default_log_handler nob_default_log_handler
         #define cancer_log_handler nob_cancer_log_handler
         // NOTE: Name log is already defined in math.h and historically always was the natural logarithmic function.
@@ -2947,6 +2959,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.5.0 (2026-03-13) Add nob_null_log_handler (by @rexim)
+                         Rename nob_log_handler to Nob_Log_Handler (by @rexim)
       3.4.0 (2026-03-12) Add nob_da_first() (by @rexim)
                          Add nob_da_pop() (by @rexim)
                          Add nob_sv_chop_while() (by @rexim)
