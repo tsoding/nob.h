@@ -1,4 +1,4 @@
-/* nob - v3.5.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.6.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -254,12 +254,28 @@ typedef enum {
     NOB_FILE_OTHER,
 } Nob_File_Type;
 
+typedef struct {
+	long sec;
+	long nsec;
+} Nob_Time_Stamp;
+
+typedef struct {
+	Nob_File_Type type;
+	uint64_t size; // size in bytes	
+	Nob_Time_Stamp last_accessed;
+	Nob_Time_Stamp last_modified;
+	bool error; // TODO: there might be a better way
+} Nob_File_Stat;
+
 NOBDEF bool nob_mkdir_if_not_exists(const char *path);
 NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path);
 NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
 NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
+NOBDEF bool nob_ts_is_newer(Nob_Time_Stamp a, Nob_Time_Stamp b);
+NOBDEF bool nob_ts_is_equal(Nob_Time_Stamp a, Nob_Time_Stamp b);
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
+NOBDEF Nob_File_Stat nob_get_file_stat(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
 
 typedef enum {
@@ -638,7 +654,7 @@ NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void);
 // if (!nob_cmd_run(&cmd, .stdin_path = "input.txt", .stdout_path = "output.txt")) fail();
 // ```
 typedef struct {
-    Nob_Fd *fdin;
+	Nob_Fd *fdin;
     Nob_Fd *fdout;
     Nob_Fd *fderr;
 } Nob_Cmd_Redirect;
@@ -2137,6 +2153,16 @@ defer:
     return result;
 }
 
+NOBDEF bool nob_ts_is_newer(Nob_Time_Stamp a, Nob_Time_Stamp b) {
+    if (a.sec > b.sec) return true;
+    if (a.sec < b.sec) return false;
+    return a.nsec > b.nsec;
+}
+
+NOBDEF bool nob_ts_is_equal(Nob_Time_Stamp a, Nob_Time_Stamp b) {
+    return a.sec == b.sec && a.nsec == b.nsec;
+}
+
 NOBDEF Nob_File_Type nob_get_file_type(const char *path)
 {
 #ifdef _WIN32
@@ -2147,7 +2173,7 @@ NOBDEF Nob_File_Type nob_get_file_type(const char *path)
     }
 
     if (attr & FILE_ATTRIBUTE_DIRECTORY) return NOB_FILE_DIRECTORY;
-    // TODO: detect symlinks on Windows (whatever that means on Windows anyway)
+    if (attr & FILE_ATTRIBUTE_REPARSE_POINT) return NOB_FILE_SYMLINK;
     return NOB_FILE_REGULAR;
 #else // _WIN32
     struct stat statbuf;
@@ -2161,6 +2187,84 @@ NOBDEF Nob_File_Type nob_get_file_type(const char *path)
     if (S_ISLNK(statbuf.st_mode)) return NOB_FILE_SYMLINK;
     return NOB_FILE_OTHER;
 #endif // _WIN32
+}
+
+#ifdef _WIN32
+static Nob_Time_Stamp nob__win32_ft_to_ts(FILETIME ft) {
+    ULARGE_INTEGER t;
+    t.LowPart = ft.dwLowDateTime;
+    t.HighPart = ft.dwHighDateTime;
+
+    const uint64_t WINDOWS_TICK = 10000000ULL;
+    const uint64_t SEC_TO_UNIX_EPOCH = 11644473600ULL;
+
+    uint64_t seconds = t.QuadPart / WINDOWS_TICK;
+    uint64_t remainder = t.QuadPart % WINDOWS_TICK;
+
+    Nob_Time_Stamp res;
+    res.sec  = (long)(seconds - SEC_TO_UNIX_EPOCH);
+    res.nsec = (long)(remainder * 100); // 100ns -> ns
+
+    return res;
+}
+#endif
+
+NOBDEF Nob_File_Stat nob_get_file_stat(const char *path) {
+	Nob_File_Stat statres = { NOB_FILE_OTHER, 0, {0}, {0}, 0};
+
+#ifdef _WIN32
+    WIN32_FILE_ATTRIBUTE_DATA data;
+
+    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &data)) {
+        nob_log(NOB_ERROR, "Could not stat %s: %s",
+            path,
+            nob_win32_error_message(GetLastError()));
+        statres.error = true;
+        return statres;
+    }
+
+    statres.last_accessed = nob__win32_ft_to_ts(data.ftLastAccessTime);
+    statres.last_modified = nob__win32_ft_to_ts(data.ftLastWriteTime);
+
+    statres.size = ((uint64_t)data.nFileSizeHigh << 32) | data.nFileSizeLow;
+
+    if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) statres.type = NOB_FILE_DIRECTORY;
+    else if (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) statres.type = NOB_FILE_SYMLINK;
+    else statres.type = NOB_FILE_REGULAR;
+
+    return statres;
+#else
+    struct stat statbuf;
+    if (lstat(path, &statbuf) < 0) {
+        nob_log(NOB_ERROR, "Could not get stat of %s: %s", path, strerror(errno));
+        statres.error = true;
+		return statres;
+    }
+
+
+#if defined(st_atim)
+    statres.last_accessed.sec = statbuf.st_atim.tv_sec;
+    statres.last_accessed.nsec = statbuf.st_atim.tv_nsec;
+
+    statres.last_modified.sec = statbuf.st_mtim.tv_sec;
+    statres.last_modified.nsec = statbuf.st_mtim.tv_nsec;
+
+#else // old posix
+    statres.last_accessed.sec = statbuf.st_atime;
+    statres.last_accessed.nsec = 0;
+
+    statres.last_modified.sec = statbuf.st_mtime;
+    statres.last_modified.nsec = 0;
+#endif
+
+	statres.size = statbuf.st_size;
+
+    if (S_ISREG(statbuf.st_mode)) statres.type = NOB_FILE_REGULAR;
+	if (S_ISDIR(statbuf.st_mode)) statres.type = NOB_FILE_DIRECTORY;
+	if (S_ISLNK(statbuf.st_mode)) statres.type = NOB_FILE_SYMLINK;
+	
+	return statres;
+#endif
 }
 
 NOBDEF bool nob_delete_file(const char *path)
@@ -2844,7 +2948,10 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define walk_dir nob_walk_dir
         #define walk_dir_opt nob_walk_dir_opt
         #define write_entire_file nob_write_entire_file
+        #define ts_is_newer nob_ts_is_newer
+        #define ts_is_equal nob_ts_is_equal
         #define get_file_type nob_get_file_type
+        #define get_file_stat nob_get_file_stat
         #define delete_file nob_delete_file
         #define Dir_Entry Nob_Dir_Entry
         #define dir_entry_open nob_dir_entry_open
@@ -2958,7 +3065,13 @@ NOBDEF char *nob_temp_running_executable_path(void)
 
 /*
    Revision history:
-
+	  3.6.0 (2026-03-13) Introduce file statistics (by @Samisalami05)
+                           - Add nob_get_file_stat
+                           - Add nob_ts_is_newer
+                           - Add nob_ts_is_equal 
+                           - Add Nob_Time_Stamp 
+                           - Add Nob_File_Stat
+                           - Fix symlink file type on windows
       3.5.0 (2026-03-13) Add nob_null_log_handler (by @rexim)
                          Rename nob_log_handler to Nob_Log_Handler (by @rexim)
       3.4.0 (2026-03-12) Add nob_da_first() (by @rexim)
