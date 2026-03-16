@@ -1,4 +1,4 @@
-/* nob - v3.5.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.6.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -216,7 +216,7 @@ typedef enum {
     NOB_NO_LOGS,
 } Nob_Log_Level;
 
-// Any messages with the level below nob_minimal_log_level are going to be suppressed.
+// Any messages with the level below nob_minimal_log_level are going to be suppressed by the nob_default_log_handler.
 extern Nob_Log_Level nob_minimal_log_level;
 
 typedef void (Nob_Log_Handler)(Nob_Log_Level level, const char *fmt, va_list args);
@@ -888,15 +888,28 @@ NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv);
 NOBDEF Nob_String_View nob_sv_chop_while(Nob_String_View *sv, int (*p)(int x));
 NOBDEF Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim);
 NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n);
+NOBDEF Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n);
 // If `sv` starts with `prefix` chops off the prefix and returns true.
 // Otherwise, leaves `sv` unmodified and returns false.
 NOBDEF bool nob_sv_chop_prefix(Nob_String_View *sv, Nob_String_View prefix);
+// If `sv` ends with `suffix` chops off the suffix and returns true.
+// Otherwise, leaves `sv` unmodified and returns false.
+NOBDEF bool nob_sv_chop_suffix(Nob_String_View *sv, Nob_String_View suffix);
 NOBDEF Nob_String_View nob_sv_trim(Nob_String_View sv);
 NOBDEF Nob_String_View nob_sv_trim_left(Nob_String_View sv);
 NOBDEF Nob_String_View nob_sv_trim_right(Nob_String_View sv);
 NOBDEF bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
+NOB_DEPRECATED("Use nob_sv_ends_with_cstr(sv, suffix) instead. "
+               "Pay attention to the `s` at the end of the `end`. "
+               "The reason this function was deprecated is because "
+               "of the typo in the name, of course, but also "
+               "because the second argument was a NULL-terminated string "
+               "while nob_sv_starts_with() accepted Nob_String_View as the "
+               "prefix which created an inconsistency in the API.")
 NOBDEF bool nob_sv_end_with(Nob_String_View sv, const char *cstr);
-NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_prefix);
+NOBDEF bool nob_sv_ends_with_cstr(Nob_String_View sv, const char *cstr);
+NOBDEF bool nob_sv_ends_with(Nob_String_View sv, Nob_String_View suffix);
+NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View prefix);
 NOBDEF Nob_String_View nob_sv_from_cstr(const char *cstr);
 NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
@@ -992,7 +1005,7 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
 #ifdef _WIN32
     // On Windows executables almost always invoked without extension, so
     // it's ./nob, not ./nob.exe. For renaming the extension is a must.
-    if (!nob_sv_end_with(nob_sv_from_cstr(binary_path), ".exe")) {
+    if (!nob_sv_ends_with_cstr(nob_sv_from_cstr(binary_path), ".exe")) {
         binary_path = nob_temp_sprintf("%s.exe", binary_path);
     }
 #endif
@@ -2553,6 +2566,15 @@ NOBDEF bool nob_sv_chop_prefix(Nob_String_View *sv, Nob_String_View prefix)
     return false;
 }
 
+NOBDEF bool nob_sv_chop_suffix(Nob_String_View *sv, Nob_String_View suffix)
+{
+    if (nob_sv_ends_with(*sv, suffix)) {
+        nob_sv_chop_right(sv, suffix.count);
+        return true;
+    }
+    return false;
+}
+
 NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n)
 {
     if (n > sv->count) {
@@ -2562,6 +2584,19 @@ NOBDEF Nob_String_View nob_sv_chop_left(Nob_String_View *sv, size_t n)
     Nob_String_View result = nob_sv_from_parts(sv->data, n);
 
     sv->data  += n;
+    sv->count -= n;
+
+    return result;
+}
+
+NOBDEF Nob_String_View nob_sv_chop_right(Nob_String_View *sv, size_t n)
+{
+    if (n > sv->count) {
+        n = sv->count;
+    }
+
+    Nob_String_View result = nob_sv_from_parts(sv->data + sv->count - n, n);
+
     sv->count -= n;
 
     return result;
@@ -2616,15 +2651,25 @@ NOBDEF bool nob_sv_eq(Nob_String_View a, Nob_String_View b)
 
 NOBDEF bool nob_sv_end_with(Nob_String_View sv, const char *cstr)
 {
-    size_t cstr_count = strlen(cstr);
-    if (sv.count >= cstr_count) {
-        size_t ending_start = sv.count - cstr_count;
-        Nob_String_View sv_ending = nob_sv_from_parts(sv.data + ending_start, cstr_count);
-        return nob_sv_eq(sv_ending, nob_sv_from_cstr(cstr));
+    return nob_sv_ends_with_cstr(sv, cstr);
+}
+
+NOBDEF bool nob_sv_ends_with_cstr(Nob_String_View sv, const char *cstr)
+{
+    return nob_sv_ends_with(sv, nob_sv_from_cstr(cstr));
+}
+
+NOBDEF bool nob_sv_ends_with(Nob_String_View sv, Nob_String_View suffix)
+{
+    if (sv.count >= suffix.count) {
+        Nob_String_View sv_tail = {
+            .count = suffix.count,
+            .data = sv.data + sv.count - suffix.count,
+        };
+        return nob_sv_eq(sv_tail, suffix);
     }
     return false;
 }
-
 
 NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_prefix)
 {
@@ -2939,13 +2984,17 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define sv_chop_by_delim nob_sv_chop_by_delim
         #define sv_chop_while nob_sv_chop_while
         #define sv_chop_prefix nob_sv_chop_prefix
+        #define sv_chop_suffix nob_sv_chop_suffix
         #define sv_chop_left nob_sv_chop_left
+        #define sv_chop_right nob_sv_chop_right
         #define sv_trim nob_sv_trim
         #define sv_trim_left nob_sv_trim_left
         #define sv_trim_right nob_sv_trim_right
         #define sv_eq nob_sv_eq
         #define sv_starts_with nob_sv_starts_with
         #define sv_end_with nob_sv_end_with
+        #define sv_ends_with nob_sv_ends_with
+        #define sv_ends_with_cstr nob_sv_ends_with_cstr
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
         #define sb_to_sv nob_sb_to_sv
@@ -2959,7 +3008,12 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      3.5.0 (2026-03-13) Add nob_null_log_handler (by @rexim)
+      3.6.0 (2026-03-16) Add nob_sv_chop_suffix()
+                         Deprecate nob_sv_end_with()
+                         Add nob_sv_ends_with_cstr() instead of nob_sv_end_with()
+                         Add nob_sv_ends_with()
+                         Add nob_sv_chop_right()
+      3.5.0 (2026-03-13) Add nob_null_log_handler() (by @rexim)
                          Rename nob_log_handler to Nob_Log_Handler (by @rexim)
       3.4.0 (2026-03-12) Add nob_da_first() (by @rexim)
                          Add nob_da_pop() (by @rexim)
