@@ -1,4 +1,4 @@
-/* nob - v3.6.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.7.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -445,6 +445,9 @@ NOBDEF void nob_sb_pad_align(Nob_String_Builder *sb, size_t size);
 
 // Append a sized buffer to a string builder
 #define nob_sb_append_buf(sb, buf, size) nob_da_append_many(sb, buf, size)
+
+// Append a string view to a string builder
+#define nob_sb_append_sv(sb, sv) nob_sb_append_buf((sb), (sv).data, (sv).count)
 
 // Append a NULL-terminated string to a string builder
 #define nob_sb_append_cstr(sb, cstr)  \
@@ -2912,6 +2915,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define read_entire_file nob_read_entire_file
         #define sb_appendf nob_sb_appendf
         #define sb_append_buf nob_sb_append_buf
+        #define sb_append_sv nob_sb_append_sv
         #define sb_append_cstr nob_sb_append_cstr
         #define sb_append_null nob_sb_append_null
         #define sb_append nob_sb_append
@@ -3008,6 +3012,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.7.0 (2026-03-20) Add nob_sb_append_sv()
       3.6.0 (2026-03-16) Add nob_sv_chop_suffix()
                          Deprecate nob_sv_end_with()
                          Add nob_sv_ends_with_cstr() instead of nob_sv_end_with()
