@@ -12,7 +12,7 @@
 
 #if defined(__cplusplus)
     #if defined(_MSC_VER)
-        #define nob_cc_flags(cmd) cmd_append(cmd, "/TP", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #define nob_cc_flags(cmd) cmd_append(cmd, "/std:c++20", "/TP", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
     #else
         #define nob_cc(cmd) cmd_append(cmd, "cc", "-x", "c++")
         #define nob_cc_flags(cmd) cmd_append(cmd, "-Wall", "-Wextra", "-Wno-missing-field-initializers", "-Wswitch-enum", "-ggdb", "-I.");
