@@ -370,11 +370,16 @@ NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
 #define nob_da_free(da) NOB_FREE((da).items)
 
 // Append several items to a dynamic array
-#define nob_da_append_many(da, new_items, new_items_count)                                      \
-    do {                                                                                        \
-        nob_da_reserve((da), (da)->count + (new_items_count));                                  \
-        memcpy((da)->items + (da)->count, (new_items), (new_items_count)*sizeof(*(da)->items)); \
-        (da)->count += (new_items_count);                                                       \
+#define nob_da_append_many(da, new_items, new_items_count)                          \
+    do {                                                                            \
+        size_t nob_new_items_count__ = (new_items_count);                           \
+        if (nob_new_items_count__ > 0) {                                            \
+            nob_da_reserve((da), (da)->count + nob_new_items_count__);              \
+            memcpy((da)->items + (da)->count,                                       \
+                   (new_items),                                                     \
+                   nob_new_items_count__ * sizeof(*(da)->items));                   \
+            (da)->count += nob_new_items_count__;                                   \
+        }                                                                           \
     } while (0)
 
 #define nob_da_resize(da, new_size)     \
