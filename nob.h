@@ -272,13 +272,15 @@ typedef enum {
 } Nob_Walk_Action;
 
 typedef struct {
-    // The path to the visited file
+    // The path to the visited file. The lifetime of the path string is very short.
+    // As soon as the execution exits the Nob_Walk_Func it's dead. Dup it somewhere
+    // if you want to preserve it for longer periods of time.
     const char *path;
-    // The type of the visited file
+    // The type of the visited file.
     Nob_File_Type type;
-    // How nested we currently are in the directory tree
+    // How nested we currently are in the directory tree.
     size_t level;
-    // User data supplied in Nob_Walk_Dir_Opt.data
+    // User data supplied in Nob_Walk_Dir_Opt.data.
     void *data;
     // The action nob_walk_dir_opt() must perform after the Nob_Walk_Func has returned.
     // Default is NOB_WALK_CONT.
