@@ -1,4 +1,4 @@
-/* nob - v3.8.1 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.8.2 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -660,9 +660,19 @@ NOBDEF void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
     #define NOB_CLIT(type) (type)
 #endif
 
-NOBDEF void nob__cmd_append(Nob_Cmd *cmd, ...);
-#define nob_cmd_append(cmd, ...) \
-    nob__cmd_append(cmd, __VA_ARGS__, (const char*)-1)
+NOBDEF void nob__cmd_append(Nob_Cmd *cmd, size_t n, const char **args);
+#if defined(__cplusplus)
+    template <typename... Args>
+    static inline void nob__cpp_cmd_append_wrapper(Nob_Cmd *cmd, Args... strs)
+    {
+        const char* args[] = { strs... };
+        nob__cmd_append(cmd, sizeof(args)/sizeof(args[0]), args);
+    }
+    #define nob_cmd_append(cmd, ...) nob__cpp_cmd_append_wrapper(cmd, __VA_ARGS__)
+#else
+    #define nob_cmd_append(cmd, ...) \
+        nob__cmd_append(cmd, sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*), (const char*[]){__VA_ARGS__})
+#endif // __cplusplus
 
 // TODO: nob_cmd_extend() evaluates other_cmd twice
 // It can be fixed by turning nob_cmd_extend() call into a statement.
@@ -959,16 +969,11 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 // Any messages with the level below nob_minimal_log_level are going to be suppressed.
 Nob_Log_Level nob_minimal_log_level = NOB_INFO;
 
-NOBDEF void nob__cmd_append(Nob_Cmd *cmd, ...)
+NOBDEF void nob__cmd_append(Nob_Cmd *cmd, size_t n, const char **args)
 {
-    va_list args;
-    va_start(args, cmd);
-    for (;;) {
-        const char *arg = va_arg(args, const char *);
-        if (arg == (const char*)-1) break;
-        nob_da_append(cmd, arg);
+    for (size_t i = 0; i < n; ++i) {
+        nob_da_append(cmd, args[i]);
     }
-    va_end(args);
 }
 
 #ifdef _WIN32
@@ -1529,7 +1534,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
         // But do we actually care? It's a one off leak anyway...
         Nob_Cmd cmd_null = {0};
         nob_da_append_many(&cmd_null, cmd.items, cmd.count);
-        nob_cmd_append(&cmd_null, NULL);
+        nob_cmd_append(&cmd_null, (const char*)NULL);
 
         if (execvp(cmd.items[0], (char * const*) cmd_null.items) < 0) {
             nob_log(NOB_ERROR, "Could not exec child process for %s: %s", cmd.items[0], strerror(errno));
@@ -3023,6 +3028,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.8.2 (2026-04-01) Fix the broken type safety of nob_cmd_append() (by @aalmkainzi)
       3.8.1 (2026-04-01) Fix annoying clang warning
       3.8.0 (2026-03-24) Add NOB_CLIT()
                          Fix compliation on MSVC with /TP
