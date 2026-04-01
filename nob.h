@@ -1,4 +1,4 @@
-/* nob - v3.8.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.8.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -1301,8 +1301,8 @@ NOBDEF bool nob_chain_cmd_opt(Nob_Chain *chain, Nob_Cmd *cmd, Nob_Chain_Cmd_Opt 
     bool result = true;
     Nob_Pipe pp = {0};
     struct {
-        Nob_Fd items[5]; // should be no more than 3, but we allocate 5 just in case
         size_t count;
+        Nob_Fd items[5]; // should be no more than 3, but we allocate 5 just in case
     } fds = {0};
 
     NOB_ASSERT(cmd->count > 0);
@@ -1353,8 +1353,8 @@ NOBDEF bool nob_chain_end_opt(Nob_Chain *chain, Nob_Chain_End_Opt opt)
 
     Nob_Fd *pfdin = NULL;
     struct {
-        Nob_Fd items[5]; // should be no more than 3, but we allocate 5 just in case
         size_t count;
+        Nob_Fd items[5]; // should be no more than 3, but we allocate 5 just in case
     } fds = {0};
 
     if (chain->fdin != NOB_INVALID_FD) {
@@ -3023,6 +3023,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.8.1 (2026-04-01) Fix annoying clang warning
       3.8.0 (2026-03-24) Add NOB_CLIT()
                          Fix compliation on MSVC with /TP
       3.7.0 (2026-03-20) Add nob_sb_append_sv()
