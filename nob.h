@@ -348,6 +348,12 @@ NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
 #define NOB_DECLTYPE_CAST(T)
 #endif // __cplusplus
 
+#ifdef __cplusplus
+#define NOB_TYPEOF(T) decltype(T)
+#else
+#define NOB_TYPEOF(T) __typeof__(T)
+#endif // __cplusplus
+
 #define nob_da_reserve(da, expected_capacity)                                              \
     do {                                                                                   \
         if ((expected_capacity) > (da)->capacity) {                                        \
@@ -368,6 +374,16 @@ NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
         nob_da_reserve((da), (da)->count + 1); \
         (da)->items[(da)->count++] = (item);   \
     } while (0)
+
+// Append an item to a dynamic array at position
+#define nob_da_insert_at(da, pos, item)               \
+  do {                                                \
+    nob_da_reserve((da), (da)->count + 1);            \
+    for (size_t it = (pos); it < (da)->count; ++it) { \
+      nob_swap_auto((da)->items[it], (item));         \
+    }                                                 \
+    (da)->items[(da)->count++] = (item);              \
+  } while (0)
 
 #define nob_da_free(da) NOB_FREE((da).items)
 
@@ -394,6 +410,65 @@ NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
         NOB_ASSERT(j < (da)->count);                 \
         (da)->items[j] = (da)->items[--(da)->count]; \
     } while(0)
+
+// Implementation of lower bound algorithm to search a
+// position of `item` within an ordered dynamic array.
+// Position will be written into `pos` and points to first element
+// which is greater of or equal to the searching one.
+//
+// The following example will produce an array `xs` of unique elements:
+// ```c
+// typedef struct {
+//     int value;
+//     size_t count;
+// } NumberStat;
+//
+// typedef struct {
+//     NumberStat *items;
+//     size_t count;
+//     size_t capacity;
+// } Numbers;
+//
+// // Compare in ascending order
+// static inline int number_cmp(NumberStat *lhs, int *rhs) {
+// 	return (lhs->value == *rhs) ? 0 : (lhs->value < *rhs ? -1 : 1);
+// }
+//
+// Numbers xs = {0};
+//
+// int input[] = {1337, 69, 420, 69};
+// for (size_t n = 0; n < 4; ++n) {
+//   size_t pos = 0;
+//   nob_da_lower_bound(&xs, input[n], number_cmp, pos);
+//   if (pos < xs.count && number_cmp(&xs.items[pos], &input[n]) == 0) {
+//     // do update things for non-generic types
+//     xs.items[pos].count++;
+//     continue;
+//   }
+//   NumberStat item = {.value = input[n], .count = 1};
+//   nob_da_insert_at(&xs, pos, item);
+// }
+//
+// nob_da_foreach(Number, x, &xs) {
+//     // `x` here is a pointer to the current element. You can get its index by taking a difference
+//     // between `x` and the start of the array which is `x.items`.
+//     size_t index = x - xs.items;
+//     nob_log(INFO, "%zu: %d (%zu)", index, x->value, x->count);
+// }
+// ```
+#define nob_da_lower_bound(da, item, cmp_fn, pos)            \
+  do {                                                       \
+    pos = 0;                                                 \
+    for (size_t count = (da)->count; count > 0;) {           \
+      size_t step = count / 2;                               \
+      if ((cmp_fn)(&(da)->items[pos + step], &(item)) < 0) { \
+        pos += ++step;                                       \
+        count -= step;                                       \
+      } else {                                               \
+        count = step;                                        \
+      }                                                      \
+    }                                                        \
+  } while (0)
 
 // Foreach over Dynamic Arrays. Example:
 // ```c
@@ -430,6 +505,7 @@ typedef struct {
 } Nob_String_Builder;
 
 #define nob_swap(T, a, b) do { T t = a; a = b; b = t; } while (0)
+#define nob_swap_auto(a, b) do { NOB_TYPEOF(a) t = (a); (a) = (b); (b) = t; } while (0)
 
 NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb);
 NOBDEF int nob_sb_appendf(Nob_String_Builder *sb, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
@@ -2915,6 +2991,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define dir_entry_close nob_dir_entry_close
         #define return_defer nob_return_defer
         #define da_append nob_da_append
+        #define da_insert_at nob_da_insert_at
         #define da_free nob_da_free
         #define da_append_many nob_da_append_many
         #define da_resize nob_da_resize
@@ -2923,6 +3000,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define da_first nob_da_first
         #define da_pop nob_da_pop
         #define da_remove_unordered nob_da_remove_unordered
+        #define da_lower_bound nob_da_lower_bound
         #define da_foreach nob_da_foreach
         #define fa_append nob_fa_append
         #define swap nob_swap
@@ -3029,6 +3107,10 @@ NOBDEF char *nob_temp_running_executable_path(void)
    Revision history:
 
       3.8.2 (2026-04-01) Fix the broken type safety of nob_cmd_append() (by @aalmkainzi)
+                         Add NOB_TYPEOF()
+                         Add nob_swap_auto()
+                         Add nob_da_insert_at()
+                         Add nob_da_lower_bound()
       3.8.1 (2026-04-01) Fix annoying clang warning
       3.8.0 (2026-03-24) Add NOB_CLIT()
                          Fix compliation on MSVC with /TP
