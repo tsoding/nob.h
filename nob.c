@@ -18,6 +18,7 @@ const char *test_names[] = {
     "cmd_run_dont_reset",
     "chain",
     "private_functions_inside_public_macros",
+    "unicode",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
