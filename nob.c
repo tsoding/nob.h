@@ -162,15 +162,6 @@ void print_available_commands(Commands commands)
     }
 }
 
-#if defined(_WIN32) && defined(_MSC_VER) && defined(__cplusplus)
-// TODO: I don't know why, but when you compile nob.c with
-// cl.exe /std:c++20 /TP nob.c
-// It just can't find the declaration of SetConsoleOutputCP().
-// This is probably something about how we include windows.h in nob.h
-extern "C" {
-    WINBASEAPI BOOL WINAPI SetConsoleOutputCP(_In_ UINT wCodePageID);
-}
-#endif
 
 int main(int argc, char **argv)
 {
