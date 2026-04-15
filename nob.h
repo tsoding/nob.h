@@ -790,7 +790,7 @@ NOBDEF char *nob_temp_running_executable_path(void);
 // or not use them at all and create your own abstraction on top of Nob_Cmd.
 
 #ifndef nob_cc
-#  if _WIN32
+#  if defined(_WIN32)
 #    if defined(__GNUC__)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "cc")
 #    elif defined(__clang__)
@@ -2704,7 +2704,7 @@ NOBDEF bool nob_sv_starts_with(Nob_String_View sv, Nob_String_View expected_pref
 //  1 - file exists
 NOBDEF int nob_file_exists(const char *file_path)
 {
-#if _WIN32
+#if defined(_WIN32)
     return GetFileAttributesA(file_path) != INVALID_FILE_ATTRIBUTES;
 #else
     return access(file_path, F_OK) == 0;
