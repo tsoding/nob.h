@@ -1479,10 +1479,19 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
     // NOTE: theoretically setting NULL to std handles should not be a problem
     // https://docs.microsoft.com/en-us/windows/console/getstdhandle?redirectedfrom=MSDN#attachdetach-behavior
     // TODO: check for errors in GetStdHandle
-    siStartInfo.hStdError = fderr ? *fderr : GetStdHandle(STD_ERROR_HANDLE);
-    siStartInfo.hStdOutput = fdout ? *fdout : GetStdHandle(STD_OUTPUT_HANDLE);
-    siStartInfo.hStdInput = fdin ? *fdin : GetStdHandle(STD_INPUT_HANDLE);
-    siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
+    // NOTE: This Fix is mainly to make the child process inheritable.
+    if (fdin || fdout || fderr) {
+        HANDLE hStdIn  = fdin  ? *fdin  : GetStdHandle(STD_INPUT_HANDLE);
+        HANDLE hStdOut = fdout ? *fdout : GetStdHandle(STD_OUTPUT_HANDLE);
+        HANDLE hStdErr = fderr ? *fderr : GetStdHandle(STD_ERROR_HANDLE);
+        SetHandleInformation(hStdIn,  HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+        SetHandleInformation(hStdOut, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+        SetHandleInformation(hStdErr, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+        siStartInfo.hStdInput  = hStdIn;
+        siStartInfo.hStdOutput = hStdOut;
+        siStartInfo.hStdError  = hStdErr;
+        siStartInfo.dwFlags   |= STARTF_USESTDHANDLES;
+    }
 
     PROCESS_INFORMATION piProcInfo;
     ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
@@ -1715,9 +1724,26 @@ NOBDEF bool nob_proc_wait(Nob_Proc proc)
                        INFINITE // DWORD  dwMilliseconds
                    );
 
+    // NOTE: This is windows process having issues of not properly closing handle.
+    // Because of this at times go rebuild yourself will try to rebuild it self
+    // But then not run the process below it because it is not properly cleaned up.
     if (result == WAIT_FAILED) {
-        nob_log(NOB_ERROR, "could not wait on child process: %s", nob_win32_error_message(GetLastError()));
-        return false;
+        DWORD exit_status;
+        for (int attempts = 0; attempts < 10000; ++attempts) {
+            if (GetExitCodeProcess(proc, &exit_status)) {
+                if (exit_status == STILL_ACTIVE) { Sleep(1); continue; }
+                CloseHandle(proc);
+                if (exit_status != 0) {
+                    nob_log(NOB_ERROR, "command exited with exit code %lu", exit_status);
+                    return false;
+                }
+                return true;
+            }
+            Sleep(1);
+        }
+        Sleep(50);
+        CloseHandle(proc);
+        return true;
     }
 
     DWORD exit_status;
@@ -1777,8 +1803,17 @@ static int nob__proc_wait_async(Nob_Proc proc, int ms)
     }
 
     if (result == WAIT_FAILED) {
-        nob_log(NOB_ERROR, "could not wait on child process: %s", nob_win32_error_message(GetLastError()));
-        return -1;
+        DWORD exit_status;
+        if (!GetExitCodeProcess(proc, &exit_status)) {
+            return 0;
+        }
+        if (exit_status == STILL_ACTIVE) return 0;
+        if (exit_status != 0) {
+            nob_log(NOB_ERROR, "command exited with exit code %lu", exit_status);
+            return -1;
+        }
+        CloseHandle(proc);
+        return 1;
     }
 
     DWORD exit_status;
