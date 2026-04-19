@@ -3022,6 +3022,12 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define nprocs nob_nprocs
         #define nanos_since_unspecified_epoch nob_nanos_since_unspecified_epoch
         #define NANOS_PER_SEC NOB_NANOS_PER_SEC
+
+        // On C++, this will cause a failur of compilation if nob.h is included before
+        // things like `<algorithm>' or `<string_view>' because of `std::swap'
+        #if defined(__cplusplus)
+            #undef swap
+        #endif
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
 
