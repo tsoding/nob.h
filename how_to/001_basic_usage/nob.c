@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     // into it.
 
     // nob.h ships with a bunch of nob_cc_* macros that try abstract away the specific compiler.
-    // They are verify basic and not particularly flexible, but you can redefine them if you need to
+    // They are very basic and not particularly flexible, but you can redefine them if you need to
     // or not use them at all and create your own abstraction on top of Nob_Cmd.
     nob_cc(&cmd);
     nob_cc_flags(&cmd);
