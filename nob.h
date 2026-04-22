@@ -166,7 +166,9 @@
 #    include <shellapi.h>
 #else
 #    ifdef __APPLE__
+#        define _DARWIN_C_SOURCE 1
 #        include <mach-o/dyld.h>
+#        include <sys/sysctl.h>
 #    endif
 #    ifdef __FreeBSD__
 #        include <sys/sysctl.h>
@@ -1226,6 +1228,11 @@ NOBDEF int nob_nprocs(void)
     SYSTEM_INFO siSysInfo;
     GetSystemInfo(&siSysInfo);
     return siSysInfo.dwNumberOfProcessors;
+#elif __APPLE__
+    int nprocs = 0;
+    size_t len = sizeof(nprocs);
+    sysctlbyname("hw.logicalcpu", &nprocs, &len, NULL, 0);
+    return nprocs;
 #else
     return sysconf(_SC_NPROCESSORS_ONLN);
 #endif
