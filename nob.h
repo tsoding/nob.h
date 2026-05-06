@@ -305,7 +305,7 @@ typedef struct {
 
 NOBDEF bool nob_walk_dir_opt(const char *root, Nob_Walk_Func func, Nob_Walk_Dir_Opt);
 
-#define nob_walk_dir(root, func, ...) nob_walk_dir_opt((root), (func), NOB_CLIT(Nob_Walk_Dir_Opt){__VA_ARGS__})
+#define nob_walk_dir(root, func, ...) nob_walk_dir_opt((root), (func), NOB_CLIT(Nob_Walk_Dir_Opt){0, __VA_ARGS__})
 
 typedef struct {
     char *name;
@@ -587,14 +587,14 @@ typedef struct {
 typedef struct {
     const char *stdin_path;
 } Nob_Chain_Begin_Opt;
-#define nob_chain_begin(chain, ...) nob_chain_begin_opt((chain), NOB_CLIT(Nob_Chain_Begin_Opt) { __VA_ARGS__ })
+#define nob_chain_begin(chain, ...) nob_chain_begin_opt((chain), NOB_CLIT(Nob_Chain_Begin_Opt) { 0, __VA_ARGS__ })
 NOBDEF bool nob_chain_begin_opt(Nob_Chain *chain, Nob_Chain_Begin_Opt opt);
 
 typedef struct {
     bool err2out;
     bool dont_reset;
 } Nob_Chain_Cmd_Opt;
-#define nob_chain_cmd(chain, cmd, ...) nob_chain_cmd_opt((chain), (cmd), NOB_CLIT(Nob_Chain_Cmd_Opt) { __VA_ARGS__ })
+#define nob_chain_cmd(chain, cmd, ...) nob_chain_cmd_opt((chain), (cmd), NOB_CLIT(Nob_Chain_Cmd_Opt) { 0, __VA_ARGS__ })
 NOBDEF bool nob_chain_cmd_opt(Nob_Chain *chain, Nob_Cmd *cmd, Nob_Chain_Cmd_Opt opt);
 
 typedef struct {
@@ -603,7 +603,7 @@ typedef struct {
     const char *stdout_path;
     const char *stderr_path;
 } Nob_Chain_End_Opt;
-#define nob_chain_end(chain, ...) nob_chain_end_opt((chain), NOB_CLIT(Nob_Chain_End_Opt) { __VA_ARGS__ })
+#define nob_chain_end(chain, ...) nob_chain_end_opt((chain), NOB_CLIT(Nob_Chain_End_Opt) { 0, __VA_ARGS__ })
 NOBDEF bool nob_chain_end_opt(Nob_Chain *chain, Nob_Chain_End_Opt opt);
 
 // Get amount of processors on the machine.
@@ -616,7 +616,8 @@ NOBDEF uint64_t nob_nanos_since_unspecified_epoch(void);
 
 // Same as nob_cmd_run_opt but using cool variadic macro to set the default options.
 // See https://x.com/vkrajacic/status/1749816169736073295 for more info on how to use such macros.
-#define nob_cmd_run(cmd, ...) nob_cmd_run_opt((cmd), NOB_CLIT(Nob_Cmd_Opt){__VA_ARGS__})
+// NOTE: MSVC does not expand __VA_ARGS__ if empty.
+#define nob_cmd_run(cmd, ...) nob_cmd_run_opt((cmd), NOB_CLIT(Nob_Cmd_Opt){0, __VA_ARGS__})
 
 // DEPRECATED:
 //
