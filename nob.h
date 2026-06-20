@@ -1899,23 +1899,26 @@ NOBDEF void nob_default_log_handler(Nob_Log_Level level, const char *fmt, va_lis
 {
     if (level < nob_minimal_log_level) return;
 
+    char *prefix = NULL;
     switch (level) {
     case NOB_INFO:
-        fprintf(stderr, "[INFO] ");
+        prefix = "[INFO] ";
         break;
     case NOB_WARNING:
-        fprintf(stderr, "[WARNING] ");
+        prefix = "[WARNING] ";
         break;
     case NOB_ERROR:
-        fprintf(stderr, "[ERROR] ");
+        prefix = "[ERROR] ";
         break;
     case NOB_NO_LOGS: return;
     default:
         NOB_UNREACHABLE("Nob_Log_Level");
     }
 
-    vfprintf(stderr, fmt, args);
-    fprintf(stderr, "\n");
+    size_t mark = nob_temp_save();
+    char *msg = nob_temp_vsprintf(fmt, args);
+    fprintf(stderr, "%s%s\n", prefix, msg);
+    nob_temp_rewind(mark);
 }
 
 NOBDEF void nob_null_log_handler(Nob_Log_Level level, const char *fmt, va_list args)
