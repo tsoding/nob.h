@@ -93,7 +93,7 @@
       - NOB_FREE(ptr) - Redefine which free() nob.h shall use.
       - NOB_DEPRECATED(message) - Redefine how nob.h shall mark functions as deprecated.
       - NOB_DA_INIT_CAP - Redefine initial capacity of Dynamic Arrays.
-      - NOB_TEMP_CAPACITY - Redefine the capacity of the temporary storate.
+      - NOB_TEMP_CAPACITY - Redefine the capacity of the temporary storage.
       - NOB_REBUILD_URSELF(binary_path, source_path) - redefine how nob.h shall rebuild itself.
       - NOB_WIN32_ERR_MSG_SIZE - Redefine the capacity of the buffer for error message on Windows.
 */
