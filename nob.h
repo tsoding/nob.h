@@ -82,6 +82,7 @@
         it works on Windows, so it's experimental for now.
       - NOB_UNSTRIP_PREFIX - do not strip the `nob_` prefixes from non-redefinable names.
       - NOB_NO_ECHO - do not echo the actions various nob functions are doing (like nob_cmd_run(), nob_mkdir_if_not_exists(), etc).
+      - NOB_ENABLE_MSVC_ANALYZE - Enable static code analysis on MSVC to validate format correctness of printf-like functions.
 
    ## Redefinable Macros
 
@@ -189,16 +190,33 @@
 #    define NOB_LINE_END "\n"
 #endif
 
-#if defined(__GNUC__) || defined(__clang__)
-//   https://gcc.gnu.org/onlinedocs/gcc-4.7.2/gcc/Function-Attributes.html
-#    ifdef __MINGW_PRINTF_FORMAT
-#        define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (__MINGW_PRINTF_FORMAT, STRING_INDEX, FIRST_TO_CHECK)))
-#    else
-#        define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (printf, STRING_INDEX, FIRST_TO_CHECK)))
-#    endif // __MINGW_PRINTF_FORMAT
-#else
-//   TODO: implement NOB_PRINTF_FORMAT for MSVC
+// NOTE: MSVC requires compiling with /analyze for _Printf_format_string_ to work
+// ref: https://github.com/facebook/folly/blob/3a3a6d4fb673443f04536f2d385b9545ba135d7e/folly/Portability.h#L49
+// ref: https://learn.microsoft.com/en-us/cpp/code-quality/annotating-function-parameters-and-return-values?view=msvc-170#format-string-parameters
+#ifdef _MSC_VER
 #    define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK)
+#    if defined(NOB_ENABLE_MSVC_ANALYZE) && (_MSC_VER >= 1900) /* VS 2015+ */
+#        ifndef _USE_ATTRIBUTES_FOR_SAL
+#            define _USE_ATTRIBUTES_FOR_SAL 1
+#        endif
+#        include <sal.h>
+#        define NOB_PRINTF_FORMAT_INLINE _Printf_format_string_
+#    else
+#        define NOB_PRINTF_FORMAT_INLINE
+#    endif
+#else // _MSC_VER
+#    define NOB_PRINTF_FORMAT_INLINE
+#    if defined(__GNUC__) || defined(__clang__)
+//   https://gcc.gnu.org/onlinedocs/gcc-4.7.2/gcc/Function-Attributes.html
+#        ifdef __MINGW_PRINTF_FORMAT
+#            define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (__MINGW_PRINTF_FORMAT, STRING_INDEX, FIRST_TO_CHECK)))
+#        else
+#            define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (printf, STRING_INDEX, FIRST_TO_CHECK)))
+#        endif // __MINGW_PRINTF_FORMAT
+#    else 
+//   TODO: implement NOB_PRINTF_FORMAT for MSVC
+#        define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK)
+#    endif
 #endif
 
 #define NOB_UNUSED(value) (void)(value)
@@ -230,7 +248,7 @@ NOBDEF Nob_Log_Handler nob_default_log_handler;
 NOBDEF Nob_Log_Handler nob_cancer_log_handler;
 NOBDEF Nob_Log_Handler nob_null_log_handler;
 
-NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
+NOBDEF void nob_log(Nob_Log_Level level, NOB_PRINTF_FORMAT_INLINE const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
 
 // It is an equivalent of shift command from bash (do `help shift` in bash). It basically
 // pops an element from the beginning of a sized array.
@@ -432,7 +450,7 @@ typedef struct {
 #define nob_swap(T, a, b) do { T t = a; a = b; b = t; } while (0)
 
 NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb);
-NOBDEF int nob_sb_appendf(Nob_String_Builder *sb, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
+NOBDEF int nob_sb_appendf(Nob_String_Builder *sb, NOB_PRINTF_FORMAT_INLINE const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
 // Pads the String_Builder (sb) to the desired word size boundary with 0s.
 // Imagine we have sb that contains 5 `a`-s:
 //
@@ -741,7 +759,7 @@ NOBDEF bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect r
 NOBDEF char *nob_temp_strdup(const char *cstr);
 NOBDEF char *nob_temp_strndup(const char *cstr, size_t size);
 NOBDEF void *nob_temp_alloc(size_t size);
-NOBDEF char *nob_temp_sprintf(const char *format, ...) NOB_PRINTF_FORMAT(1, 2);
+NOBDEF char *nob_temp_sprintf(NOB_PRINTF_FORMAT_INLINE const char *format, ...) NOB_PRINTF_FORMAT(1, 2);
 NOBDEF char *nob_temp_vsprintf(const char *format, va_list ap);
 // nob_temp_reset() - Resets the entire temporary storage to 0.
 //
@@ -807,7 +825,11 @@ NOBDEF char *nob_temp_running_executable_path(void);
 
 #ifndef nob_cc_flags
 #  if defined(_MSC_VER) && !defined(__clang__)
-#    define nob_cc_flags(cmd) nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS")
+#    ifdef NOB_ENABLE_MSVC_ANALYZE
+#      define nob_cc_flags(cmd) nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "/analyze", "/analyze:WX-")
+#    else
+#      define nob_cc_flags(cmd) nob_cmd_append(cmd, "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS")
+#    endif
 #  else
 #    define nob_cc_flags(cmd) nob_cmd_append(cmd, "-Wall", "-Wextra")
 #  endif
