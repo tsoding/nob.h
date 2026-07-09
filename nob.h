@@ -214,7 +214,6 @@
 #            define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (printf, STRING_INDEX, FIRST_TO_CHECK)))
 #        endif // __MINGW_PRINTF_FORMAT
 #    else 
-//   TODO: implement NOB_PRINTF_FORMAT for MSVC
 #        define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK)
 #    endif
 #endif
