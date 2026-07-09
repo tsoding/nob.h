@@ -12,14 +12,22 @@
 
 #if defined(__cplusplus)
     #if defined(_MSC_VER)
-        #define nob_cc_flags(cmd) cmd_append(cmd, "/std:c++20", "/TP", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #ifdef NOB_ENABLE_MSVC_ANALYZE 
+            #define nob_cc_flags(cmd) cmd_append(cmd, "/std:c++20", "/TP", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "/analyze", "/analyze:WX-", "-I.")
+        #else
+            #define nob_cc_flags(cmd) cmd_append(cmd, "/std:c++20", "/TP", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #endif
     #else
         #define nob_cc(cmd) cmd_append(cmd, "cc", "-x", "c++")
         #define nob_cc_flags(cmd) cmd_append(cmd, "-Wall", "-Wextra", "-Wno-missing-field-initializers", "-Wswitch-enum", "-ggdb", "-I.");
     #endif
 #else // __cplusplus
     #if defined(_MSC_VER)
-        #define nob_cc_flags(cmd) cmd_append(cmd, "/TC", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #ifdef NOB_ENABLE_MSVC_ANALYZE 
+            #define nob_cc_flags(cmd) cmd_append(cmd, "/std:c++20", "/TC", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "/analyze", "/analyze:WX-", "-I.")
+        #else
+            #define nob_cc_flags(cmd) cmd_append(cmd, "/std:c++20", "/TC", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #endif
     #elif defined(__APPLE__) || defined(__MACH__)
         // TODO: "-std=c99", "-D_POSIX_C_SOURCE=200112L" didn't work for MacOS, don't know why, don't really care that much at the moment.
         //   Anybody who does feel free to investigate.
