@@ -1,4 +1,4 @@
-/* nob - v3.8.3 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.9.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -201,9 +201,13 @@
 #    define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK)
 #endif
 
+NOBDEF void nob__panicf(const char *file, int line, const char *label, const char *format, ...);
+
 #define NOB_UNUSED(value) (void)(value)
 #define NOB_TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define NOB_TODOF(...) nob__panicf(__FILE__, __LINE__, "TODO", __VA_ARGS__)
 #define NOB_UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define NOB_UNREACHABLEF(...) nob__panicf(__FILE__, __LINE__, "UNREACHABLE", __VA_ARGS__)
 
 #define NOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 #define NOB_ARRAY_GET(array, index) \
@@ -1015,6 +1019,17 @@ NOBDEF char *nob_win32_error_message(DWORD err) {
 }
 
 #endif // _WIN32
+
+NOBDEF void nob__panicf(const char *file, int line, const char *label, const char *format, ...)
+{
+    fprintf(stderr, "%s:%d: %s: ", file, line, label);
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+    abort();
+}
 
 // The implementation idea is stolen from https://github.com/zhiayang/nabs
 NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
@@ -2868,7 +2883,9 @@ NOBDEF char *nob_temp_running_executable_path(void)
     // end of the file after the NOB_IMPLEMENTATION.
     #ifndef NOB_UNSTRIP_PREFIX
         #define TODO NOB_TODO
+        #define TODOF NOB_TODOF
         #define UNREACHABLE NOB_UNREACHABLE
+        #define UNREACHABLEF NOB_UNREACHABLEF
         #define UNUSED NOB_UNUSED
         #define ARRAY_LEN NOB_ARRAY_LEN
         #define ARRAY_GET NOB_ARRAY_GET
@@ -3033,6 +3050,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.9.0 (          ) Add TODOF() and UNREACHABLEF()
       3.8.3 (2026-07-14) Fix "applying zero offset to null pointer" error by clang's UndefinedBehaviorSanitizer
       3.8.2 (2026-04-01) Fix the broken type safety of nob_cmd_append() (by @aalmkainzi)
       3.8.1 (2026-04-01) Fix annoying clang warning
