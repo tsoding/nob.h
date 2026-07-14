@@ -906,7 +906,10 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
 
 typedef struct {
     size_t count;
-    const char *data;
+    union {
+        const char *data;
+        const char *items;
+    };
 } Nob_String_View;
 
 NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv);
@@ -3096,6 +3099,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
       3.9.0 (          ) Add NOB_TODOF() and NOB_UNREACHABLEF()
                          Add NOB_SVLIT()
                          Add nob_bytes_for_utf8[] and nob_sv_utf8_len()
+                         Add String_View.items alias to String_View.data
       3.8.3 (2026-07-14) Fix "applying zero offset to null pointer" error by clang's UndefinedBehaviorSanitizer
       3.8.2 (2026-04-01) Fix the broken type safety of nob_cmd_append() (by @aalmkainzi)
       3.8.1 (2026-04-01) Fix annoying clang warning

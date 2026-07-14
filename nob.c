@@ -19,6 +19,7 @@ const char *test_names[] = {
     "chain",
     "private_functions_inside_public_macros",
     "bytes_for_utf8",
+    "sv_foreach",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
