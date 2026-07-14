@@ -954,6 +954,29 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 //   String_View name = ...;
 //   printf("Name: "SV_Fmt"\n", SV_Arg(name));
 
+// Stolen from Jai's Unicode module
+// Example:
+// ```c
+// String_View sv = SVLIT("Привет, Мир!");
+// while (sv.count > 0) {
+//     size_t n = nob_bytes_for_utf8[(uint8_t)*sv.data];
+//     String_View c = sv_chop_left(&sv, n);
+//     printf(SV_Fmt" => %zu\n", SV_Arg(c), n);
+// }
+// ```
+static const uint8_t nob_bytes_for_utf8[] = {
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+    3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3, 4,4,4,4,4,4,4,4,5,5,5,5,6,6,6,6,
+};
+
+NOBDEF size_t nob_sv_utf8_len(Nob_String_View sv, size_t *bytes_overrun);
+
 #ifdef _WIN32
 
 NOBDEF char *nob_win32_error_message(DWORD err);
@@ -980,6 +1003,21 @@ NOBDEF void nob__cmd_append(Nob_Cmd *cmd, size_t n, const char **args)
     for (size_t i = 0; i < n; ++i) {
         nob_da_append(cmd, args[i]);
     }
+}
+
+NOBDEF size_t nob_sv_utf8_len(Nob_String_View sv, size_t *bytes_overrun)
+{
+    size_t i = 0;
+    size_t n = 0;
+    while (true) {
+        if (i >= sv.count) {
+            if (bytes_overrun) *bytes_overrun = i - sv.count;
+            return n;
+        }
+        i += nob_bytes_for_utf8[(uint8_t)sv.data[i]];
+        n += 1;
+    }
+    NOB_UNREACHABLE("sv_utf8_len");
 }
 
 #ifdef _WIN32
@@ -3042,6 +3080,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define sv_ends_with_cstr nob_sv_ends_with_cstr
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
+        #define sv_utf8_len nob_sv_utf8_len
+        #define bytes_for_utf8 nob_bytes_for_utf8
         #define sb_to_sv nob_sb_to_sv
         #define win32_error_message nob_win32_error_message
         #define nprocs nob_nprocs
@@ -3055,6 +3095,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 
       3.9.0 (          ) Add NOB_TODOF() and NOB_UNREACHABLEF()
                          Add NOB_SVLIT()
+                         Add nob_bytes_for_utf8[] and nob_sv_utf8_len()
       3.8.3 (2026-07-14) Fix "applying zero offset to null pointer" error by clang's UndefinedBehaviorSanitizer
       3.8.2 (2026-04-01) Fix the broken type safety of nob_cmd_append() (by @aalmkainzi)
       3.8.1 (2026-04-01) Fix annoying clang warning
