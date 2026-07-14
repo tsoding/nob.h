@@ -1,0 +1,21 @@
+temp_dir_name:
+    C: => C:
+    C:\Program Files\Aboba => C:\Program Files\
+    C:\Program Files\Aboba\File.exe => C:\Program Files\Aboba\
+     => 
+    . => 
+    (null) => 
+temp_file_name:
+    C: => 
+    C:\Program Files\Aboba => Aboba
+    C:\Program Files\Aboba\File.exe => File.exe
+     => 
+    . => .
+    (null) => 
+temp_file_ext:
+    C: => 
+    C:\Program Files\Aboba => 
+    C:\Program Files\Aboba\File.exe => .exe
+     => 
+    . => .
+    (null) => 

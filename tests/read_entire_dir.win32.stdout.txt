@@ -1,0 +1,5 @@
+Reading empty dir: ok=false, error_counter=1
+Tests:
+    bar.txt
+    baz.txt
+    foo.txt

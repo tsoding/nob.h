@@ -1,6 +1,4 @@
-#define NOB_IMPLEMENTATION
-#define NOB_STRIP_PREFIX
-#include "nob.h"
+#include "shared.h"
 
 typedef struct {
     int *items;
@@ -25,7 +23,7 @@ int main(void)
     while (xs.count > 0) {
         sb.count = 0;
         render_numbers(xs, &sb);
-        nob_log(INFO, "%s", sb.items);
+        printf("%s\n", sb.items);
         da_remove_unordered(&xs, 0);
     }
     return 0;
