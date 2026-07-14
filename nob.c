@@ -1,6 +1,11 @@
 #include "shared.h"
 
 const char *test_names[] = {
+    "minimal_log_level",
+    "nob_sv_end_with",
+    "nob_sv_chop_left",
+    "nob_sv_chop_right",
+    "set_get_current_dir",
     "nob_string_view",
     "cmd_redirect",
     "cmd_args_passing",
@@ -18,6 +23,8 @@ const char *test_names[] = {
     "cmd_run_dont_reset",
     "chain",
     "private_functions_inside_public_macros",
+    "bytes_for_utf8",
+    "sv_foreach",
 };
 #define test_names_count ARRAY_LEN(test_names)
 

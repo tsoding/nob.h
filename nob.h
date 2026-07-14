@@ -1,4 +1,4 @@
-/* nob - v3.8.3 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.9.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -201,9 +201,13 @@
 #    define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK)
 #endif
 
+NOBDEF void nob__panicf(const char *file, int line, const char *label, const char *format, ...);
+
 #define NOB_UNUSED(value) (void)(value)
 #define NOB_TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define NOB_TODOF(...) nob__panicf(__FILE__, __LINE__, "TODO", __VA_ARGS__)
 #define NOB_UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
+#define NOB_UNREACHABLEF(...) nob__panicf(__FILE__, __LINE__, "UNREACHABLE", __VA_ARGS__)
 
 #define NOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 #define NOB_ARRAY_GET(array, index) \
@@ -902,7 +906,10 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
 
 typedef struct {
     size_t count;
-    const char *data;
+    union {
+        const char *data;
+        const char *items;
+    };
 } Nob_String_View;
 
 NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv);
@@ -937,6 +944,8 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
 #define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
 
+#define NOB_SVLIT(lit) nob_sv_from_parts((lit), sizeof(lit)-1)
+
 // printf macros for String_View
 #ifndef SV_Fmt
 #define SV_Fmt "%.*s"
@@ -947,6 +956,29 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // USAGE:
 //   String_View name = ...;
 //   printf("Name: "SV_Fmt"\n", SV_Arg(name));
+
+// Stolen from Jai's Unicode module
+// Example:
+// ```c
+// String_View sv = SVLIT("Привет, Мир!");
+// while (sv.count > 0) {
+//     size_t n = nob_bytes_for_utf8[(uint8_t)*sv.data];
+//     String_View c = sv_chop_left(&sv, n);
+//     printf(SV_Fmt" => %zu\n", SV_Arg(c), n);
+// }
+// ```
+static const uint8_t nob_bytes_for_utf8[] = {
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+    2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+    3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3, 4,4,4,4,4,4,4,4,5,5,5,5,6,6,6,6,
+};
+
+NOBDEF size_t nob_sv_utf8_len(Nob_String_View sv, size_t *bytes_overrun);
 
 #ifdef _WIN32
 
@@ -974,6 +1006,21 @@ NOBDEF void nob__cmd_append(Nob_Cmd *cmd, size_t n, const char **args)
     for (size_t i = 0; i < n; ++i) {
         nob_da_append(cmd, args[i]);
     }
+}
+
+NOBDEF size_t nob_sv_utf8_len(Nob_String_View sv, size_t *bytes_overrun)
+{
+    size_t i = 0;
+    size_t n = 0;
+    while (true) {
+        if (i >= sv.count) {
+            if (bytes_overrun) *bytes_overrun = i - sv.count;
+            return n;
+        }
+        i += nob_bytes_for_utf8[(uint8_t)sv.data[i]];
+        n += 1;
+    }
+    NOB_UNREACHABLE("sv_utf8_len");
 }
 
 #ifdef _WIN32
@@ -1015,6 +1062,17 @@ NOBDEF char *nob_win32_error_message(DWORD err) {
 }
 
 #endif // _WIN32
+
+NOBDEF void nob__panicf(const char *file, int line, const char *label, const char *format, ...)
+{
+    fprintf(stderr, "%s:%d: %s: ", file, line, label);
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+    abort();
+}
 
 // The implementation idea is stolen from https://github.com/zhiayang/nabs
 NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_path, ...)
@@ -2868,7 +2926,10 @@ NOBDEF char *nob_temp_running_executable_path(void)
     // end of the file after the NOB_IMPLEMENTATION.
     #ifndef NOB_UNSTRIP_PREFIX
         #define TODO NOB_TODO
+        #define TODOF NOB_TODOF
         #define UNREACHABLE NOB_UNREACHABLE
+        #define UNREACHABLEF NOB_UNREACHABLEF
+        #define SVLIT NOB_SVLIT
         #define UNUSED NOB_UNUSED
         #define ARRAY_LEN NOB_ARRAY_LEN
         #define ARRAY_GET NOB_ARRAY_GET
@@ -3022,6 +3083,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define sv_ends_with_cstr nob_sv_ends_with_cstr
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
+        #define sv_utf8_len nob_sv_utf8_len
+        #define bytes_for_utf8 nob_bytes_for_utf8
         #define sb_to_sv nob_sb_to_sv
         #define win32_error_message nob_win32_error_message
         #define nprocs nob_nprocs
@@ -3033,6 +3096,10 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+      3.9.0 (          ) Add NOB_TODOF() and NOB_UNREACHABLEF()
+                         Add NOB_SVLIT()
+                         Add nob_bytes_for_utf8[] and nob_sv_utf8_len()
+                         Add String_View.items alias to String_View.data
       3.8.3 (2026-07-14) Fix "applying zero offset to null pointer" error by clang's UndefinedBehaviorSanitizer
       3.8.2 (2026-04-01) Fix the broken type safety of nob_cmd_append() (by @aalmkainzi)
       3.8.1 (2026-04-01) Fix annoying clang warning
