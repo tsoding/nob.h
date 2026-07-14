@@ -941,6 +941,8 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
 #define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
 
+#define NOB_SVLIT(lit) nob_sv_from_parts((lit), sizeof(lit)-1)
+
 // printf macros for String_View
 #ifndef SV_Fmt
 #define SV_Fmt "%.*s"
@@ -2886,6 +2888,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define TODOF NOB_TODOF
         #define UNREACHABLE NOB_UNREACHABLE
         #define UNREACHABLEF NOB_UNREACHABLEF
+        #define SVLIT NOB_SVLIT
         #define UNUSED NOB_UNUSED
         #define ARRAY_LEN NOB_ARRAY_LEN
         #define ARRAY_GET NOB_ARRAY_GET
@@ -3050,7 +3053,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-      3.9.0 (          ) Add TODOF() and UNREACHABLEF()
+      3.9.0 (          ) Add NOB_TODOF() and NOB_UNREACHABLEF()
+                         Add NOB_SVLIT()
       3.8.3 (2026-07-14) Fix "applying zero offset to null pointer" error by clang's UndefinedBehaviorSanitizer
       3.8.2 (2026-04-01) Fix the broken type safety of nob_cmd_append() (by @aalmkainzi)
       3.8.1 (2026-04-01) Fix annoying clang warning
