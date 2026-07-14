@@ -1,0 +1,33 @@
+[INFO] Testing log...
+[INFO] Здравствуйте
+[INFO] Γεια σας
+[INFO] 안녕
+[INFO] こんにちは
+[INFO] 您好
+[INFO] Testing mkdir...
+[INFO] created directory `Здравствуйте`
+[INFO] deleting Здравствуйте
+[INFO] created directory `Γεια σας`
+[INFO] deleting Γεια σας
+[INFO] created directory `안녕`
+[INFO] deleting 안녕
+[INFO] created directory `こんにちは`
+[INFO] deleting こんにちは
+[INFO] created directory `您好`
+[INFO] deleting 您好
+[INFO] Testing file operations...
+[INFO] renaming Здравствуйте -> Γεια σας
+[INFO] renaming Γεια σας -> Здравствуйте
+[INFO] deleting Здравствуйте
+[INFO] renaming Γεια σας -> 안녕
+[INFO] renaming 안녕 -> Γεια σας
+[INFO] deleting Γεια σας
+[INFO] renaming 안녕 -> こんにちは
+[INFO] renaming こんにちは -> 안녕
+[INFO] deleting 안녕
+[INFO] renaming こんにちは -> 您好
+[INFO] renaming 您好 -> こんにちは
+[INFO] deleting こんにちは
+[INFO] renaming 您好 -> Здравствуйте
+[INFO] renaming Здравствуйте -> 您好
+[INFO] deleting 您好
