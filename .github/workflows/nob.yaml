@@ -45,6 +45,8 @@ jobs:
     steps:
       - name: Clone GIT repo
         uses: actions/checkout@v4
+      - name: vswhere
+        run: vswhere
       - name: Build tests
         shell: cmd
         # cl.exe isn't available as-is in Github images because they don't want
@@ -52,13 +54,13 @@ jobs:
         # https://github.com/actions/runner-images/issues/6205#issuecomment-1241573412
         # https://learn.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-170#create-your-own-command-prompt-shortcut
         run: |
-          call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+          call "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
           cl.exe ${{ matrix.mode }} /Fe:nob nob.c
           nob.exe
       - name: Build how_to-s
         shell: cmd
         run: |
-          call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
+          call "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat"
           cd how_to/
           cl.exe ${{ matrix.mode }} /Fe:nob nob.c
           nob.exe
