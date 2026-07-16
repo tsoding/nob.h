@@ -1,4 +1,4 @@
-/* nob - v3.9.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.10.0 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -947,7 +947,11 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
 #define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
 
-#define NOB_SVLIT(lit) nob_sv_from_parts((lit), sizeof(lit)-1)
+#define NOB_SVLIT(lit) (NOB_CLIT(Nob_String_View){.count = sizeof(lit)-1, .data = (lit)})
+// Generally majority of the C/C++ compilers will allow you to use NOB_SVLIT to construct global variables.
+// But there are some (specifically MSVC with /TC flag enabled) that will refuse.
+// For such compilers use NOB_SVLIT_STATIC instead.
+#define NOB_SVLIT_STATIC(lit) {.count = sizeof(lit)-1, .data = (lit)}
 
 // printf macros for String_View
 #ifndef SV_Fmt
@@ -2956,6 +2960,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define UNREACHABLE NOB_UNREACHABLE
         #define UNREACHABLEF NOB_UNREACHABLEF
         #define SVLIT NOB_SVLIT
+        #define SVLIT_STATIC NOB_SVLIT_STATIC
         #define UNUSED NOB_UNUSED
         #define ARRAY_LEN NOB_ARRAY_LEN
         #define ARRAY_GET NOB_ARRAY_GET
@@ -3125,6 +3130,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+     3.10.0 (2026-07-17) Make NOB_SVLIT a bit more usable at compile-time (by @Arhcout)
+                         Add NOB_SVLIT_STATIC for when a compiler simply refuses to accept NOB_SVLIT() at compile-time (looking at you `cl.exe /TC`) (by @rexim)
       3.9.0 (2026-07-15) Add NOB_TODOF() and NOB_UNREACHABLEF()
                          Add NOB_SVLIT()
                          Add nob_bytes_for_utf8[] and nob_sv_utf8_len()
