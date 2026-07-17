@@ -319,9 +319,10 @@ typedef struct {
 
     struct {
 #ifdef _WIN32
-        WIN32_FIND_DATA win32_data;
+        WIN32_FIND_DATAW win32_data;
         HANDLE win32_hFind;
         bool win32_init;
+        char utf8_name[MAX_PATH];
 #else
         DIR *posix_dir;
         struct dirent *posix_ent;
@@ -1068,7 +1069,6 @@ NOBDEF char *nob_win32_error_message(DWORD err) {
 
     return win32ErrMsg;
 }
-
 #endif // _WIN32
 
 NOBDEF void nob__panicf(const char *file, int line, const char *label, const char *format, ...)
@@ -1142,10 +1142,25 @@ static char nob_temp[NOB_TEMP_CAPACITY] = {0};
 NOBDEF bool nob_mkdir_if_not_exists(const char *path)
 {
 #ifdef _WIN32
-    int result = _mkdir(path);
+    WCHAR utf16_buffer[MAX_PATH];
+    int n = MultiByteToWideChar(CP_UTF8, 0, path, -1, utf16_buffer, sizeof(utf16_buffer));
+    if(n == 0){
+        nob_log(NOB_ERROR, "Could not convert dir_path name from utf8 to utf16: %s", nob_win32_error_message(GetLastError()));
+        return false;
+    }
+    
+    int result = CreateDirectoryW(utf16_buffer, NULL);
+    if(result == 0){
+      if(GetLastError() == ERROR_ALREADY_EXISTS){
+        nob_log(NOB_INFO, "directory `%s` already exists", path);
+        return true;
+      }else{
+        nob_log(NOB_ERROR, "Could not create directory: %s", nob_win32_error_message(GetLastError()));
+        return false;
+      }
+    }
 #else
     int result = mkdir(path, 0755);
-#endif
     if (result < 0) {
         if (errno == EEXIST) {
 #ifndef NOB_NO_ECHO
@@ -1156,6 +1171,7 @@ NOBDEF bool nob_mkdir_if_not_exists(const char *path)
         nob_log(NOB_ERROR, "could not create directory `%s`: %s", path, strerror(errno));
         return false;
     }
+#endif
 
 #ifndef NOB_NO_ECHO
     nob_log(NOB_INFO, "created directory `%s`", path);
@@ -2048,7 +2064,15 @@ NOBDEF bool nob_dir_entry_open(const char *dir_path, Nob_Dir_Entry *dir)
 #ifdef _WIN32
     size_t temp_mark = nob_temp_save();
     char *buffer = nob_temp_sprintf("%s\\*", dir_path);
-    dir->nob__private.win32_hFind = FindFirstFile(buffer, &dir->nob__private.win32_data);
+
+    WCHAR utf16_buffer[MAX_PATH];
+    int n = MultiByteToWideChar(CP_UTF8, 0, buffer, -1, utf16_buffer, sizeof(utf16_buffer));
+    if(n == 0){
+        nob_log(NOB_ERROR, "Could not convert dir_path name from utf8 to utf16: %s", nob_win32_error_message(GetLastError()));
+        return false;
+    }
+
+    dir->nob__private.win32_hFind = FindFirstFileW(utf16_buffer, &dir->nob__private.win32_data);
     nob_temp_rewind(temp_mark);
 
     if (dir->nob__private.win32_hFind == INVALID_HANDLE_VALUE) {
@@ -2072,17 +2096,29 @@ NOBDEF bool nob_dir_entry_next(Nob_Dir_Entry *dir)
 #ifdef _WIN32
     if (!dir->nob__private.win32_init) {
         dir->nob__private.win32_init = true;
-        dir->name = dir->nob__private.win32_data.cFileName;
+
+        int n = WideCharToMultiByte(CP_UTF8, 0, dir->nob__private.win32_data.cFileName, -1, dir->nob__private.utf8_name, sizeof(dir->nob__private.utf8_name), NULL, NULL);
+        if(n == 0){
+            nob_log(NOB_ERROR, "Could not convert path name from utf16 to utf8: %s", nob_win32_error_message(GetLastError()));
+            return false;
+        }
+        dir->name = dir->nob__private.utf8_name;
         return true;
     }
 
-    if (!FindNextFile(dir->nob__private.win32_hFind, &dir->nob__private.win32_data)) {
+    if (!FindNextFileW(dir->nob__private.win32_hFind, &dir->nob__private.win32_data)) {
         if (GetLastError() == ERROR_NO_MORE_FILES) return false;
         nob_log(NOB_ERROR, "Could not read next directory entry: %s", nob_win32_error_message(GetLastError()));
         dir->error = true;
         return false;
     }
-    dir->name = dir->nob__private.win32_data.cFileName;
+        
+    int n = WideCharToMultiByte(CP_UTF8, 0, dir->nob__private.win32_data.cFileName, -1, dir->nob__private.utf8_name, sizeof(dir->nob__private.utf8_name), NULL, NULL);
+    if(n == 0){
+      nob_log(NOB_ERROR, "Could not convert path name from utf16 to utf8: %s", nob_win32_error_message(GetLastError()));
+      return false;
+    }
+    dir->name = dir->nob__private.utf8_name;
 #else
     errno = 0;
     dir->nob__private.posix_ent = readdir(dir->nob__private.posix_dir);
@@ -2228,7 +2264,18 @@ NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t siz
     bool result = true;
 
     const char *buf = NULL;
+#ifdef _WIN32
+    WCHAR utf16_buffer[MAX_PATH];
+    int n = MultiByteToWideChar(CP_UTF8, 0, path, -1, utf16_buffer, sizeof(utf16_buffer));
+    if(n == 0){
+        nob_log(NOB_ERROR, "Could not convert file path from utf8 to utf16: %s", nob_win32_error_message(GetLastError()));
+        return false;
+    }
+
+    FILE* f = _wfopen(utf16_buffer, L"wb");
+#else
     FILE *f = fopen(path, "wb");
+#endif
     if (f == NULL) {
         nob_log(NOB_ERROR, "Could not open file %s for writing: %s\n", path, strerror(errno));
         nob_return_defer(false);
@@ -2565,7 +2612,17 @@ NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 {
     bool result = true;
 
+#ifdef _WIN32
+    WCHAR wpath[MAX_PATH];
+    int n = MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, sizeof(wpath));
+    if(n == 0){
+        nob_log(NOB_ERROR, "Could not convert file path from utf8 to utf16: %s", nob_win32_error_message(GetLastError()));
+        return false;
+    }
+    FILE *f = _wfopen(wpath, L"rb");
+#else
     FILE *f = fopen(path, "rb");
+#endif
     size_t new_count = 0;
     long long m = 0;
     if (f == NULL)                 nob_return_defer(false);
@@ -2807,17 +2864,36 @@ NOBDEF int nob_file_exists(const char *file_path)
 NOBDEF const char *nob_get_current_dir_temp(void)
 {
 #ifdef _WIN32
-    DWORD nBufferLength = GetCurrentDirectory(0, NULL);
+    DWORD nBufferLength = GetCurrentDirectoryW(0, NULL);
     if (nBufferLength == 0) {
         nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
 
-    char *buffer = (char*) nob_temp_alloc(nBufferLength);
-    if (GetCurrentDirectory(nBufferLength, buffer) == 0) {
+    LPWSTR wpath;
+    wpath = (LPWSTR) nob_temp_alloc(nBufferLength*sizeof(*wpath));
+
+    if (GetCurrentDirectoryW(nBufferLength, wpath) == 0) {
         nob_log(NOB_ERROR, "could not get current directory: %s", nob_win32_error_message(GetLastError()));
         return NULL;
     }
+
+
+    int nUtf8BufferLength = WideCharToMultiByte(CP_UTF8, 0, wpath, nBufferLength, NULL, 0, NULL, NULL);
+    if(nUtf8BufferLength == 0){
+      nob_log(NOB_ERROR, "Could not determine utf8 path size: %s", nob_win32_error_message(GetLastError()));
+      return NULL;
+    }
+    
+    char* buffer;
+    buffer = (char*) nob_temp_alloc(nUtf8BufferLength*sizeof(*buffer));
+    
+    nUtf8BufferLength = WideCharToMultiByte(CP_UTF8, 0, wpath, nBufferLength, buffer, nUtf8BufferLength, NULL, NULL);
+    if(nBufferLength == 0){
+      nob_log(NOB_ERROR, "Could not convert utf16 path to utf8: %s", nob_win32_error_message(GetLastError()));
+      return NULL;
+    }
+
 
     return buffer;
 #else

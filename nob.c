@@ -175,6 +175,10 @@ extern "C" {
 }
 #endif
 
+#ifdef _WIN32
+#include "ConsoleApi2.h"
+#endif // _WIN32
+
 int main(int argc, char **argv)
 {
 #ifdef _WIN32
