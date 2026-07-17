@@ -207,9 +207,9 @@ NOBDEF void nob__panicf(const char *file, int line, const char *label, const cha
 
 #define NOB_UNUSED(value) (void)(value)
 #define NOB_TODO(message) do { fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
-#define NOB_TODOF(...) nob__panicf(__FILE__, __LINE__, "TODO", __VA_ARGS__)
+#define NOB_TODOF(format, ...) nob__panicf(__FILE__, __LINE__, "TODO", format, ## __VA_ARGS__)
 #define NOB_UNREACHABLE(message) do { fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); abort(); } while(0)
-#define NOB_UNREACHABLEF(...) nob__panicf(__FILE__, __LINE__, "UNREACHABLE", __VA_ARGS__)
+#define NOB_UNREACHABLEF(format, ...) nob__panicf(__FILE__, __LINE__, "UNREACHABLE", format, ## __VA_ARGS__)
 
 #define NOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 #define NOB_ARRAY_GET(array, index) \
