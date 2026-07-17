@@ -947,11 +947,11 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
 #define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
 
-#define NOB_SVLIT(lit) (NOB_CLIT(Nob_String_View){.count = sizeof(lit)-1, .data = (lit)})
+#define NOB_SVLIT(lit) (NOB_CLIT(Nob_String_View){.count = sizeof("" lit "")-1, .data = (lit)})
 // Generally majority of the C/C++ compilers will allow you to use NOB_SVLIT to construct global variables.
 // But there are some (specifically MSVC with /TC flag enabled) that will refuse.
 // For such compilers use NOB_SVLIT_STATIC instead.
-#define NOB_SVLIT_STATIC(lit) {.count = sizeof(lit)-1, .data = (lit)}
+#define NOB_SVLIT_STATIC(lit) {.count = sizeof("" lit "")-1, .data = (lit)}
 
 // printf macros for String_View
 #ifndef SV_Fmt
