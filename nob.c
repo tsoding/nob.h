@@ -20,6 +20,7 @@ const char *test_names[] = {
     "private_functions_inside_public_macros",
     "bytes_for_utf8",
     "sv_foreach",
+    "svlit_at_different_storages",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
