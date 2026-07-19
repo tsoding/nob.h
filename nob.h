@@ -199,9 +199,27 @@
 #        define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (printf, STRING_INDEX, FIRST_TO_CHECK)))
 #    endif // __MINGW_PRINTF_FORMAT
 #else
-//   TODO: implement NOB_PRINTF_FORMAT for MSVC
+//   NOB_PRINTF_FORMAT is left empty on MSVC; format verification is instead
+//   handled below via dedicated macros.
 #    define NOB_PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK)
 #endif
+
+/*
+   SAL.h-free implementation of NOB_PRINTF_FORMAT for MSVC:
+   - use an printf() inside unevaluated sizeof() expression call to force
+     compile-time format validation against the supplied parameters
+   - parentheses around the target function names (e.g., `(nob_log)`) prevent
+     recursive macro expansion when compiling library definition
+   - C and C++ comaptible
+
+   Applicable to functions:
+   - nob_log();
+   - nob_sb_appendf() & nob_temp_sprintf():
+       - C uses the comma operator to chain the check expression alongside
+         the value evaluation
+       - C++ utilizes an immediately invoked lambda expression `([&]() { ... }())`
+         to preserve the wrapped function's return value
+ */
 
 NOBDEF void nob__panicf(const char *file, int line, const char *label, const char *format, ...);
 
@@ -236,7 +254,29 @@ NOBDEF Nob_Log_Handler nob_default_log_handler;
 NOBDEF Nob_Log_Handler nob_cancer_log_handler;
 NOBDEF Nob_Log_Handler nob_null_log_handler;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 NOBDEF void nob_log(Nob_Log_Level level, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
+#ifdef __cplusplus
+}
+#endif
+
+#if defined(_MSC_VER)
+#    ifdef __cplusplus
+#        define nob_log(level, fmt, ...)                                                \
+            do {                                                                        \
+                if (0) { (void)sizeof(::printf(fmt, ##__VA_ARGS__)); }                  \
+                (nob_log)(level, fmt, ##__VA_ARGS__);                                   \
+            } while (0)
+#    else
+#        define nob_log(level, fmt, ...)                                                \
+            do {                                                                        \
+                if (0) { (void)sizeof(printf(fmt, __VA_ARGS__)); }                      \
+                (nob_log)(level, fmt, __VA_ARGS__);                                     \
+            } while (0)
+#    endif
+#endif
 
 // It is an equivalent of shift command from bash (do `help shift` in bash). It basically
 // pops an element from the beginning of a sized array.
@@ -438,7 +478,27 @@ typedef struct {
 #define nob_swap(T, a, b) do { T t = a; a = b; b = t; } while (0)
 
 NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb);
+#ifdef __cplusplus
+extern "C" {
+#endif
 NOBDEF int nob_sb_appendf(Nob_String_Builder *sb, const char *fmt, ...) NOB_PRINTF_FORMAT(2, 3);
+#ifdef __cplusplus
+}
+#endif
+
+#if defined(_MSC_VER)
+#    ifdef __cplusplus
+#        define nob_sb_appendf(sb, fmt, ...)                                            \
+            ([&]() {                                                                    \
+                if (0) { (void)sizeof(::printf(fmt, ##__VA_ARGS__)); }                  \
+                return (nob_sb_appendf)(sb, fmt, ##__VA_ARGS__);                        \
+            }())
+#    else
+#        define nob_sb_appendf(sb, fmt, ...)                                            \
+            ((void)sizeof(printf(fmt, __VA_ARGS__)), (nob_sb_appendf)(sb, fmt, __VA_ARGS__))
+#    endif
+#endif
+
 // Pads the String_Builder (sb) to the desired word size boundary with 0s.
 // Imagine we have sb that contains 5 `a`-s:
 //
@@ -748,8 +808,28 @@ NOBDEF bool nob_cmd_run_sync_redirect_and_reset(Nob_Cmd *cmd, Nob_Cmd_Redirect r
 NOBDEF char *nob_temp_strdup(const char *cstr);
 NOBDEF char *nob_temp_strndup(const char *cstr, size_t size);
 NOBDEF void *nob_temp_alloc(size_t size);
+#ifdef __cplusplus
+extern "C" {
+#endif
 NOBDEF char *nob_temp_sprintf(const char *format, ...) NOB_PRINTF_FORMAT(1, 2);
+#ifdef __cplusplus
+}
+#endif
 NOBDEF char *nob_temp_vsprintf(const char *format, va_list ap);
+
+#if defined(_MSC_VER)
+#    ifdef __cplusplus
+#        define nob_temp_sprintf(format, ...)                                           \
+            ([&]() {                                                                    \
+                if (0) { (void)sizeof(::printf(format, ##__VA_ARGS__)); }               \
+                return (nob_temp_sprintf)(format, ##__VA_ARGS__);                       \
+            }())
+#    else
+#        define nob_temp_sprintf(format, ...)                                           \
+            ((void)sizeof(printf(format, __VA_ARGS__)), (nob_temp_sprintf)(format, __VA_ARGS__))
+#    endif
+#endif
+
 // nob_temp_reset() - Resets the entire temporary storage to 0.
 //
 // It is generally not recommended to call this function ever. What you usually want to do is let's say you have a loop,
