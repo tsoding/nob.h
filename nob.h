@@ -2119,7 +2119,7 @@ bool nob__walk_dir_opt_impl(Nob_String_Builder *file_path, Nob_Walk_Func func, s
     Nob_Walk_Action action = NOB_WALK_CONT;
 
     Nob_File_Type file_type = nob_get_file_type(file_path->items);
-    if (file_type < 0) nob_return_defer(false);
+    if (file_type == (Nob_File_Type)-1) nob_return_defer(false);
 
     // Pre-order walking
     if (!opt.post_order) {
@@ -2325,7 +2325,7 @@ NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst
     size_t temp_checkpoint = nob_temp_save();
 
     Nob_File_Type type = nob_get_file_type(src_path);
-    if (type < 0) return false;
+    if (type == (Nob_File_Type)-1) return false;
 
     switch (type) {
         case NOB_FILE_DIRECTORY: {
