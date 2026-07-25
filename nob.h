@@ -2564,36 +2564,42 @@ NOBDEF bool nob_rename(const char *old_path, const char *new_path)
 NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
 {
     bool result = true;
+    size_t saved_count = sb->count;
+    long long m = 0;
 
     FILE *f = fopen(path, "rb");
-    size_t new_count = 0;
-    long long m = 0;
-    if (f == NULL)                 nob_return_defer(false);
-    if (fseek(f, 0, SEEK_END) < 0) nob_return_defer(false);
+    if (f == NULL) nob_return_defer(false);
+
+    if (fseek(f, 0, SEEK_END) == 0) {
 #ifndef _WIN32
-    m = ftell(f);
+        m = ftell(f);
 #else
-    m = _telli64(_fileno(f));
+        m = _telli64(_fileno(f));
 #endif
-    if (m < 0)                     nob_return_defer(false);
-    if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
-
-    new_count = sb->count + m;
-    if (new_count > sb->capacity) {
-        sb->items = NOB_DECLTYPE_CAST(sb->items)NOB_REALLOC(sb->items, new_count);
-        NOB_ASSERT(sb->items != NULL && "Buy more RAM lool!!");
-        sb->capacity = new_count;
+        if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
+        if (m > 0) nob_da_reserve(sb, sb->count + (size_t)m);
+    } else {
+        clearerr(f);
     }
 
-    fread(sb->items + sb->count, m, 1, f);
-    if (ferror(f)) {
-        // TODO: Afaik, ferror does not set errno. So the error reporting in defer is not correct in this case.
-        nob_return_defer(false);
+    for (;;) {
+        nob_da_reserve(sb, sb->count + 1);
+        size_t n = fread(sb->items + sb->count, 1, sb->capacity - sb->count, f);
+        sb->count += n;
+        if (n == 0) {
+            if (ferror(f)) {
+                // TODO: Afaik, ferror does not set errno. So the error reporting in defer is not correct in this case.
+                nob_return_defer(false);
+            }
+            break;
+        }
     }
-    sb->count = new_count;
 
 defer:
-    if (!result) nob_log(NOB_ERROR, "Could not read file %s: %s", path, strerror(errno));
+    if (!result) {
+        sb->count = saved_count;
+        nob_log(NOB_ERROR, "Could not read file %s: %s", path, strerror(errno));
+    }
     if (f) fclose(f);
     return result;
 }

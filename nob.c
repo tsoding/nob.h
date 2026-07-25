@@ -5,6 +5,7 @@ const char *test_names[] = {
     "cmd_redirect",
     "cmd_args_passing",
     "read_entire_dir",
+    "read_entire_file",
     "da_resize",
     "da_last",
     "da_remove_unordered",

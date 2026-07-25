@@ -1,0 +1,7 @@
+regular file: read 23 bytes
+first line
+second line
+read again: 46 bytes total
+missing file: ok=false, error_counter=1, count=46
+fifo: read 21 bytes
+hello through a fifo
