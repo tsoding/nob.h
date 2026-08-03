@@ -532,7 +532,7 @@ typedef struct {
 typedef struct {
     // Run the command asynchronously appending its Nob_Proc to the provided Nob_Procs array
     Nob_Procs *async;
-    // Maximum processes allowed in the .async list. Zero implies nob_nprocs().
+    // Maximum processes allowed in the .async list. Zero implies nob_nprocs() + 1.
     size_t max_procs;
     // Do not reset the command after execution.
     bool dont_reset;
