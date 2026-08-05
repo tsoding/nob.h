@@ -2100,7 +2100,7 @@ NOBDEF bool nob_dir_entry_next(Nob_Dir_Entry *dir)
 NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir)
 {
 #ifdef _WIN32
-    FindClose(dir.nob__private.win32_hFind);
+    if (dir->nob__private.win32_hFind != INVALID_HANDLE_VALUE) FindClose(dir.nob__private.win32_hFind);
 #else
     if (dir.nob__private.posix_dir) closedir(dir.nob__private.posix_dir);
 #endif
@@ -2190,7 +2190,7 @@ defer:
     file_path->count = saved_file_path_count;
     nob_da_last(file_path) = '\0';
 
-    nob_dir_entry_close(dir);
+    if (file_type == NOB_FILE_DIRECTORY) nob_dir_entry_close(dir);
     return result;
 }
 
