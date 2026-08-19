@@ -12,14 +12,25 @@
 
 #if defined(__cplusplus)
     #if defined(_MSC_VER)
-        #define nob_cc_flags(cmd) cmd_append(cmd, "/std:c++20", "/TP", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #if defined(__clang__)
+            // TODO: Clang targeting MSVC in C++ mode warns about missing field initializers
+            // and missing braces when using C-style {0} initialization. Suppress for now.
+            #define nob_cc_flags(cmd) cmd_append(cmd, "-x", "c++", "-Wall", "-Wextra", "-Wswitch-enum", \
+                "-Wno-missing-field-initializers", "-Wno-missing-braces", "-D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #else
+            #define nob_cc_flags(cmd) cmd_append(cmd, "/utf-8", "/std:c++20", "/TP", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #endif
     #else
         #define nob_cc(cmd) cmd_append(cmd, "cc", "-x", "c++")
         #define nob_cc_flags(cmd) cmd_append(cmd, "-Wall", "-Wextra", "-Wno-missing-field-initializers", "-Wswitch-enum", "-ggdb", "-I.");
     #endif
 #else // __cplusplus
     #if defined(_MSC_VER)
-        #define nob_cc_flags(cmd) cmd_append(cmd, "/TC", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #if defined(__clang__)
+            #define nob_cc_flags(cmd) cmd_append(cmd, "-Wall", "-Wextra", "-Wswitch-enum", "-std=c99", "-D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #else
+            #define nob_cc_flags(cmd) cmd_append(cmd, "/utf-8", "/TC", "/W4", "/nologo", "/D_CRT_SECURE_NO_WARNINGS", "-I.")
+        #endif
     #elif defined(__APPLE__) || defined(__MACH__)
         // TODO: "-std=c99", "-D_POSIX_C_SOURCE=200112L" didn't work for MacOS, don't know why, don't really care that much at the moment.
         //   Anybody who does feel free to investigate.
