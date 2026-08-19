@@ -2459,41 +2459,34 @@ NOBDEF const char *nob_temp_sv_to_cstr(Nob_String_View sv)
 NOBDEF int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count)
 {
 #ifdef _WIN32
-    BOOL bSuccess;
+    // NOTE: GetFileAttributesEx() reads only the file metadata and never
+    // opens the file, so it cannot fail just because an editor or an
+    // antivirus has the file open. CreateFile() with dwShareMode=0 used to
+    // fail with ERROR_SHARING_VIOLATION in that case, which the POSIX
+    // stat() implementation below is not susceptible to.
+    WIN32_FILE_ATTRIBUTE_DATA file_attributes = {0};
 
-    HANDLE output_path_fd = CreateFile(output_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
-    if (output_path_fd == INVALID_HANDLE_VALUE) {
+    if (GetFileAttributesExA(output_path, GetFileExInfoStandard, &file_attributes) == 0) {
         // NOTE: if output does not exist it 100% must be rebuilt
-        if (GetLastError() == ERROR_FILE_NOT_FOUND) return 1;
-        nob_log(NOB_ERROR, "Could not open file %s: %s", output_path, nob_win32_error_message(GetLastError()));
+        if (GetLastError() == ERROR_FILE_NOT_FOUND)
+            return 1;
+        nob_log(NOB_ERROR, "Could not get file attributes of %s: %s", output_path, nob_win32_error_message(GetLastError()));
         return -1;
     }
-    FILETIME output_path_time;
-    bSuccess = GetFileTime(output_path_fd, NULL, NULL, &output_path_time);
-    CloseHandle(output_path_fd);
-    if (!bSuccess) {
-        nob_log(NOB_ERROR, "Could not get time of %s: %s", output_path, nob_win32_error_message(GetLastError()));
-        return -1;
-    }
+    FILETIME output_path_time = file_attributes.ftLastWriteTime;
 
     for (size_t i = 0; i < input_paths_count; ++i) {
         const char *input_path = input_paths[i];
-        HANDLE input_path_fd = CreateFile(input_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
-        if (input_path_fd == INVALID_HANDLE_VALUE) {
+        if (GetFileAttributesExA(input_path, GetFileExInfoStandard, &file_attributes) == 0) {
             // NOTE: non-existing input is an error cause it is needed for building in the first place
-            nob_log(NOB_ERROR, "Could not open file %s: %s", input_path, nob_win32_error_message(GetLastError()));
+            nob_log(NOB_ERROR, "Could not get file attributes of %s: %s", input_path, nob_win32_error_message(GetLastError()));
             return -1;
         }
-        FILETIME input_path_time;
-        bSuccess = GetFileTime(input_path_fd, NULL, NULL, &input_path_time);
-        CloseHandle(input_path_fd);
-        if (!bSuccess) {
-            nob_log(NOB_ERROR, "Could not get time of %s: %s", input_path, nob_win32_error_message(GetLastError()));
-            return -1;
-        }
+        FILETIME input_path_time = file_attributes.ftLastWriteTime;
 
         // NOTE: if even a single input_path is fresher than output_path that's 100% rebuild
-        if (CompareFileTime(&input_path_time, &output_path_time) == 1) return 1;
+        if (CompareFileTime(&input_path_time, &output_path_time) == 1)
+            return 1;
     }
 
     return 0;

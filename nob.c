@@ -21,6 +21,7 @@ const char *test_names[] = {
     "bytes_for_utf8",
     "sv_foreach",
     "svlit_at_different_storages",
+    "needs_rebuild_locked_file",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
