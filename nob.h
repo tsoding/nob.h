@@ -157,6 +157,12 @@
 #include <time.h>
 
 #ifdef _WIN32
+// TODO: We currently mix ANSI (xxxA) and macro-based Windows APIs. By undefining
+// UNICODE, generic APIs resolve to their ANSI variants, but some code directly
+// calls xxxA functions. This inconsistency limits Unicode path support on Windows.
+// A better approach would be to consistently use wide-character (W) APIs with
+// explicit UTF-8 <-> UTF-16 conversion.
+#    undef UNICODE
 #    define WIN32_LEAN_AND_MEAN
 #    define _WINUSER_
 #    define _WINGDI_
@@ -166,6 +172,16 @@
 #    include <direct.h>
 #    include <io.h>
 #    include <shellapi.h>
+// TODO: SetConsoleOutputCP is declared in consoleapi2.h, but defining _WINCON_
+// prevented windows.h from including it. The manual include below is a temporary
+// workaround. The correct fix is to remove all private SDK guards and only keep
+// WIN32_LEAN_AND_MEAN.
+#    include <consoleapi2.h>
+#    undef _WINUSER_
+#    undef _WINGDI_
+#    undef _IMM_
+#    undef _WINCON_
+#    undef WIN32_LEAN_AND_MEAN
 #else
 #    ifdef __APPLE__
 #        include <mach-o/dyld.h>
@@ -821,8 +837,12 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #endif // nob_cc_flags
 
 #ifndef nob_cc_output
-#  if defined(_MSC_VER) && !defined(__clang__)
-#    define nob_cc_output(cmd, output_path) nob_cmd_append(cmd, nob_temp_sprintf("/Fe:%s", (output_path)), nob_temp_sprintf("/Fo:%s", (output_path)))
+#  if defined(_MSC_VER)
+#    if defined(__clang__)
+#      define nob_cc_output(cmd, output_path) nob_cmd_append(cmd, nob_temp_sprintf("-o%s.exe", (output_path)))
+#    else
+#      define nob_cc_output(cmd, output_path) nob_cmd_append(cmd, nob_temp_sprintf("/Fe:%s", (output_path)), nob_temp_sprintf("/Fo:%s", (output_path)))
+#    endif
 #  else
 #    define nob_cc_output(cmd, output_path) nob_cmd_append(cmd, "-o", (output_path))
 #  endif
