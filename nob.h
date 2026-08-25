@@ -3350,6 +3350,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         without really modifying any existing functionality.
       - Breaking backward compatibility in a MINOR release should be considered a bug and
         should be promptly fixed in the next PATCH release.
+      - `+` in front of the version means means unstable version currently in development.
 
    API conventions:
 
