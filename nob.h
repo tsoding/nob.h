@@ -1,4 +1,4 @@
-/* nob - v3.10.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.11.0+ - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -84,6 +84,8 @@
         because I'm not sure how much it alters the UX of the library for other people, but this is something I personally need.
       - NOB_UNSTRIP_PREFIX - do not strip the `nob_` prefixes from non-redefinable names.
       - NOB_NO_ECHO - do not echo the actions various nob functions are doing (like nob_cmd_run(), nob_mkdir_if_not_exists(), etc).
+      - NOB_OVERWRITE_TEMP_ON_REWIND - Make nob_temp_rewind(checkpoint) overwrite all the temporary memory with 0xCC between checkpoint and nob_temp_size before resetting nob_temp_size to the checkpoint, which will help debug use-after-free-like problems by annihilating the contents of the temporary memory on each rewind (which makes it much harder to use the data by mistake).
+
 
    ## Redefinable Macros
 
@@ -2438,7 +2440,7 @@ NOBDEF char *nob_temp_sprintf(const char *format, ...)
 
 NOBDEF void nob_temp_reset(void)
 {
-    nob_temp_size = 0;
+    nob_temp_rewind(0);
 }
 
 NOBDEF size_t nob_temp_save(void)
@@ -2448,6 +2450,11 @@ NOBDEF size_t nob_temp_save(void)
 
 NOBDEF void nob_temp_rewind(size_t checkpoint)
 {
+#ifdef NOB_OVERWRITE_TEMP_ON_REWIND
+    for (size_t i = checkpoint; i < nob_temp_size; ++i) {
+        nob_temp[i] = 0xCC;
+    }
+#endif // NOB_OVERWRITE_TEMP_ON_REWIND
     nob_temp_size = checkpoint;
 }
 
@@ -3130,6 +3137,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+    3.11.0+ (          ) Introduce NOB_OVERWRITE_TEMP_ON_REWIND (by @rexim)
      3.10.0 (2026-07-17) Make NOB_SVLIT a bit more usable at compile-time (by @Arhcout)
                          Add NOB_SVLIT_STATIC for when a compiler simply refuses to accept NOB_SVLIT() at compile-time (looking at you `cl.exe /TC`) (by @rexim)
       3.9.0 (2026-07-15) Add NOB_TODOF() and NOB_UNREACHABLEF()
