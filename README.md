@@ -47,7 +47,6 @@ This is obviously applicable not only to C. You can implement the same kind of a
 - C++ - [https://github.com/zhiayang/nabs](https://github.com/zhiayang/nabs)
 - Java
   - [https://gitlab.com/NikaDev/arris](https://gitlab.com/NikaDev/arris)
-  - [https://codeberg.org/ptrace/job](https://codeberg.org/ptrace/job)
 - Fortran - [https://codeberg.org/shascilowicz/fob.f90](https://codeberg.org/shascilowicz/fob.f90)
 - ...
 
