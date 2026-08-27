@@ -905,7 +905,7 @@ NOBDEF void nob__go_rebuild_urself(int argc, char **argv, const char *source_pat
 //     // ...
 //     return 0;
 // }
-#define NOB_GO_REBUILD_URSELF_PLUS(argc, argv, ...) nob__go_rebuild_urself(argc, argv, __FILE__, __VA_ARGS__, NULL);
+#define NOB_GO_REBUILD_URSELF_PLUS(argc, argv, ...) nob__go_rebuild_urself(argc, argv, __FILE__, __VA_ARGS__, NULL)
 
 typedef struct {
     size_t count;
