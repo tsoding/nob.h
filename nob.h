@@ -832,6 +832,14 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #  define nob_cc_inputs(cmd, ...) nob_cmd_append(cmd, __VA_ARGS__)
 #endif // nob_cc_inputs
 
+#ifndef nob_cc_compile_only
+# if defined(_MSC_VER) && !defined(__clang__)
+#   define nob_cc_compile_only(cmd) nob_cmd_append(cmd, "/c")
+# else
+#   define nob_cc_compile_only(cmd) nob_cmd_append(cmd, "-c")
+# endif
+#endif // nob_cc_compile_only
+
 // TODO: add MinGW support for Go Rebuild Urself™ Technology and all the nob_cc_* macros above
 //   Musializer contributors came up with a pretty interesting idea of an optional prefix macro which could be useful for
 //   MinGW support:
