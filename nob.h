@@ -960,6 +960,9 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 #define NOB_SVLIT_STATIC(lit) {.count = sizeof(lit)-1, .data = (lit)}
 
 // printf macros for String_View
+#ifndef NOB_SV_Fmt2
+#define NOB_SV_Fmt2 ".*s"
+#endif // NOB_SV_Fmt2
 #ifndef SV_Fmt
 #define SV_Fmt "%.*s"
 #endif // SV_Fmt
@@ -3130,6 +3133,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define sv_from_parts nob_sv_from_parts
         #define sv_utf8_len nob_sv_utf8_len
         #define bytes_for_utf8 nob_bytes_for_utf8
+        #define SV_Fmt2 NOB_SV_Fmt2
         #define sb_to_sv nob_sb_to_sv
         #define win32_error_message nob_win32_error_message
         #define nprocs nob_nprocs
@@ -3142,6 +3146,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
    Revision history:
 
     3.11.0+ (          ) Introduce NOB_OVERWRITE_TEMP_ON_REWIND (by @rexim)
+                         Introduce NOB_SV_Fmt2 (by @rexim)
      3.10.1 (2026-10-28) Set _POSIX_C_SOURCE to 200809L for Unix environments (by @aalmkainzi)
                          Make nob_cc check for clang first on _WIN32 (by @aalmkainzi)
      3.10.0 (2026-07-17) Make NOB_SVLIT a bit more usable at compile-time (by @Arhcout)
