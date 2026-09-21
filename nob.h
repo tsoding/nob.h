@@ -3165,10 +3165,10 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
-    3.11.0+ (          ) Introduce NOB_OVERWRITE_TEMP_ON_REWIND (by @rexim)
-                         Introduce NOB_SV_Fmt2, NOB_SVNULL (by @rexim)
-                         Introduce NOB_SB_Fmt2, NOB_SB_Arg (by @rexim)
-                         Introduce nob_delete_directory_recursively() (by @rexim)
+    3.11.0+ (          ) Add NOB_OVERWRITE_TEMP_ON_REWIND (by @rexim)
+                         Add NOB_SV_Fmt2, NOB_SVNULL (by @rexim)
+                         Add NOB_SB_Fmt2, NOB_SB_Arg (by @rexim)
+                         Add nob_delete_directory_recursively() (by @rexim)
      3.10.1 (2026-10-28) Set _POSIX_C_SOURCE to 200809L for Unix environments (by @aalmkainzi)
                          Make nob_cc check for clang first on _WIN32 (by @aalmkainzi)
      3.10.0 (2026-07-17) Make NOB_SVLIT a bit more usable at compile-time (by @Arhcout)
