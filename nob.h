@@ -273,6 +273,7 @@ NOBDEF bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size);
 NOBDEF Nob_File_Type nob_get_file_type(const char *path);
 NOBDEF bool nob_delete_file(const char *path);
+NOBDEF bool nob_delete_directory_recursively(const char *dir_path);
 
 typedef enum {
     // If the current file is a directory go inside of it.
@@ -1634,7 +1635,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
             nob_log(NOB_ERROR, "Could not exec child process for %s: %s", cmd.items[0], strerror(errno));
             exit(1);
         }
-        NOB_UNREACHABLE("nob_cmd_run_async_redirect");
+        NOB_UNREACHABLE("nob__cmd_start_process");
     }
 
     return cpid;
@@ -2328,6 +2329,16 @@ NOBDEF bool nob_delete_file(const char *path)
     }
     return true;
 #endif // _WIN32
+}
+
+static bool nob__delete_walk_entry(Nob_Walk_Entry entry)
+{
+    return nob_delete_file(entry.path);
+}
+
+NOBDEF bool nob_delete_directory_recursively(const char *dir_path)
+{
+    return nob_walk_dir(dir_path, nob__delete_walk_entry, .post_order = true);
 }
 
 NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
@@ -3025,6 +3036,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define write_entire_file nob_write_entire_file
         #define get_file_type nob_get_file_type
         #define delete_file nob_delete_file
+        #define delete_directory_recursively nob_delete_directory_recursively
         #define Dir_Entry Nob_Dir_Entry
         #define dir_entry_open nob_dir_entry_open
         #define dir_entry_next nob_dir_entry_next
@@ -3156,6 +3168,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
     3.11.0+ (          ) Introduce NOB_OVERWRITE_TEMP_ON_REWIND (by @rexim)
                          Introduce NOB_SV_Fmt2, NOB_SVNULL (by @rexim)
                          Introduce NOB_SB_Fmt2, NOB_SB_Arg (by @rexim)
+                         Introduce nob_delete_directory_recursively() (by @rexim)
      3.10.1 (2026-10-28) Set _POSIX_C_SOURCE to 200809L for Unix environments (by @aalmkainzi)
                          Make nob_cc check for clang first on _WIN32 (by @aalmkainzi)
      3.10.0 (2026-07-17) Make NOB_SVLIT a bit more usable at compile-time (by @Arhcout)
