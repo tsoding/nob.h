@@ -24,17 +24,6 @@ const char *test_names[] = {
 };
 #define test_names_count ARRAY_LEN(test_names)
 
-bool delete_walk_entry(Walk_Entry entry)
-{
-    return delete_file(entry.path);
-}
-
-// TODO: we eventually should make this part of nob.h
-bool delete_directory_recursively(const char *dir_path)
-{
-    return walk_dir(dir_path, delete_walk_entry, .post_order = true);
-}
-
 bool build_and_run_test(const char *test_name, bool record)
 {
     bool result = true;
