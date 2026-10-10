@@ -21,6 +21,7 @@ const char *test_names[] = {
     "bytes_for_utf8",
     "sv_foreach",
     "svlit_at_different_storages",
+    "sv_find",
 };
 #define test_names_count ARRAY_LEN(test_names)
 
@@ -70,7 +71,9 @@ bool build_and_run_test(const char *test_name, bool record)
     } else {
         // TODO: it would be cool to have a portable diff utility in here.
         if (!read_entire_file(src_stdout_path, &src)) return_defer(false);
-        if (!read_entire_file(dst_stdout_path, &dst)) return_defer(false);
+        if (file_exists(dst_stdout_path)) {
+            if (!read_entire_file(dst_stdout_path, &dst)) return_defer(false);
+        }
 
         src_sv = sb_to_sv(src);
         dst_sv = sb_to_sv(dst);
