@@ -953,6 +953,10 @@ NOBDEF Nob_String_View nob_sv_from_cstr(const char *cstr);
 NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count);
 // nob_sb_to_sv() enables you to just view Nob_String_Builder as Nob_String_View
 #define nob_sb_to_sv(sb) nob_sv_from_parts((sb).items, (sb).count)
+// nob_sv_find() finds an the index at which `needle` starts in `haystack`
+// as a substring. If the `haystack` doesn't contain `needle` as the substring
+// returns -1. Uses naive O(NM) algorithm right now.
+NOBDEF int nob_sv_find(Nob_String_View haystack, Nob_String_View needle);
 
 #define NOB_SVLIT(lit) (NOB_CLIT(Nob_String_View){.count = sizeof(lit)-1, .data = (lit)})
 // Generally majority of the C/C++ compilers will allow you to use NOB_SVLIT to construct global variables.
@@ -2746,6 +2750,18 @@ NOBDEF Nob_String_View nob_sv_from_parts(const char *data, size_t count)
     return sv;
 }
 
+NOBDEF int nob_sv_find(Nob_String_View haystack, Nob_String_View needle)
+{
+    // TODO: Use something better in here. Something like a Rolling Hash.
+    for (size_t i = 0; needle.count <= haystack.count; ++i) {
+        if (nob_sv_starts_with(haystack, needle)) {
+            return (int)i;
+        }
+        nob_sv_chop_left(&haystack, 1);
+    }
+    return -1;
+}
+
 NOBDEF Nob_String_View nob_sv_trim_left(Nob_String_View sv)
 {
     size_t i = 0;
@@ -3148,6 +3164,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define sv_ends_with_cstr nob_sv_ends_with_cstr
         #define sv_from_cstr nob_sv_from_cstr
         #define sv_from_parts nob_sv_from_parts
+        #define sv_find nob_sv_find
         #define sv_utf8_len nob_sv_utf8_len
         #define bytes_for_utf8 nob_bytes_for_utf8
         #define SVNULL NOB_SVNULL
@@ -3169,6 +3186,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
                          Add NOB_SV_Fmt2, NOB_SVNULL (by @rexim)
                          Add NOB_SB_Fmt2, NOB_SB_Arg (by @rexim)
                          Add nob_delete_directory_recursively() (by @rexim)
+                         Add nob_sv_find() (by @rexim)
      3.10.1 (2026-10-28) Set _POSIX_C_SOURCE to 200809L for Unix environments (by @aalmkainzi)
                          Make nob_cc check for clang first on _WIN32 (by @aalmkainzi)
      3.10.0 (2026-07-17) Make NOB_SVLIT a bit more usable at compile-time (by @Arhcout)
