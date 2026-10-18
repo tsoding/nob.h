@@ -460,6 +460,9 @@ NOBDEF void nob_sb_pad_align(Nob_String_Builder *sb, size_t size);
 // Append a string view to a string builder
 #define nob_sb_append_sv(sb, sv) nob_sb_append_buf((sb), (sv).data, (sv).count)
 
+// Append another string builder to the string builder
+NOBDEF void nob_sb_append_sb(Nob_String_Builder *dst, Nob_String_Builder src);
+
 // Append a NULL-terminated string to a string builder
 #define nob_sb_append_cstr(sb, cstr)  \
     do {                              \
@@ -2659,6 +2662,11 @@ NOBDEF void nob_sb_pad_align(Nob_String_Builder *sb, size_t size)
     }
 }
 
+NOBDEF void nob_sb_append_sb(Nob_String_Builder *dst, Nob_String_Builder src)
+{
+    nob_sb_append_sv(dst, nob_sb_to_sv(src));
+}
+
 NOBDEF Nob_String_View nob_sv_chop_while(Nob_String_View *sv, int (*p)(int x))
 {
     size_t i = 0;
@@ -3074,6 +3082,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define sb_appendf nob_sb_appendf
         #define sb_append_buf nob_sb_append_buf
         #define sb_append_sv nob_sb_append_sv
+        #define sb_append_sb nob_sb_append_sb
         #define sb_append_cstr nob_sb_append_cstr
         #define sb_append_null nob_sb_append_null
         #define sb_append nob_sb_append
@@ -3183,6 +3192,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
                          Add NOB_SB_Fmt2, NOB_SB_Arg (by @rexim)
                          Add nob_delete_directory_recursively() (by @rexim)
                          Add nob_sv_find() (by @rexim)
+                         Add nob_sb_append_sb() (by @rexim)
      3.10.0 (2026-07-17) Make NOB_SVLIT a bit more usable at compile-time (by @Arhcout)
                          Add NOB_SVLIT_STATIC for when a compiler simply refuses to accept NOB_SVLIT() at compile-time (looking at you `cl.exe /TC`) (by @rexim)
       3.9.0 (2026-07-15) Add NOB_TODOF() and NOB_UNREACHABLEF()
