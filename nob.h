@@ -965,6 +965,8 @@ NOBDEF int nob_sv_find(Nob_String_View haystack, Nob_String_View needle);
 
 #define NOB_SVNULL ((Nob_String_View){0})
 
+// @no-release: better names than NOB_SV_Fmt2 and NOB_SB_Fmt2
+
 #define NOB_SB_Fmt2 NOB_SV_Fmt2
 #define NOB_SB_Arg(sb) (int) (sb).count, (sb).items
 
@@ -3022,6 +3024,8 @@ Nob_Git_Hash_Result nob_sb_append_git_hash(Nob_String_Builder *sb, const char *b
     Nob_String_Builder git_status_sb = {0};
     Nob_String_View git_status_sv = {0};
 
+    // @no-release: it would be better to suffix the names with some sort of random suffix,
+    // or maybe even use the platforms temporary files mechanism.
     const char *git_status_txt_path = nob_temp_sprintf("%s/%s", build_folder, "git_status.txt");
     const char *git_hash_txt_path   = nob_temp_sprintf("%s/%s", build_folder, "git_hash.txt");
 
