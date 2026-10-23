@@ -1015,6 +1015,26 @@ NOBDEF char *nob_win32_error_message(DWORD err);
 
 #endif // _WIN32
 
+typedef enum {
+    // Git hash was successfully acquired.
+    NOB_GIT_HASH_OK,
+
+    // Git commands returned error while acquiring the hash. This is likely due
+    // to user missing git on the their setup. It is generally recommended to
+    // not fail the entire build because of this and just fallback to some sort
+    // of "no git hash" string in the place where you'd place the hash.
+    NOB_GIT_HASH_NO_GIT,
+
+    // Something went wrong while acquiring the git hash.
+    NOB_GIT_HASH_ERROR,
+} Nob_Git_Hash_Result;
+
+// Calls a git command line to obtain the short version of the current git hash and
+// appends it to `sb`. `build_folder` is the path to a folder where the function can
+// put temporary files. If the git repo is in the dirty state the hash is suffixed with
+// `+` to indicate that.
+Nob_Git_Hash_Result nob_sb_append_git_hash(Nob_String_Builder *sb, const char *build_folder);
+
 #endif // NOB_H_
 
 #ifdef NOB_IMPLEMENTATION
@@ -2998,6 +3018,53 @@ NOBDEF char *nob_temp_running_executable_path(void)
 #endif
 }
 
+Nob_Git_Hash_Result nob_sb_append_git_hash(Nob_String_Builder *sb, const char *build_folder)
+{
+    Nob_Git_Hash_Result result = NOB_GIT_HASH_OK;
+
+    Nob_Cmd cmd = {0};
+    Nob_String_Builder git_status_sb = {0};
+    Nob_String_View git_status_sv = {0};
+
+    const char *git_status_txt_path = nob_temp_sprintf("%s/%s", build_folder, "git_status.txt");
+    const char *git_hash_txt_path   = nob_temp_sprintf("%s/%s", build_folder, "git_hash.txt");
+
+    nob_cmd_append(&cmd, "git");
+    nob_cmd_append(&cmd, "status");
+    nob_cmd_append(&cmd, "--porcelain");
+    if (!nob_cmd_run(&cmd, .stdout_path = git_status_txt_path)) {
+        nob_return_defer(NOB_GIT_HASH_NO_GIT);
+    }
+
+    if (!nob_read_entire_file(git_status_txt_path, &git_status_sb)) {
+        nob_return_defer(NOB_GIT_HASH_ERROR);
+    }
+    git_status_sv = nob_sv_trim(nob_sb_to_sv(git_status_sb));
+
+    nob_cmd_append(&cmd, "git");
+    nob_cmd_append(&cmd, "rev-parse");
+    nob_cmd_append(&cmd, "--short");
+    nob_cmd_append(&cmd, "HEAD");
+    if (!nob_cmd_run(&cmd, .stdout_path = git_hash_txt_path)) {
+        nob_return_defer(NOB_GIT_HASH_NO_GIT);
+    }
+
+    if (!nob_read_entire_file(git_hash_txt_path, sb)) {
+        nob_return_defer(NOB_GIT_HASH_ERROR);
+    }
+    while (sb->count > 0 && isspace(nob_da_last(sb))) {
+        NOB_UNUSED(nob_da_pop(sb));
+    }
+    if (git_status_sv.count > 0) {
+        nob_sb_append(sb, '+');
+    }
+
+defer:
+    free(cmd.items);
+    free(git_status_sb.items);
+    return result;
+}
+
 #endif // NOB_IMPLEMENTATION
 
 #ifndef NOB_STRIP_PREFIX_GUARD_
@@ -3185,6 +3252,11 @@ NOBDEF char *nob_temp_running_executable_path(void)
         #define nprocs nob_nprocs
         #define nanos_since_unspecified_epoch nob_nanos_since_unspecified_epoch
         #define NANOS_PER_SEC NOB_NANOS_PER_SEC
+        #define GIT_HASH_OK NOB_GIT_HASH_OK
+        #define GIT_HASH_NO_GIT NOB_GIT_HASH_NO_GIT
+        #define GIT_HASH_ERROR NOB_GIT_HASH_ERROR
+        #define Git_Hash_Result Nob_Git_Hash_Result
+        #define sb_append_git_hash nob_sb_append_git_hash
     #endif // NOB_STRIP_PREFIX
 #endif // NOB_STRIP_PREFIX_GUARD_
 
@@ -3197,6 +3269,7 @@ NOBDEF char *nob_temp_running_executable_path(void)
                          Add nob_delete_directory_recursively() (by @rexim)
                          Add nob_sv_find() (by @rexim)
                          Add nob_sb_append_sb() (by @rexim)
+                         Add nob_sb_append_git_hash() (by @rexim)
      3.10.1 (2026-10-28) Set _POSIX_C_SOURCE to 200809L for Unix environments (by @aalmkainzi)
                          Make nob_cc check for clang first on _WIN32 (by @aalmkainzi)
      3.10.0 (2026-07-17) Make NOB_SVLIT a bit more usable at compile-time (by @Arhcout)
