@@ -1,4 +1,4 @@
-/* nob - v3.10.0 - Public Domain - https://github.com/tsoding/nob.h
+/* nob - v3.10.1 - Public Domain - https://github.com/tsoding/nob.h
 
    This library is the next generation of the [NoBuild](https://github.com/tsoding/nobuild) idea.
 
@@ -115,6 +115,10 @@
 */
 #define NOBDEF
 #endif /* NOBDEF */
+
+#if defined(__unix__) && !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
 
 #ifndef NOB_ASSERT
 #include <assert.h>
@@ -798,10 +802,10 @@ NOBDEF char *nob_temp_running_executable_path(void);
 
 #ifndef nob_cc
 #  if _WIN32
-#    if defined(__GNUC__)
-#       define nob_cc(cmd) nob_cmd_append(cmd, "cc")
-#    elif defined(__clang__)
+#    if defined(__clang__)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "clang")
+#    elif defined(__GNUC__)
+#       define nob_cc(cmd) nob_cmd_append(cmd, "cc")
 #    elif defined(_MSC_VER)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "cl.exe")
 #    elif defined(__TINYC__)
@@ -3130,6 +3134,8 @@ NOBDEF char *nob_temp_running_executable_path(void)
 /*
    Revision history:
 
+     3.10.1 (2026-10-28) Set _POSIX_C_SOURCE to 200809L for Unix environments (by @aalmkainzi)
+                         Make nob_cc check for clang first on _WIN32 (by @aalmkainzi)
      3.10.0 (2026-07-17) Make NOB_SVLIT a bit more usable at compile-time (by @Arhcout)
                          Add NOB_SVLIT_STATIC for when a compiler simply refuses to accept NOB_SVLIT() at compile-time (looking at you `cl.exe /TC`) (by @rexim)
       3.9.0 (2026-07-15) Add NOB_TODOF() and NOB_UNREACHABLEF()
