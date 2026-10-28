@@ -116,6 +116,10 @@
 #define NOBDEF
 #endif /* NOBDEF */
 
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE 1
+#endif
+
 #ifndef NOB_ASSERT
 #include <assert.h>
 #define NOB_ASSERT assert
