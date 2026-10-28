@@ -116,8 +116,8 @@
 #define NOBDEF
 #endif /* NOBDEF */
 
-#if defined(__linux__) && !defined(_GNU_SOURCE)
-#define _GNU_SOURCE 1
+#if defined(__unix__) && !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
 #endif
 
 #ifndef NOB_ASSERT
