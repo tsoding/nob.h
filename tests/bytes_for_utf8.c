@@ -1,4 +1,3 @@
-#include <stdio.h>
 #define NOB_IMPLEMENTATION
 #include "nob.h"
 
