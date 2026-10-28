@@ -171,13 +171,19 @@
 #    include <io.h>
 #    include <shellapi.h>
 #else
+#    if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+#        ifndef __BSD_VISIBLE
+#            define __BSD_VISIBLE 1
+#        endif
+#    endif
+#    include <sys/types.h>
+#    if defined(__FreeBSD__)
+#        include <sys/param.h>
+#        include <sys/sysctl.h>
+#    endif
 #    ifdef __APPLE__
 #        include <mach-o/dyld.h>
 #    endif
-#    ifdef __FreeBSD__
-#        include <sys/sysctl.h>
-#    endif
-#    include <sys/types.h>
 #    include <sys/wait.h>
 #    include <sys/stat.h>
 #    include <unistd.h>
@@ -1297,7 +1303,31 @@ NOBDEF int nob_nprocs(void)
     GetSystemInfo(&siSysInfo);
     return siSysInfo.dwNumberOfProcessors;
 #else
-    return sysconf(_SC_NPROCESSORS_ONLN);
+#ifdef _SC_NPROCESSORS_ONLN
+    {
+        long n = sysconf(_SC_NPROCESSORS_ONLN);
+        if (n > 0) return (int)n;
+    }
+#endif
+#if defined(__FreeBSD__)
+    {
+#if defined(CTL_HW) && defined(HW_NCPU)
+        int mib[2] = {CTL_HW, HW_NCPU};
+        int ncpu = 0;
+        size_t len = sizeof(ncpu);
+        if (sysctl(mib, 2, &ncpu, &len, NULL, 0) == 0 && ncpu > 0)
+            return ncpu;
+#endif
+        {
+            int ncpu = 0;
+            size_t len = sizeof(ncpu);
+            if (sysctlbyname("hw.ncpu", &ncpu, &len, NULL, 0) == 0 &&
+                ncpu > 0)
+                return ncpu;
+        }
+    }
+#endif
+    return 1;
 #endif
 }
 
