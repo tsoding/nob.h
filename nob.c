@@ -1,3 +1,5 @@
+//usr/bin/env -S cc -Wall -Og -g $0 -o nob; ./nob $@; exit
+
 #include "shared.h"
 
 const char *test_names[] = {
