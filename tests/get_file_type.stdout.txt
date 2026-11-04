@@ -1,0 +1,3 @@
+get_file_type(missing): is_error=true, error_counter=1
+walk_dir(missing): ok=false, error_counter=1
+copy_directory_recursively(missing): ok=false, error_counter=1
