@@ -116,7 +116,7 @@
 #define NOBDEF
 #endif /* NOBDEF */
 
-#if defined(__unix__) && !defined(_POSIX_C_SOURCE)
+#if defined(__unix__) && !defined(__FreeBSD__) && !defined(_POSIX_C_SOURCE)
 #define _POSIX_C_SOURCE 200809L
 #endif
 
