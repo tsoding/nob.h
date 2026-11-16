@@ -480,16 +480,20 @@ NOBDEF void nob_sb_pad_align(Nob_String_Builder *sb, size_t size);
 
 // Process handle
 #ifdef _WIN32
-typedef HANDLE Nob_Proc;
 #define NOB_INVALID_PROC INVALID_HANDLE_VALUE
 typedef HANDLE Nob_Fd;
 #define NOB_INVALID_FD INVALID_HANDLE_VALUE
 #else
-typedef int Nob_Proc;
 #define NOB_INVALID_PROC (-1)
 typedef int Nob_Fd;
 #define NOB_INVALID_FD (-1)
 #endif // _WIN32
+
+typedef struct {
+    Nob_Fd p;
+    Nob_Fd out;
+    Nob_Fd err;
+} Nob_Proc;
 
 NOBDEF Nob_Fd nob_fd_open_for_read(const char *path);
 NOBDEF Nob_Fd nob_fd_open_for_write(const char *path);
@@ -546,6 +550,8 @@ typedef struct {
     const char *stdout_path;
     // Redirect stderr to file
     const char *stderr_path;
+    // Sync output
+    bool sync_output;
 } Nob_Cmd_Opt;
 
 // Run the command with options.
@@ -1315,6 +1321,32 @@ NOBDEF bool nob__cmd_run_opt_with_location(Nob_Cmd *cmd, const char *file, int l
     return ok;
 }
 
+static bool nob__read_from_pipe(Nob_Fd pp, FILE *out) {
+    while (true) {
+        char tmp[2048];
+#ifdef _WIN32
+        DWORD n = 0;
+        // EOF can be: ReadFile == true && n == 0 or ReadFile == false && GetLastError() == ERROR_BROKEN_PIPE
+        if (!ReadFile(pp, tmp, sizeof(tmp), &n, NULL)) {
+            DWORD err = GetLastError();
+            if (err == ERROR_BROKEN_PIPE) break;
+            nob_log(NOB_ERROR, "Failed to Read from Pipe: %s", nob_win32_error_message(err));
+            return false;
+        }
+#else
+        ssize_t n = read(pp, tmp, sizeof(tmp));
+        if (n < 0) {
+            nob_log(NOB_ERROR, "Failed to Read from Pipe: %s", strerror(errno));
+            return false;
+        }
+#endif
+        if (n == 0) break;
+        fprintf(out, SV_Fmt, (int)n, tmp);
+    }
+    fflush(out);
+    return true;
+}
+
 NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
 {
     bool result = true;
@@ -1324,7 +1356,10 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
     Nob_Fd *opt_fdin  = NULL;
     Nob_Fd *opt_fdout = NULL;
     Nob_Fd *opt_fderr = NULL;
-    Nob_Proc proc = NOB_INVALID_PROC;
+    Nob_Proc proc = {.p = NOB_INVALID_PROC};
+
+    Nob_Pipe ppout = {0};
+    Nob_Pipe pperr = {0};
 
     size_t max_procs = opt.max_procs > 0 ? opt.max_procs : (size_t) nob_nprocs() + 1;
 
@@ -1350,16 +1385,41 @@ NOBDEF bool nob_cmd_run_opt(Nob_Cmd *cmd, Nob_Cmd_Opt opt)
         fdout = nob_fd_open_for_write(opt.stdout_path);
         if (fdout == NOB_INVALID_FD) nob_return_defer(false);
         opt_fdout = &fdout;
+    } else if (opt.sync_output) {
+        if (!nob_pipe_create(&ppout)) nob_return_defer(false);
+#ifdef _WIN32
+        SetHandleInformation(ppout.read, HANDLE_FLAG_INHERIT, 0);
+#endif
+        opt_fdout = &ppout.write;
     }
     if (opt.stderr_path) {
         fderr = nob_fd_open_for_write(opt.stderr_path);
         if (fderr == NOB_INVALID_FD) nob_return_defer(false);
         opt_fderr = &fderr;
+    } else if (opt.sync_output) {
+        if (!nob_pipe_create(&pperr)) nob_return_defer(false);
+#ifdef _WIN32
+        SetHandleInformation(pperr.read, HANDLE_FLAG_INHERIT, 0);
+#endif
+        opt_fderr = &pperr.write;
     }
     proc = nob__cmd_start_process(*cmd, opt_fdin, opt_fdout, opt_fderr);
 
+    if (ppout.write) {
+        nob_fd_close(ppout.write);
+        memset(&ppout.write, 0, sizeof(ppout.write));
+        opt_fdout = NULL;
+    }
+    if (pperr.write) {
+        nob_fd_close(pperr.write);
+        memset(&pperr.write, 0, sizeof(pperr.write));
+        opt_fderr = NULL;
+    }
+
     if (opt.async) {
-        if (proc == NOB_INVALID_PROC) nob_return_defer(false);
+        if (proc.p == NOB_INVALID_PROC)    nob_return_defer(false);
+        if (opt.sync_output && ppout.read) proc.out = ppout.read;
+        if (opt.sync_output && pperr.read) proc.err = pperr.read;
         nob_da_append(opt.async, proc);
     } else {
         if (!nob_proc_wait(proc)) nob_return_defer(false);
@@ -1409,7 +1469,7 @@ NOBDEF bool nob_chain_cmd_opt(Nob_Chain *chain, Nob_Cmd *cmd, Nob_Chain_Cmd_Opt 
 
         Nob_Proc proc = nob__cmd_start_process(chain->cmd, pfdin, pfdout, pfderr);
         chain->cmd.count = 0;
-        if (proc == NOB_INVALID_PROC) {
+        if (proc.p == NOB_INVALID_PROC) {
             nob_fa_append(&fds, pp.read);
             nob_return_defer(false);
         }
@@ -1496,7 +1556,7 @@ NOBDEF bool nob_chain_end_opt(Nob_Chain *chain, Nob_Chain_End_Opt opt)
         chain->cmd.count = 0;
 
         if (opt.async) {
-            if (proc == NOB_INVALID_PROC) nob_return_defer(false);
+            if (proc.p == NOB_INVALID_PROC) nob_return_defer(false);
             nob_da_append(opt.async, proc);
         } else {
             if (!nob_proc_wait(proc)) nob_return_defer(false);
@@ -1542,7 +1602,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 {
     if (cmd.count < 1) {
         nob_log(NOB_ERROR, "Could not run empty command");
-        return NOB_INVALID_PROC;
+        return (Nob_Proc){.p = NOB_INVALID_PROC};
     }
 
 #ifndef NOB_NO_ECHO
@@ -1579,17 +1639,17 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 
     if (!bSuccess) {
         nob_log(NOB_ERROR, "Could not create child process for %s: %s", cmd.items[0], nob_win32_error_message(GetLastError()));
-        return NOB_INVALID_PROC;
+        return (Nob_Proc){.p = NOB_INVALID_PROC};
     }
 
     CloseHandle(piProcInfo.hThread);
 
-    return piProcInfo.hProcess;
+    return (Nob_Proc){.p = piProcInfo.hProcess};
 #else
     pid_t cpid = fork();
     if (cpid < 0) {
         nob_log(NOB_ERROR, "Could not fork child process: %s", strerror(errno));
-        return NOB_INVALID_PROC;
+        return (Nob_Proc){.p = NOB_INVALID_PROC};
     }
 
     if (cpid == 0) {
@@ -1605,6 +1665,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
                 nob_log(NOB_ERROR, "Could not setup stdout for child process: %s", strerror(errno));
                 exit(1);
             }
+            close(*fdout);
         }
 
         if (fderr) {
@@ -1612,6 +1673,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
                 nob_log(NOB_ERROR, "Could not setup stderr for child process: %s", strerror(errno));
                 exit(1);
             }
+            close(*fderr);
         }
 
         // NOTE: This leaks a bit of memory in the child process.
@@ -1627,7 +1689,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
         NOB_UNREACHABLE("nob_cmd_run_async_redirect");
     }
 
-    return cpid;
+    return (Nob_Proc){.p = cpid};
 #endif
 }
 
@@ -1791,42 +1853,62 @@ NOBDEF bool nob_procs_wait_and_reset(Nob_Procs *procs)
 
 NOBDEF bool nob_proc_wait(Nob_Proc proc)
 {
-    if (proc == NOB_INVALID_PROC) return false;
+    if (proc.p == NOB_INVALID_PROC) return false;
 
 #ifdef _WIN32
-    DWORD result = WaitForSingleObject(
-                       proc,    // HANDLE hHandle,
+    bool result = true;
+
+    DWORD wait = WaitForSingleObject(
+                       proc.p,    // HANDLE hHandle,
                        INFINITE // DWORD  dwMilliseconds
                    );
 
-    if (result == WAIT_FAILED) {
+    if (wait == WAIT_FAILED) {
         nob_log(NOB_ERROR, "could not wait on child process: %s", nob_win32_error_message(GetLastError()));
-        return false;
+        nob_return_defer(false);
     }
 
     DWORD exit_status;
-    if (!GetExitCodeProcess(proc, &exit_status)) {
+    if (!GetExitCodeProcess(proc.p, &exit_status)) {
         nob_log(NOB_ERROR, "could not get process exit code: %s", nob_win32_error_message(GetLastError()));
-        return false;
+        nob_return_defer(false);
     }
 
     if (exit_status != 0) {
         nob_log(NOB_ERROR, "command exited with exit code %lu", exit_status);
-        return false;
+        nob_return_defer(false);
     }
 
-    CloseHandle(proc);
+defer:
+    if (proc.out) {
+        nob__read_from_pipe(proc.out, stdout);
+        CloseHandle(proc.out);
+    }
+    if (proc.err) {
+        nob__read_from_pipe(proc.err, stderr);
+        CloseHandle(proc.err);
+    }
+    CloseHandle(proc.p);
 
-    return true;
+    return result;
 #else
     for (;;) {
         int wstatus = 0;
-        if (waitpid(proc, &wstatus, 0) < 0) {
-            nob_log(NOB_ERROR, "could not wait on command (pid %d): %s", proc, strerror(errno));
+        if (waitpid(proc.p, &wstatus, 0) < 0) {
+            nob_log(NOB_ERROR, "could not wait on command (pid %d): %s", proc.p, strerror(errno));
             return false;
         }
 
         if (WIFEXITED(wstatus)) {
+            if (proc.out) {
+                nob__read_from_pipe(proc.out, stdout);
+                close(proc.out);
+            }
+            if (proc.err) {
+                nob__read_from_pipe(proc.err, stderr);
+                close(proc.err);
+            }
+
             int exit_status = WEXITSTATUS(wstatus);
             if (exit_status != 0) {
                 nob_log(NOB_ERROR, "command exited with exit code %d", exit_status);
@@ -1848,37 +1930,47 @@ NOBDEF bool nob_proc_wait(Nob_Proc proc)
 
 static int nob__proc_wait_async(Nob_Proc proc, int ms)
 {
-    if (proc == NOB_INVALID_PROC) return false;
+    if (proc.p == NOB_INVALID_PROC) return -1;
 
 #ifdef _WIN32
-    DWORD result = WaitForSingleObject(
-                       proc,    // HANDLE hHandle,
+    int result = 1;
+
+    DWORD wait = WaitForSingleObject(
+                       proc.p,  // HANDLE hHandle,
                        ms       // DWORD  dwMilliseconds
                    );
 
-    if (result == WAIT_TIMEOUT) {
+    if (wait == WAIT_TIMEOUT) {
         return 0;
     }
 
-    if (result == WAIT_FAILED) {
+    if (wait == WAIT_FAILED) {
         nob_log(NOB_ERROR, "could not wait on child process: %s", nob_win32_error_message(GetLastError()));
-        return -1;
+        nob_return_defer(-1);
     }
 
     DWORD exit_status;
-    if (!GetExitCodeProcess(proc, &exit_status)) {
+    if (!GetExitCodeProcess(proc.p, &exit_status)) {
         nob_log(NOB_ERROR, "could not get process exit code: %s", nob_win32_error_message(GetLastError()));
-        return -1;
+        nob_return_defer(-1);
     }
 
     if (exit_status != 0) {
         nob_log(NOB_ERROR, "command exited with exit code %lu", exit_status);
-        return -1;
+        nob_return_defer(-1);
     }
 
-    CloseHandle(proc);
-
-    return 1;
+defer:
+    if (proc.out) {
+        nob__read_from_pipe(proc.out, stdout);
+        CloseHandle(proc.out);
+    }
+    if (proc.err) {
+        nob__read_from_pipe(proc.err, stderr);
+        CloseHandle(proc.err);
+    }
+    CloseHandle(proc.p);
+    return result;
 #else
     long ns = ms*1000*1000;
     struct timespec duration = {
@@ -1887,9 +1979,9 @@ static int nob__proc_wait_async(Nob_Proc proc, int ms)
     };
 
     int wstatus = 0;
-    pid_t pid = waitpid(proc, &wstatus, WNOHANG);
+    pid_t pid = waitpid(proc.p, &wstatus, WNOHANG);
     if (pid < 0) {
-        nob_log(NOB_ERROR, "could not wait on command (pid %d): %s", proc, strerror(errno));
+        nob_log(NOB_ERROR, "could not wait on command (pid %d): %s", proc.p, strerror(errno));
         return -1;
     }
 
@@ -1899,6 +1991,15 @@ static int nob__proc_wait_async(Nob_Proc proc, int ms)
     }
 
     if (WIFEXITED(wstatus)) {
+        if (proc.out) {
+            nob__read_from_pipe(proc.out, stdout);
+            close(proc.out);
+        }
+        if (proc.err) {
+            nob__read_from_pipe(proc.err, stderr);
+            close(proc.err);
+        }
+
         int exit_status = WEXITSTATUS(wstatus);
         if (exit_status != 0) {
             nob_log(NOB_ERROR, "command exited with exit code %d", exit_status);
