@@ -1600,9 +1600,10 @@ NOBDEF Nob_Proc nob_cmd_run_async_redirect(Nob_Cmd cmd, Nob_Cmd_Redirect redirec
 
 static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout, Nob_Fd *fderr)
 {
+    Nob_Proc proc = {.p = NOB_INVALID_PROC};
     if (cmd.count < 1) {
         nob_log(NOB_ERROR, "Could not run empty command");
-        return (Nob_Proc){.p = NOB_INVALID_PROC};
+        return proc;
     }
 
 #ifndef NOB_NO_ECHO
@@ -1639,17 +1640,18 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 
     if (!bSuccess) {
         nob_log(NOB_ERROR, "Could not create child process for %s: %s", cmd.items[0], nob_win32_error_message(GetLastError()));
-        return (Nob_Proc){.p = NOB_INVALID_PROC};
+        return proc;
     }
 
     CloseHandle(piProcInfo.hThread);
 
-    return (Nob_Proc){.p = piProcInfo.hProcess};
+    proc.p = piProcInfo.hProcess;
+    return proc;
 #else
     pid_t cpid = fork();
     if (cpid < 0) {
         nob_log(NOB_ERROR, "Could not fork child process: %s", strerror(errno));
-        return (Nob_Proc){.p = NOB_INVALID_PROC};
+        return proc;
     }
 
     if (cpid == 0) {
@@ -1687,7 +1689,8 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
         NOB_UNREACHABLE("nob_cmd_run_async_redirect");
     }
 
-    return (Nob_Proc){.p = cpid};
+    proc.p = cpid;
+    return proc;
 #endif
 }
 
