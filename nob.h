@@ -1593,24 +1593,25 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
     }
 
     if (cpid == 0) {
+        // We use _exit instead of exit in case of error here to avoid running exit handlers (atexit) when execvp fails.
         if (fdin) {
             if (dup2(*fdin, STDIN_FILENO) < 0) {
                 nob_log(NOB_ERROR, "Could not setup stdin for child process: %s", strerror(errno));
-                exit(1);
+                _exit(1);
             }
         }
 
         if (fdout) {
             if (dup2(*fdout, STDOUT_FILENO) < 0) {
                 nob_log(NOB_ERROR, "Could not setup stdout for child process: %s", strerror(errno));
-                exit(1);
+                _exit(1);
             }
         }
 
         if (fderr) {
             if (dup2(*fderr, STDERR_FILENO) < 0) {
                 nob_log(NOB_ERROR, "Could not setup stderr for child process: %s", strerror(errno));
-                exit(1);
+                _exit(1);
             }
         }
 
@@ -1622,7 +1623,7 @@ static Nob_Proc nob__cmd_start_process(Nob_Cmd cmd, Nob_Fd *fdin, Nob_Fd *fdout,
 
         if (execvp(cmd.items[0], (char * const*) cmd_null.items) < 0) {
             nob_log(NOB_ERROR, "Could not exec child process for %s: %s", cmd.items[0], strerror(errno));
-            exit(1);
+            _exit(1);
         }
         NOB_UNREACHABLE("nob_cmd_run_async_redirect");
     }
