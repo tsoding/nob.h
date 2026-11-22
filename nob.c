@@ -13,6 +13,7 @@ const char *test_names[] = {
     "da_foreach",
     "temp_aligned_alloc",
     "temp_path_comps",
+    "mkdir_collision",
     "temp_running_executable_path",
     "no_echo",
     "cmd_run_dont_reset",

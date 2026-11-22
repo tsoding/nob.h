@@ -168,6 +168,7 @@
 #    define _WINCON_
 #    include <windows.h>
 #    include <direct.h>
+#    include <sys/stat.h>
 #    include <io.h>
 #    include <shellapi.h>
 #else
@@ -1152,6 +1153,17 @@ NOBDEF bool nob_mkdir_if_not_exists(const char *path)
 #endif
     if (result < 0) {
         if (errno == EEXIST) {
+#ifdef _WIN32
+            struct _stat st;
+            bool is_dir = _stat(path, &st) == 0 && (st.st_mode & _S_IFMT) == _S_IFDIR;
+#else
+            struct stat st;
+            bool is_dir = stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+#endif
+            if (!is_dir) {
+                nob_log(NOB_ERROR, "could not use `%s` as a directory", path);
+                return false;
+            }
 #ifndef NOB_NO_ECHO
             nob_log(NOB_INFO, "directory `%s` already exists", path);
 #endif // NOB_NO_ECHO
