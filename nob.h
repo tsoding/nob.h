@@ -2110,6 +2110,9 @@ NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir)
 #endif
 }
 
+// Keep lookup failures signed until a file type is available.
+static int nob__get_file_type(const char *path);
+
 // On the moment of entering `nob__walk_dir_opt_impl()`, the `file_path` Nob_String_Builder is expected to be NULL-terminated.
 // So you can freely pass `file_path->items` to functions that expect NULL-terminated file path.
 // On existing `nob__walk_dir_opt_impl()` is expected to restore the original content of `file_path`
@@ -2122,14 +2125,14 @@ bool nob__walk_dir_opt_impl(Nob_String_Builder *file_path, Nob_Walk_Func func, s
     size_t saved_file_path_count = file_path->count;
     Nob_Walk_Action action = NOB_WALK_CONT;
 
-    Nob_File_Type file_type = nob_get_file_type(file_path->items);
+    int file_type = nob__get_file_type(file_path->items);
     if (file_type < 0) nob_return_defer(false);
 
     // Pre-order walking
     if (!opt.post_order) {
         if (!func(NOB_CLIT(Nob_Walk_Entry) {
             .path = file_path->items,
-            .type = file_type,
+            .type = (Nob_File_Type)file_type,
             .level = level,
             .data = opt.data,
             .action = &action,
@@ -2176,7 +2179,7 @@ bool nob__walk_dir_opt_impl(Nob_String_Builder *file_path, Nob_Walk_Func func, s
     if (opt.post_order) {
         if (!func(NOB_CLIT(Nob_Walk_Entry) {
             .path = file_path->items,
-            .type = file_type,
+            .type = (Nob_File_Type)file_type,
             .level = level,
             .data = opt.data,
             .action = &action,
@@ -2260,13 +2263,13 @@ defer:
     return result;
 }
 
-NOBDEF Nob_File_Type nob_get_file_type(const char *path)
+static int nob__get_file_type(const char *path)
 {
 #ifdef _WIN32
     DWORD attr = GetFileAttributesA(path);
     if (attr == INVALID_FILE_ATTRIBUTES) {
         nob_log(NOB_ERROR, "Could not get file attributes of %s: %s", path, nob_win32_error_message(GetLastError()));
-        return (Nob_File_Type)-1;
+        return -1;
     }
 
     if (attr & FILE_ATTRIBUTE_DIRECTORY) return NOB_FILE_DIRECTORY;
@@ -2276,7 +2279,7 @@ NOBDEF Nob_File_Type nob_get_file_type(const char *path)
     struct stat statbuf;
     if (lstat(path, &statbuf) < 0) {
         nob_log(NOB_ERROR, "Could not get stat of %s: %s", path, strerror(errno));
-        return (Nob_File_Type)(-1);
+        return -1;
     }
 
     if (S_ISREG(statbuf.st_mode)) return NOB_FILE_REGULAR;
@@ -2286,13 +2289,19 @@ NOBDEF Nob_File_Type nob_get_file_type(const char *path)
 #endif // _WIN32
 }
 
+NOBDEF Nob_File_Type nob_get_file_type(const char *path)
+{
+    return (Nob_File_Type)nob__get_file_type(path);
+}
+
 NOBDEF bool nob_delete_file(const char *path)
 {
 #ifndef NOB_NO_ECHO
     nob_log(NOB_INFO, "deleting %s", path);
 #endif // NOB_NO_ECHO
 #ifdef _WIN32
-    Nob_File_Type type = nob_get_file_type(path);
+    int type = nob__get_file_type(path);
+    if (type < 0) return false;
     switch (type) {
     case NOB_FILE_DIRECTORY:
         if (!RemoveDirectoryA(path)) {
@@ -2328,7 +2337,7 @@ NOBDEF bool nob_copy_directory_recursively(const char *src_path, const char *dst
     Nob_String_Builder dst_sb = {0};
     size_t temp_checkpoint = nob_temp_save();
 
-    Nob_File_Type type = nob_get_file_type(src_path);
+    int type = nob__get_file_type(src_path);
     if (type < 0) return false;
 
     switch (type) {
