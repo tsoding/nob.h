@@ -3,6 +3,7 @@
 const char *test_names[] = {
     "nob_string_view",
     "cmd_redirect",
+    "write_entire_file",
     "cmd_args_passing",
     "read_entire_dir",
     "da_resize",

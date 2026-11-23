@@ -2229,35 +2229,19 @@ defer:
 
 NOBDEF bool nob_write_entire_file(const char *path, const void *data, size_t size)
 {
-    bool result = true;
-
-    const char *buf = NULL;
     FILE *f = fopen(path, "wb");
     if (f == NULL) {
-        nob_log(NOB_ERROR, "Could not open file %s for writing: %s\n", path, strerror(errno));
-        nob_return_defer(false);
+        nob_log(NOB_ERROR, "Could not open file %s for writing: %s", path, strerror(errno));
+        return false;
     }
 
-    //           len
-    //           v
-    // aaaaaaaaaa
-    //     ^
-    //     data
-
-    buf = (const char*)data;
-    while (size > 0) {
-        size_t n = fwrite(buf, 1, size, f);
-        if (ferror(f)) {
-            nob_log(NOB_ERROR, "Could not write into file %s: %s\n", path, strerror(errno));
-            nob_return_defer(false);
-        }
-        size -= n;
-        buf  += n;
+    bool ok = size == 0 || fwrite(data, 1, size, f) == size;
+    if (!ok) nob_log(NOB_ERROR, "Could not write into file %s: %s", path, strerror(errno));
+    if (fclose(f) != 0) {
+        nob_log(NOB_ERROR, "Could not close file %s after writing: %s", path, strerror(errno));
+        return false;
     }
-
-defer:
-    if (f) fclose(f);
-    return result;
+    return ok;
 }
 
 NOBDEF Nob_File_Type nob_get_file_type(const char *path)
