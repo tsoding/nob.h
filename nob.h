@@ -1198,9 +1198,24 @@ NOBDEF bool nob_copy_file(const char *src_path, const char *dst_path)
         nob_return_defer(false);
     }
 
-    dst_fd = open(dst_path, O_CREAT | O_TRUNC | O_WRONLY, src_stat.st_mode);
+    dst_fd = open(dst_path, O_CREAT | O_WRONLY, src_stat.st_mode);
     if (dst_fd < 0) {
         nob_log(NOB_ERROR, "Could not create file %s: %s", dst_path, strerror(errno));
+        nob_return_defer(false);
+    }
+
+    // Distinct paths (including hard links) may name the same file.
+    struct stat dst_stat;
+    if (fstat(dst_fd, &dst_stat) < 0) {
+        nob_log(NOB_ERROR, "Could not stat destination %s: %s", dst_path, strerror(errno));
+        nob_return_defer(false);
+    }
+    if (src_stat.st_dev == dst_stat.st_dev && src_stat.st_ino == dst_stat.st_ino) {
+        nob_log(NOB_ERROR, "%s and %s are the same file", src_path, dst_path);
+        nob_return_defer(false);
+    }
+    if (S_ISREG(dst_stat.st_mode) && ftruncate(dst_fd, 0) < 0) {
+        nob_log(NOB_ERROR, "Could not truncate %s: %s", dst_path, strerror(errno));
         nob_return_defer(false);
     }
 
