@@ -2104,7 +2104,8 @@ NOBDEF bool nob_dir_entry_next(Nob_Dir_Entry *dir)
 NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir)
 {
 #ifdef _WIN32
-    FindClose(dir.nob__private.win32_hFind);
+    HANDLE h = dir.nob__private.win32_hFind;
+    if (h != NULL && h != INVALID_HANDLE_VALUE) FindClose(h);
 #else
     if (dir.nob__private.posix_dir) closedir(dir.nob__private.posix_dir);
 #endif
