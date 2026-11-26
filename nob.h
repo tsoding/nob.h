@@ -385,11 +385,13 @@ NOBDEF void nob_dir_entry_close(Nob_Dir_Entry dir);
 #define nob_da_free(da) NOB_FREE((da).items)
 
 // Append several items to a dynamic array
-#define nob_da_append_many(da, new_items, new_items_count)                                      \
-    do {                                                                                        \
-        nob_da_reserve((da), (da)->count + (new_items_count));                                  \
-        memcpy((da)->items + (da)->count, (new_items), (new_items_count)*sizeof(*(da)->items)); \
-        (da)->count += (new_items_count);                                                       \
+#define nob_da_append_many(da, new_items, new_items_count)                                          \
+    do {                                                                                            \
+        if (new_items_count) {                                                                      \
+            nob_da_reserve((da), (da)->count + (new_items_count));                                  \
+            memcpy((da)->items + (da)->count, (new_items), (new_items_count)*sizeof(*(da)->items)); \
+            (da)->count += (new_items_count);                                                       \
+        }                                                                                           \
     } while (0)
 
 #define nob_da_resize(da, new_size)     \
@@ -3274,6 +3276,11 @@ defer:
                          Add nob_sv_find() (by @rexim)
                          Add nob_sb_append_sb() (by @rexim)
                          Add nob_sb_append_git_hash() (by @rexim)
+                         Make nob_da_append_many() do nothing if new_items_count is 0 (by @rexim)
+                           This was caught by clang's UBSan when we tried to do
+                           sb_append_sv(&sb, SVNULL). This resulted in passing NULL
+                           to one of the arguments of memcpy() which is apparently
+                           a UB.
      3.10.1 (2026-10-28) Set _POSIX_C_SOURCE to 200809L for Unix environments (by @aalmkainzi)
                          Make nob_cc check for clang first on _WIN32 (by @aalmkainzi)
      3.10.0 (2026-07-17) Make NOB_SVLIT a bit more usable at compile-time (by @Arhcout)
