@@ -977,6 +977,7 @@ NOBDEF int nob_sv_find(Nob_String_View haystack, Nob_String_View needle);
 #define NOB_SB_Arg(sb) (int) (sb).count, (sb).items
 
 // printf macros for String_View
+// @no-release: wait, why these printf macros are redefinable?
 #ifndef NOB_SV_Fmt2
 #define NOB_SV_Fmt2 ".*s"
 #endif // NOB_SV_Fmt2
