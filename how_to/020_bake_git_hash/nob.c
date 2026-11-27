@@ -4,7 +4,7 @@
 #define BUILD_FOLDER "build/"
 #define SRC_FOLDER   "src/"
 
-bool generate_build_h(void)
+bool generate_build_h(void);
 
 int main(int argc, char **argv)
 {
@@ -18,7 +18,7 @@ int main(int argc, char **argv)
     Cmd cmd = {0};
     nob_cc(&cmd);
     nob_cc_flags(&cmd);
-    cmd_append(&cmd, "-I"BUILD_FOLDER);
+    cmd_append(&cmd, "-I" BUILD_FOLDER);
     nob_cc_output(&cmd, BUILD_FOLDER"main");
     nob_cc_inputs(&cmd, SRC_FOLDER"main.c");
     if (!cmd_run(&cmd)) return 1;
